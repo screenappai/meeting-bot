@@ -1,0 +1,28 @@
+{
+  "AutoLaunchProtocolsFromOrigins": [
+    {
+      "allowed_origins": [
+        "*"
+      ],
+      "protocol": "msteams"
+    },
+    {
+      "allowed_origins": [
+        "*"
+      ],
+      "protocol": "ms-teams"
+    },
+    {
+      "allowed_origins": [
+        "*"
+      ],
+      "protocol": "teams"
+    },
+    {
+      "allowed_origins": [
+        "*"
+      ],
+      "protocol": "zoommtg"
+    }
+  ]
+}

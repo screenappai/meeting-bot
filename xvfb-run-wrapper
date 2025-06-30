@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# Forward SIGTERM to child processes
+trap 'echo "sending SIGABRT to child"; kill -SIGABRT "$child" 2>/dev/null' SIGTERM SIGINT
+
+# Start Xvfb
+Xvfb :99 -screen 0 1280x720x24 &
+xvfb_pid=$!
+
+# Start your application
+DISPLAY=:99 "$@" &
+child=$!
+
+# Wait for the child process to finish. have to use these both commands
+wait "$child"
+tail --pid="$child" -f /dev/null
+child_exit_code=$?
+
+# Cleanup Xvfb process
+kill -TERM "$xvfb_pid" 2>/dev/null
+wait "$xvfb_pid"
+
+# Exit with the application's exit code
+exit "$child_exit_code"

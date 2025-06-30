@@ -1,0 +1,13 @@
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+dist/
+assets/videos
+*.y4m
+__pycache__/
+.env
+gcp-key
+assets/screenshots
+/data
