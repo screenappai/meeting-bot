@@ -1,9 +1,8 @@
 import { Frame, Page } from 'playwright';
-import { JoinParams, AbstractMeetBot } from '../util/bots/AbstractMeetBot';
+import { JoinParams, AbstractMeetBot } from './AbstractMeetBot';
 import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
 import { WaitingAtLobbyRetryError } from '../error';
-import { handleWaitingAtLobbyError } from '../util/bots/MeetBotBase';
 import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
 import { RecordingTask } from '../tasks/RecordingTask';
@@ -12,6 +11,7 @@ import { getWaitingPromise } from '../lib/promise';
 import createBrowserContext from '../lib/chromium';
 import { uploadDebugImage } from '../services/bugService';
 import { Logger } from 'winston';
+import { handleWaitingAtLobbyError } from './MeetBotBase';
 
 class BotBase extends AbstractMeetBot {
   protected page: Page;

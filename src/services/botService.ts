@@ -17,6 +17,10 @@ export const patchBotStatus = async ({
     status: BotStatus[],
 }, logger: Logger) => {
   try {
+    if (!config.serviceKey) {
+      logger.error('ScreenApp service key is not set');
+      return false;
+    }
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<
         IVFSResponse<never>
@@ -53,6 +57,10 @@ export const addBotLog = async ({
     subCategory: WaitingAtLobbyCategory['subCategory'],
 }, logger: Logger) => {
   try {
+    if (!config.serviceKey) {
+      logger.error('ScreenApp service key is not set');
+      return false;
+    }
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<
         IVFSResponse<never>

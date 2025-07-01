@@ -1,6 +1,6 @@
 import { Page } from 'playwright';
 import { Task } from '../lib/Task';
-import { JoinParams } from '../util/bots/AbstractMeetBot';
+import { JoinParams } from '../bots/AbstractMeetBot';
 import { WaitPromise } from '../types';
 import { IUploader } from '../middleware/disk-uploader';
 import { Logger } from 'winston';

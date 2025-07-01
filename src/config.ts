@@ -33,30 +33,15 @@ export default {
     host: process.env.DB_HOST || 'localhost',
     user: process,
   },
-  authBaseUrlV2: process.env.AUTH_BASE_URL_V2 ?? 'http://localhost:8081/v2',
+  authBaseUrlV2: process.env.SCREENAPP_AUTH_BASE_URL_V2 ?? 'http://localhost:8081/v2',
   // Unset MAX_RECORDING_DURATION_MINUTES to use default upper limit on duration
   maxRecordingDuration: process.env.MAX_RECORDING_DURATION_MINUTES ?
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
-    180, // There's an upper limit on meeting duration 3 hours
-  redisUri: (() => {
-    const host = process.env.REDIS_HOST || 'redis';
-    const port = process.env.REDIS_PORT || 6379;
-    const username = process.env.REDIS_USERNAME;
-    const password = process.env.REDIS_PASSWORD;
-    
-    if (username && password) {
-      return `redis://${username}:${password}@${host}:${port}`;
-    } else if (password) {
-      return `redis://:${password}@${host}:${port}`;
-    } else {
-      return `redis://${host}:${port}`;
-    }
-  })(),
-  // We use Google Chrome with Playwright for recording 
-  chromeExecutablePath: process.env.CHROME_EXECUTABLE_PATH ? process.env.CHROME_EXECUTABLE_PATH : '/usr/bin/google-chrome',
+    180, // There's an upper limit on meeting duration 3 hours 
+  chromeExecutablePath: '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
   inactivityLimit: 0.5,
   activateInactivityDetectionAfter: 0.5,
-  serviceKey: process.env.BACKEND_SERVICE_API_KEY,
+  serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
   joinWaitTime: 10,
   miscStorageBucket: process.env.GCP_MISC_BUCKET,
   miscStorageFolder: process.env.GCP_MISC_BUCKET_FOLDER ? process.env.GCP_MISC_BUCKET_FOLDER : 'meeting-bot',
