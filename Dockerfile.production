@@ -7,8 +7,8 @@ WORKDIR /usr/src/app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
@@ -41,8 +41,11 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /usr/src/app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/package*.json ./
+
+# Install only production dependencies in final stage
+RUN npm ci --only=production && npm cache clean --force
+
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
 
 # Copy Chrome enterprise policy
