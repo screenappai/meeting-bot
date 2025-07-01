@@ -1,21 +1,11 @@
-// Express App
 import express from 'express';
-import { AxiosError } from 'axios';
-import { GoogleMeetBot } from '../util/bots/GoogleMeetBot';
-import messageBroker from '../util/messageBroker';
-import { gracefulShutdownApp } from '../index';
-import { KnownError } from '../error';
-import { MicrosoftTeamsBot } from '../util/bots/MicrosoftTeamsBot';
-import { BotLaunchParams } from '../util/bots/AbstractMeetBot';
-import { createCorrelationId, loggerFactory, getErrorType } from '../util/logger';
 import client from 'prom-client';
-import { ZoomBot } from '../bots/ZoomBot';
 import { NODE_ENV } from '../config';
 import mainDebug from '../test/debug';
-import { encodeFileNameSafebase64 } from '../util/strings';
-import DiskUploader, { IUploader } from '../middleware/disk-uploader';
-import { getRecordingNamePrefix } from '../util/bots/recordingName';
-import { Logger } from 'winston';
+import googleRouter from './google';
+import microsoftRouter from './microsoft';
+import zoomRouter from './zoom';
+import { globalJobStore } from '../lib/globalJobStore';
 
 const app = express();
 
@@ -25,7 +15,18 @@ let isbusy = 0;
 let gracefulShutdown = 0;
 
 app.get('/isbusy', async (req, res) => {
-  return res.status(200).json({ success: true, data: isbusy });
+  // Use the job store's isBusy status
+  const jobStoreBusy = globalJobStore.isBusy() ? 1 : 0;
+  return res.status(200).json({ success: true, data: jobStoreBusy });
+});
+
+app.get('/health', async (req, res) => {
+  // Simple health check endpoint for Docker
+  return res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // Create a Gauge metric for busy status (0 or 1)
@@ -40,8 +41,10 @@ const isavailable = new client.Gauge({
 });
 
 app.get('/metrics', async (req, res) => {
-  busyStatus.set(isbusy);
-  isavailable.set(1 - isbusy);
+  // Use the job store's isBusy status for metrics
+  const jobStoreBusy = globalJobStore.isBusy() ? 1 : 0;
+  busyStatus.set(jobStoreBusy);
+  isavailable.set(1 - jobStoreBusy);
   res.set('Content-Type', client.register.contentType);
   res.end(await client.register.metrics());
 });
@@ -58,186 +61,53 @@ app.get('/debug', async (req, res, next) => {
   res.status(200).send({});
 });
 
-const joinGoogleMeet = async (
-  bearerToken: string,
-  url: string,
-  name: string,
-  teamId: string,
-  timezone: string,
-  userId: string,
-  eventId: string | undefined,
-  botId: string | undefined,
-  uploader: IUploader,
-  logger: Logger
-) => {
-  isbusy = 1;
-  try {
-    const bot = new GoogleMeetBot(logger);
-    await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-    logger.info('Joined Google Meet event successfully.', userId, teamId);
-  } catch (error) {
-    logger.error('Error joining Google Meet:', { userId, teamId, botId, eventId, error });
-    if (error instanceof AxiosError) {
-      logger.error('axios error', { userId, teamId, botId, data: error?.response?.data, config: error?.response?.config });
-    }
-    throw error;
-  }
-};
-
-const joinMicrosoftTeams = async (
-  bearerToken: string,
-  url: string,
-  name: string,
-  teamId: string,
-  timezone: string,
-  userId: string,
-  eventId: string | undefined,
-  botId: string | undefined,
-  uploader: IUploader,
-  logger: Logger
-) => {
-  isbusy = 1;
-  try {
-    const bot = new MicrosoftTeamsBot(logger);
-    await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-    logger.info('Joined Microsoft Teams meeting successfully.', userId);
-  } catch (error) {
-    logger.error('Error joining Microsoft Teams meeting:', { error, userId, teamId, botId, eventId });
-    if (error instanceof AxiosError) {
-      logger.error('axios error', error?.response?.data, error?.response?.config);
-    }
-    throw error;
-  }
-};
-
-const joinZoom = async (
-  bearerToken: string,
-  url: string,
-  name: string,
-  teamId: string,
-  timezone: string,
-  userId: string,
-  eventId: string | undefined,
-  botId: string | undefined,
-  uploader: IUploader,
-  logger: Logger
-) => {
-  isbusy = 1;
-  try {
-    const bot = new ZoomBot(logger);
-    await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-    logger.info('Joined Zoom meeting successfully.', userId);
-  } catch (error) {
-    logger.error('Error joining Zoom meeting:', { error, userId, teamId, botId, eventId });
-    if (error instanceof AxiosError) {
-      logger.error('axios error', error?.response?.data, error?.response?.config);
-    }
-    throw error;
-  }
-};
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((r) => setTimeout(r, ms));
+app.use('/google', googleRouter);
+app.use('/microsoft', microsoftRouter);
+app.use('/zoom', zoomRouter);
 
 export const setGracefulShutdown = (val: number) =>
   gracefulShutdown = val;
 
-const main = async () => {
-  console.log('Running main loop...');
+export const getGracefulShutdown = () => gracefulShutdown;
 
-  const joinMeetWithRetry = async (
-    bearerToken: string, 
-    url: string, 
-    name: string, 
-    teamId: string, 
-    timezone: string, 
-    userId: string,
-    provider: 'google' | 'microsoft' | 'zoom',
-    retryCount: number,
-    eventId: undefined | string,
-    botId: undefined | string,
-    logger: Logger
-  ) => {
-    const entityId = botId ?? eventId;
-    const tempId = `${userId}${entityId}${retryCount}`;
-    const tempFileId = encodeFileNameSafebase64(tempId);
+export const setIsBusy = (val: number) =>
+  isbusy = val;
 
-    const namePrefix = getRecordingNamePrefix(provider);
-    
-    const diskUploader = await DiskUploader.initialize(
-      bearerToken,
-      teamId,
-      timezone,
-      userId,
-      botId ?? '',
-      namePrefix,
-      tempFileId,
-      logger,
-    );
+export const getIsBusy = () => isbusy;
 
-    try {
-      if (provider === 'google')
-        await joinGoogleMeet(bearerToken, url, name, teamId, timezone, userId, eventId, botId, diskUploader, logger);
-      if (provider === 'microsoft')
-        await joinMicrosoftTeams(bearerToken, url, name, teamId, timezone, userId, eventId, botId, diskUploader, logger);
-      if (provider === 'zoom')
-        await joinZoom(bearerToken, url, name, teamId, timezone, userId, eventId, botId, diskUploader, logger);
-    } catch (error) {
-      if (error instanceof KnownError && !error.retryable) {
-        logger.error('KnownError is not retryable:', error.name, error.message);
-        throw error;
-      }
+// This is endpoint start
+// const main = async () => {
+//   console.log('Running main loop...');
 
-      if (error instanceof KnownError && error.retryable && (retryCount + 1) >= error.maxRetries) {
-        logger.error(`KnownError: ${error.maxRetries} tries consumed:`, error.name, error.message);
-        throw error;
-      }
-
-      retryCount += 1;
-      await sleep(retryCount * 30000);
-      if (retryCount < 3) {
-        if (retryCount) {
-          logger.warn(`Retry count: ${retryCount}`);
-        }
-        await joinMeetWithRetry(bearerToken, url, name, teamId, timezone, userId, provider, retryCount, eventId, botId, logger);
-      } else {
-        throw error;
-      }
-    }
-  };
-
-  while (true) {
-    isbusy = 0;
-    const content = await messageBroker.getMeetingbotJobs();
-    if (content && content.element) {
-      const { bearerToken, url, name, teamId, timezone, userId, provider, eventId, botId } = JSON.parse(content.element) as BotLaunchParams;
-      const correlationId = createCorrelationId({ teamId, userId, botId, eventId, url });
-      const logger = loggerFactory(correlationId, provider);
-      logger.info(content.element);
+  
+//   while (true) {
+//     isbusy = 0;
+//     if (content && content.element) {
+//       const { bearerToken, url, name, teamId, timezone, userId, provider, eventId, botId } = JSON.parse(content.element) as BotLaunchParams;
+//       const correlationId = createCorrelationId({ teamId, userId, botId, eventId, url });
+//       const logger = loggerFactory(correlationId, provider);
+//       logger.info(content.element);
       
-      try {
-        logger.info('LogBasedMetric Bot has started recording meeting.');
-        await joinMeetWithRetry(bearerToken, url, name, teamId, timezone, userId, provider, 0, eventId, botId, logger);
-        logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
-      } catch (error) {
-        const errorType = getErrorType(error);
-        if (error instanceof KnownError) {
-          logger.error('KnownError bot is permanently exiting:', { error, teamId, userId });
-        } else {
-          logger.error('Error joining meeting after multiple retries on team:', { error, teamId, userId });
-        }
-        logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
-      }
-    }
-    if (gracefulShutdown) {
-      console.log('Exiting from main loop...');
-      gracefulShutdownApp(messageBroker);
-      break;
-    }
-  }
-};
-
-// Start the loop
-main();
+//       try {
+//         logger.info('LogBasedMetric Bot has started recording meeting.');
+//         await joinMeetWithRetry(bearerToken, url, name, teamId, timezone, userId, provider, 0, eventId, botId, logger);
+//         logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
+//       } catch (error) {
+//         const errorType = getErrorType(error);
+//         if (error instanceof KnownError) {
+//           logger.error('KnownError bot is permanently exiting:', { error, teamId, userId });
+//         } else {
+//           logger.error('Error joining meeting after multiple retries on team:', { error, teamId, userId });
+//         }
+//         logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
+//       }
+//     }
+//     if (gracefulShutdown) {
+//       console.log('Exiting from main loop...');
+//       gracefulShutdownApp();
+//       break;
+//     }
+//   }
+// };
 
 export default app;

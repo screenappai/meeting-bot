@@ -1,18 +1,18 @@
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { JoinParams } from './AbstractMeetBot';
-import { BotStatus, ContentType, WaitPromise } from '../../types';
-import config from '../../config';
-import { WaitingAtLobbyRetryError } from '../../error';
+import { BotStatus, ContentType, WaitPromise } from '../types';
+import config from '../config';
+import { WaitingAtLobbyRetryError } from '../error';
 import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
 import { v4 } from 'uuid';
-import { patchBotStatus } from '../../services/botService';
-import { IUploader } from '../../middleware/disk-uploader';
+import { patchBotStatus } from '../services/botService';
+import { IUploader } from '../middleware/disk-uploader';
 import { Logger } from 'winston';
-import { browserLogCaptureCallback } from '../logger';
-import { getWaitingPromise } from '../../lib/promise';
-import { retryActionWithWait } from '../resilience';
-import { uploadDebugImage } from '../../services/bugService';
+import { browserLogCaptureCallback } from '../util/logger';
+import { getWaitingPromise } from '../lib/promise';
+import { retryActionWithWait } from '../util/resilience';
+import { uploadDebugImage } from '../services/bugService';
 
 const stealthPlugin = StealthPlugin();
 stealthPlugin.enabledEvasions.delete('iframe.contentWindow');

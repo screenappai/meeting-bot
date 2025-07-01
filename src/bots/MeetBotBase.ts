@@ -1,9 +1,9 @@
 import { Page } from 'playwright';
 import { AbstractMeetBot, JoinParams } from './AbstractMeetBot';
-import { WaitingAtLobbyError } from '../../error';
-import { addBotLog } from '../../services/botService';
+import { WaitingAtLobbyError } from '../error';
+import { addBotLog } from '../services/botService';
 import { Logger } from 'winston';
-import { WaitingAtLobbyCategory } from '../../types';
+import { WaitingAtLobbyCategory } from '../types';
 import { GOOGLE_REQUEST_DENIED } from './GoogleMeetBot';
 
 // TODO complete modularise code with implementation classes

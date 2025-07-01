@@ -1,4 +1,4 @@
-import { IUploader } from '../../middleware/disk-uploader';
+import { IUploader } from '../middleware/disk-uploader';
 
 export interface BotLaunchParams {
   provider: 'google' | 'microsoft' | 'zoom';
