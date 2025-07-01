@@ -27,12 +27,9 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont \
+    fontconfig \
     ffmpeg \
     xvfb \
-    xorg-server \
-    xorg-apps \
-    mesa-dri-gallium \
     && rm -rf /var/cache/apk/*
 
 # Create app directory
@@ -60,6 +57,7 @@ ENV NODE_ENV=production
 ENV CHROME_BIN=/usr/bin/chromium-browser
 ENV CHROME_PATH=/usr/bin/chromium-browser
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
 
 # Switch to non-root user
 USER nodejs
