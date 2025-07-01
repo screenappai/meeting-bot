@@ -7,6 +7,7 @@ import DiskUploader from '../middleware/disk-uploader';
 import { getRecordingNamePrefix } from '../util/recordingName';
 import { encodeFileNameSafebase64 } from '../util/strings';
 import { MeetingJoinParams } from './common';
+import { globalJobStore } from '../lib/globalJobStore';
 
 const router = express.Router();
 
@@ -30,42 +31,69 @@ const joinMicrosoftTeams = async (req: Request, res: Response) => {
     });
   }
 
+  if (!botId && !eventId) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: botId or eventId'
+    });
+  }
+
   // Create correlation ID and logger
   const correlationId = createCorrelationId({ teamId, userId, botId, eventId, url });
   const logger = loggerFactory(correlationId, 'microsoft');
 
   try {
-    // Initialize disk uploader
-    const entityId = botId ?? eventId;
-    const tempId = `${userId}${entityId}0`; // Using 0 as retry count
-    const tempFileId = encodeFileNameSafebase64(tempId);
-    const namePrefix = getRecordingNamePrefix('microsoft');
-    
-    const uploader: IUploader = await DiskUploader.initialize(
-      bearerToken,
-      teamId,
-      timezone,
-      userId,
-      botId ?? '',
-      namePrefix,
-      tempFileId,
-      logger,
-    );
+    // Try to add the job to the store
+    const jobResult = await globalJobStore.addJob(async () => {
+      // Initialize disk uploader
+      const entityId = botId ?? eventId;
+      const tempId = `${userId}${entityId}0`; // Using 0 as retry count
+      const tempFileId = encodeFileNameSafebase64(tempId);
+      const namePrefix = getRecordingNamePrefix('microsoft');
+      
+      const uploader: IUploader = await DiskUploader.initialize(
+        bearerToken,
+        teamId,
+        timezone,
+        userId,
+        botId ?? '',
+        namePrefix,
+        tempFileId,
+        logger,
+      );
 
-    // Create and join the meeting
-    const bot = new MicrosoftTeamsBot(logger);
-    await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
+      // Create and join the meeting
+      const bot = new MicrosoftTeamsBot(logger);
+      await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
+      
+      logger.info('Joined Microsoft Teams meeting successfully.', userId, teamId);
+    }, logger);
+
+    if (!jobResult.accepted) {
+      return res.status(409).json({
+        success: false,
+        error: 'Another meeting is currently being processed. Please try again later.',
+        data: { userId, teamId, eventId, botId }
+      });
+    }
+
+    // Job was accepted, return immediate response
+    logger.info('Microsoft Teams job accepted and started processing', { userId, teamId });
     
-    logger.info('Joined Microsoft Teams meeting successfully.', userId, teamId);
-    
-    return res.status(200).json({
+    return res.status(202).json({
       success: true,
-      message: 'Successfully joined Microsoft Teams meeting',
-      data: { userId, teamId, eventId, botId }
+      message: 'Microsoft Teams join request accepted and processing started',
+      data: { 
+        userId, 
+        teamId, 
+        eventId, 
+        botId,
+        status: 'processing'
+      }
     });
 
   } catch (error) {
-    logger.error('Error joining Microsoft Teams meeting:', { userId, teamId, botId, eventId, error });
+    logger.error('Error setting up Microsoft Teams job:', { userId, teamId, botId, eventId, error });
     
     if (error instanceof AxiosError) {
       logger.error('axios error', { 

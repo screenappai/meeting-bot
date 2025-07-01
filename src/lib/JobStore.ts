@@ -20,12 +20,10 @@ export class JobStore {
 
     this.isRunning = true;
     
-    try {
-      logger.info('LogBasedMetric Bot has started recording meeting.');
-      // Execute the task asynchronously with retry logic
-      await this.executeTaskWithRetry(task, logger, retryCount);
+    // Execute the task asynchronously without waiting for completion
+    this.executeTaskWithRetry(task, logger, retryCount).then(() => {
       logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
-    } catch (error) {
+    }).catch((error) => {
       const errorType = getErrorType(error);
       if (error instanceof KnownError) {
         logger.error('KnownError JobStore is permanently exiting:', { error });
@@ -33,10 +31,11 @@ export class JobStore {
         logger.error('Error executing task after multiple retries:', { error });
       }
       logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
-    } finally {
+    }).finally(() => {
       this.isRunning = false;
-    }
+    });
 
+    logger.info('LogBasedMetric Bot job has been queued and started recording meeting.');
     return { accepted: true };
   }
 
