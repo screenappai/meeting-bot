@@ -157,9 +157,33 @@ GET /metrics
 
 The project includes Docker support with separate configurations for development and production:
 
-- `Dockerfile` - Production build
-- `Dockerfile.development` - Development build with hot reload
+- `Dockerfile` - Development build with hot reload
+- `Dockerfile.production` - Optimized production build
 - `docker-compose.yml` - Complete development environment
+
+#### Using Docker Image from GitHub Packages
+
+The project automatically builds and publishes Docker images to GitHub Packages on every push to the main branch.
+
+**Pull the latest image:**
+```bash
+docker pull ghcr.io/YOUR_USERNAME/meeting-bot:latest
+```
+
+**Run the container:**
+```bash
+docker run -d \
+  --name meeting-bot \
+  -p 3000:3000 \
+  -e MAX_RECORDING_DURATION_MINUTES=60 \
+  -e NODE_ENV=production \
+  ghcr.io/YOUR_USERNAME/meeting-bot:latest
+```
+
+**Available tags:**
+- `latest` - Latest stable release from main branch
+- `main` - Latest commit from main branch
+- `sha-<commit-hash>` - Specific commit builds
 
 ## 🏗️ Architecture
 

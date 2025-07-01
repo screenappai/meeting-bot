@@ -1,0 +1,77 @@
+# Multi-stage build for production
+FROM node:18-alpine AS builder
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy source code
+COPY . .
+
+# Build the TypeScript code
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Install system dependencies for Chrome and Playwright
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    ffmpeg \
+    xvfb \
+    xorg-server \
+    xorg-apps \
+    mesa-dri-gallium \
+    && rm -rf /var/cache/apk/*
+
+# Create app directory
+WORKDIR /usr/src/app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/package*.json ./
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
+
+# Copy Chrome enterprise policy
+RUN mkdir -p /etc/opt/chrome/policies/managed
+COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/managed/auto_launch_protocols.json
+
+# Set permissions
+RUN chmod +x /usr/src/app/xvfb-run-wrapper
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV CHROME_BIN=/usr/bin/chromium-browser
+ENV CHROME_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# Switch to non-root user
+USER nodejs
+
+# Expose the port your app runs on
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
+
+# Set Tini as the entry point
+ENTRYPOINT ["/usr/src/app/xvfb-run-wrapper"]
+
+CMD ["node", "dist/index.js"] 

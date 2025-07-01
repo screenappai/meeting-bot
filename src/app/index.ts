@@ -20,6 +20,15 @@ app.get('/isbusy', async (req, res) => {
   return res.status(200).json({ success: true, data: jobStoreBusy });
 });
 
+app.get('/health', async (req, res) => {
+  // Simple health check endpoint for Docker
+  return res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Create a Gauge metric for busy status (0 or 1)
 const busyStatus = new client.Gauge({
   name: 'isbusy',
