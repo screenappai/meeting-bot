@@ -223,6 +223,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
+- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) for real-time collaboration and support
 - **Documentation**: [Wiki](https://github.com/screenappai/meeting-bot/wiki)
 
 ## 🙏 Acknowledgments

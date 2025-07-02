@@ -254,4 +254,17 @@ For high availability, consider:
 1. Use specific commit tags for rollbacks
 2. Keep previous images for quick rollback
 3. Test new versions in staging environment
-4. Use blue-green deployment for zero-downtime updates 
+4. Use blue-green deployment for zero-downtime updates
+
+## 🤝 Community and Support
+
+### Getting Help
+
+- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
+- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) for real-time collaboration and support
+- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/screenappai/meeting-bot/wiki)
+
+### Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved with the project. 
