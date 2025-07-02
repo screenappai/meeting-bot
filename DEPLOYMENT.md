@@ -21,7 +21,7 @@ The workflow is defined in `.github/workflows/docker-build.yml` and includes:
 
 1. **Trigger**: Only runs on main branch pushes and PRs
 2. **Build**: Uses `Dockerfile.production` for optimized builds
-3. **Publish**: Pushes to `ghcr.io/YOUR_USERNAME/meeting-bot`
+3. **Publish**: Pushes to `ghcr.io/screenappai/meeting-bot`
 4. **Tags**: Creates multiple tags for versioning
 
 ## 📦 Docker Images
@@ -63,7 +63,7 @@ The workflow uses these environment variables:
 3. Check the "Actions" tab to monitor the build
 4. Once complete, your image will be available at:
    ```
-   ghcr.io/YOUR_USERNAME/meeting-bot:latest
+   ghcr.io/screenappai/meeting-bot:latest
    ```
 
 ## 🐳 Using the Docker Image
@@ -71,7 +71,7 @@ The workflow uses these environment variables:
 ### Pull the Image
 
 ```bash
-docker pull ghcr.io/YOUR_USERNAME/meeting-bot:latest
+docker pull ghcr.io/screenappai/meeting-bot:latest
 ```
 
 ### Run the Container
@@ -84,7 +84,7 @@ docker run -d \
   -e NODE_ENV=production \
   -e GCP_DEFAULT_REGION=your-region \
   -e GCP_MISC_BUCKET=your-bucket \
-  ghcr.io/YOUR_USERNAME/meeting-bot:latest
+  ghcr.io/screenappai/meeting-bot:latest
 ```
 
 ### Environment Variables
@@ -104,7 +104,7 @@ Optional environment variables:
 version: '3.8'
 services:
   meeting-bot:
-    image: ghcr.io/YOUR_USERNAME/meeting-bot:latest
+    image: ghcr.io/screenappai/meeting-bot:latest
     ports:
       - "3000:3000"
     environment:
@@ -132,13 +132,13 @@ The workflow creates multiple tags:
 
 ```bash
 # Latest stable
-docker pull ghcr.io/YOUR_USERNAME/meeting-bot:latest
+docker pull ghcr.io/screenappai/meeting-bot:latest
 
 # Latest from main branch
-docker pull ghcr.io/YOUR_USERNAME/meeting-bot:main
+docker pull ghcr.io/screenappai/meeting-bot:main
 
 # Specific commit
-docker pull ghcr.io/YOUR_USERNAME/meeting-bot:sha-abc123
+docker pull ghcr.io/screenappai/meeting-bot:sha-abc123
 ```
 
 ## 🔍 Monitoring and Health Checks
@@ -246,7 +246,7 @@ For high availability, consider:
 
 1. Push changes to main branch
 2. Wait for GitHub Actions to complete
-3. Pull the new image: `docker pull ghcr.io/YOUR_USERNAME/meeting-bot:latest`
+3. Pull the new image: `docker pull ghcr.io/screenappai/meeting-bot:latest`
 4. Restart containers with new image
 
 ### Rollback Strategy
@@ -254,4 +254,17 @@ For high availability, consider:
 1. Use specific commit tags for rollbacks
 2. Keep previous images for quick rollback
 3. Test new versions in staging environment
-4. Use blue-green deployment for zero-downtime updates 
+4. Use blue-green deployment for zero-downtime updates
+
+## 🤝 Community and Support
+
+### Getting Help
+
+- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
+- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) for real-time collaboration and support
+- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/screenappai/meeting-bot/wiki)
+
+### Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved with the project. 

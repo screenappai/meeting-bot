@@ -30,7 +30,7 @@ An open-source automation bot for joining and recording video meetings across mu
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/meeting-bot.git
+   git clone https://github.com/screenappai/meeting-bot.git
    cd meeting-bot
    ```
 
@@ -167,7 +167,7 @@ The project automatically builds and publishes Docker images to GitHub Packages 
 
 **Pull the latest image:**
 ```bash
-docker pull ghcr.io/YOUR_USERNAME/meeting-bot:latest
+docker pull ghcr.io/screenappai/meeting-bot:latest
 ```
 
 **Run the container:**
@@ -177,7 +177,7 @@ docker run -d \
   -p 3000:3000 \
   -e MAX_RECORDING_DURATION_MINUTES=60 \
   -e NODE_ENV=production \
-  ghcr.io/YOUR_USERNAME/meeting-bot:latest
+  ghcr.io/screenappai/meeting-bot:latest
 ```
 
 **Available tags:**
@@ -221,9 +221,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/meeting-bot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/meeting-bot/discussions)
-- **Documentation**: [Wiki](https://github.com/your-username/meeting-bot/wiki)
+- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
+- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) for real-time collaboration and support
+- **Documentation**: [Wiki](https://github.com/screenappai/meeting-bot/wiki)
 
 ## 🙏 Acknowledgments
 
