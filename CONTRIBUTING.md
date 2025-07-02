@@ -326,10 +326,12 @@ refactor: improve error handling in bot implementations
 
 ## 🎯 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
-- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) for real-time collaboration and support
-- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/screenappai/meeting-bot/wiki)
+**🎯 Primary Support Channel:**
+- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) - Our main forum for discussions, support, and real-time collaboration
+
+**📋 Additional Resources:**
+- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues) - For bug reports and feature requests
+- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/screenappai/meeting-bot/wiki) - For detailed guides and API documentation
 
 ## 🙏 Recognition
 
