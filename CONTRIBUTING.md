@@ -32,7 +32,7 @@ By participating in this project, you agree to abide by our Code of Conduct. We 
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/your-username/meeting-bot.git
+   git clone https://github.com/screenappai/meeting-bot.git
    cd meeting-bot
    ```
 3. Add the upstream repository:
@@ -326,9 +326,9 @@ refactor: improve error handling in bot implementations
 
 ## 🎯 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/your-username/meeting-bot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/meeting-bot/discussions)
-- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/your-username/meeting-bot/wiki)
+- **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/screenappai/meeting-bot/discussions)
+- **Documentation**: Check the [README.md](README.md) and [Wiki](https://github.com/screenappai/meeting-bot/wiki)
 
 ## 🙏 Recognition
 
