@@ -1,5 +1,5 @@
 # Multi-stage build for production
-FROM node:18-alpine AS builder
+FROM node:18 AS builder
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -10,6 +10,9 @@ COPY package*.json ./
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci && npm cache clean --force
 
+# Install Playwright and its dependencies
+RUN npx playwright install --with-deps
+
 # Copy source code
 COPY . .
 
@@ -17,29 +20,52 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:18 AS production
 
-# Install system dependencies for Chrome and Playwright
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    fontconfig \
-    ffmpeg \
-    xvfb \
-    bash \
-    dos2unix \
-    && rm -rf /var/cache/apk/*
+# Install system dependencies, including WebGL support
+RUN apt-get update && \
+  apt-get install -y \
+  ffmpeg \
+  libnss3 \
+  libxss1 \
+  libasound2 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libcups2 \
+  libxkbcommon-x11-0 \
+  libgbm-dev \
+  libgl1-mesa-dri \
+  libgl1-mesa-glx \
+  mesa-utils \
+  xvfb \
+  wget \
+  gnupg \
+  xorg \
+  xserver-xorg \
+  libx11-dev \
+  libxext-dev \
+  dos2unix \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Google Chrome
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg && \
+  ARCH=$(dpkg --print-architecture) && \
+  if [ "$ARCH" = "amd64" ]; then \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+  elif [ "$ARCH" = "arm64" ]; then \
+    echo "deb [arch=arm64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+  else \
+    echo "deb [signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list; \
+  fi && \
+  apt-get update && apt-get install -y google-chrome-stable || apt-get install -y chromium && \
+  rm -rf /var/lib/apt/lists/*
 
 # Create app directory
 WORKDIR /usr/src/app
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/dist ./dist
@@ -53,17 +79,12 @@ COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
 RUN dos2unix /usr/src/app/xvfb-run-wrapper && \
     chmod +x /usr/src/app/xvfb-run-wrapper
 
-# Copy Chrome enterprise policy
+    # Copy Chrome policy to allow protocol launching
 RUN mkdir -p /etc/opt/chrome/policies/managed
 COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/managed/auto_launch_protocols.json
-
+    
 # Set environment variables
 ENV NODE_ENV=production
-ENV CHROME_BIN=/usr/bin/chromium-browser
-ENV CHROME_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
-
 # Switch to non-root user
 USER nodejs
 
@@ -74,7 +95,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })" || exit 1
 
-# Set Tini as the entry point
+# Set the entry point
 ENTRYPOINT ["/usr/src/app/xvfb-run-wrapper"]
 
 CMD ["node", "dist/index.js"] 
