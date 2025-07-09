@@ -254,11 +254,54 @@ export class GoogleMeetBot extends MeetBotBase {
       this._logger.info('Waiting for the "Got it" button...');
       await this.page.waitForSelector('button:has-text("Got it")', { timeout: 15000 });
 
-      this._logger.info('Clicking the "Got it" button...');
-      await this.page.click('button:has-text("Got it")');
+      this._logger.info('Going to click all visible "Got it" buttons...');
+
+      let gotItButtonsClicked = 0;
+      let previousButtonCount = -1;
+      let consecutiveNoChangeCount = 0;
+      const maxConsecutiveNoChange = 2; // Stop if button count doesn't change for 2 consecutive iterations
+
+      while (true) {
+        const visibleButtons = await this.page.locator('button:visible', {
+          hasText: 'Got it',
+        }).all();
+      
+        const currentButtonCount = visibleButtons.length;
+        
+        if (currentButtonCount === 0) {
+          break;
+        }
+        
+        // Check if button count hasn't changed (indicating we might be stuck)
+        if (currentButtonCount === previousButtonCount) {
+          consecutiveNoChangeCount++;
+          if (consecutiveNoChangeCount >= maxConsecutiveNoChange) {
+            this._logger.warn(`Button count hasn't changed for ${maxConsecutiveNoChange} iterations, stopping`);
+            break;
+          }
+        } else {
+          consecutiveNoChangeCount = 0;
+        }
+        
+        previousButtonCount = currentButtonCount;
+
+        for (const btn of visibleButtons) {
+          try {
+            await btn.click({ timeout: 5000 });
+            gotItButtonsClicked++;
+            this._logger.info(`Clicked a "Got it" button #${gotItButtonsClicked}`);
+            
+            await this.page.waitForTimeout(2000);
+          } catch (err) {
+            this._logger.warn('Click failed, possibly already dismissed', { error: err });
+          }
+        }
+      
+        await this.page.waitForTimeout(2000);
+      }
     } catch (error) {
       // Log and ignore this error
-      this._logger.info('Safety popup might be missing...', error);
+      this._logger.info('"Got it" modals might be missing...', { error });
     }
 
     // Recording the meeting page

@@ -7,6 +7,9 @@ trap 'echo "sending SIGABRT to child"; kill -SIGABRT "$child" 2>/dev/null' SIGTE
 Xvfb :99 -screen 0 1280x720x24 &
 xvfb_pid=$!
 
+# Wait a moment for Xvfb to start
+sleep 1
+
 # Start your application
 DISPLAY=:99 "$@" &
 child=$!

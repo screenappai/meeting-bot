@@ -75,39 +75,4 @@ export const setIsBusy = (val: number) =>
 
 export const getIsBusy = () => isbusy;
 
-// This is endpoint start
-// const main = async () => {
-//   console.log('Running main loop...');
-
-  
-//   while (true) {
-//     isbusy = 0;
-//     if (content && content.element) {
-//       const { bearerToken, url, name, teamId, timezone, userId, provider, eventId, botId } = JSON.parse(content.element) as BotLaunchParams;
-//       const correlationId = createCorrelationId({ teamId, userId, botId, eventId, url });
-//       const logger = loggerFactory(correlationId, provider);
-//       logger.info(content.element);
-      
-//       try {
-//         logger.info('LogBasedMetric Bot has started recording meeting.');
-//         await joinMeetWithRetry(bearerToken, url, name, teamId, timezone, userId, provider, 0, eventId, botId, logger);
-//         logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
-//       } catch (error) {
-//         const errorType = getErrorType(error);
-//         if (error instanceof KnownError) {
-//           logger.error('KnownError bot is permanently exiting:', { error, teamId, userId });
-//         } else {
-//           logger.error('Error joining meeting after multiple retries on team:', { error, teamId, userId });
-//         }
-//         logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
-//       }
-//     }
-//     if (gracefulShutdown) {
-//       console.log('Exiting from main loop...');
-//       gracefulShutdownApp();
-//       break;
-//     }
-//   }
-// };
-
 export default app;
