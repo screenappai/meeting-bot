@@ -30,6 +30,8 @@ RUN apk add --no-cache \
     fontconfig \
     ffmpeg \
     xvfb \
+    bash \
+    dos2unix \
     && rm -rf /var/cache/apk/*
 
 # Create app directory
@@ -46,14 +48,14 @@ COPY --from=builder --chown=nodejs:nodejs /usr/src/app/package*.json ./
 # Install only production dependencies in final stage
 RUN npm ci --only=production && npm cache clean --force
 
+# Copy xvfb-run-wrapper and set permissions
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
+RUN dos2unix /usr/src/app/xvfb-run-wrapper && \
+    chmod +x /usr/src/app/xvfb-run-wrapper
 
 # Copy Chrome enterprise policy
 RUN mkdir -p /etc/opt/chrome/policies/managed
 COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/managed/auto_launch_protocols.json
-
-# Set permissions
-RUN chmod +x /usr/src/app/xvfb-run-wrapper
 
 # Set environment variables
 ENV NODE_ENV=production
