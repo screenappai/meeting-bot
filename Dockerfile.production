@@ -45,6 +45,8 @@ RUN apt-get update && \
   libx11-dev \
   libxext-dev \
   dos2unix \
+  # ARM-specific packages (only for ARM64)
+  $(if [ "$(dpkg --print-architecture)" = "arm64" ]; then echo "libgles2 libegl1 libwayland-egl1"; fi) \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
@@ -59,6 +61,9 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
   fi && \
   apt-get update && apt-get install -y google-chrome-stable || apt-get install -y chromium && \
   rm -rf /var/lib/apt/lists/*
+
+# Create symlink for Playwright compatibility (ARM64 only)
+RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then ln -sf /usr/bin/chromium /usr/bin/google-chrome; fi
 
 # Create app directory
 WORKDIR /usr/src/app
