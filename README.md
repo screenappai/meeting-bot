@@ -206,6 +206,22 @@ src/
 - **RecordingTask**: Handles meeting recording functionality
 - **ContextBridgeTask**: Manages browser context and automation
 
+## ⚠️ Limitations
+
+### Meeting Join Requirements
+
+Meeting Bot supports joining meetings where users can join with a direct link without requiring authentication. The following scenarios are **not supported**:
+
+- **Sign-in Required**: Meetings that require users to sign in to the platform (Google, Microsoft, Zoom) before joining
+- **Enterprise Authentication**: Meetings that require enterprise SSO or domain-specific authentication
+- **Password Protected**: Meetings that require a password in addition to the meeting link
+- **Waiting Room with Authentication**: Meetings where the waiting room requires user identification or authentication
+
+**Supported Scenarios:**
+- ✅ Public meeting links that allow direct join
+- ✅ Meetings with waiting rooms that don't require authentication
+- ✅ Meetings where the bot can join as a guest/anonymous participant
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to:
@@ -242,6 +258,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Recording functionality
 - ✅ Docker deployment
 - ✅ API documentation
+- 🔄 Recording Upload support - cloud bucket or a Docker volume (planned)
 - 🔄 Additional platform support (planned)
 - 🔄 Enhanced monitoring (planned)
 
