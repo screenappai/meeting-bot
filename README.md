@@ -238,7 +238,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🆘 Support
 
 **🎯 Primary Support Channel:**
-- **Discord**: [Join our Discord Community](https://discord.gg/yS62MZBH) - Our main forum for discussions, support, and real-time collaboration
+- **Discord**: [Join our Discord Community](https://discord.gg/frS8QgUygn) - Our main forum for discussions, support, and real-time collaboration
 
 **📋 Additional Resources:**
 - **Issues**: [GitHub Issues](https://github.com/screenappai/meeting-bot/issues) - For bug reports and feature requests
