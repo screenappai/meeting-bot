@@ -128,6 +128,32 @@ GET /isbusy
 GET /metrics
 ```
 
+
+### Response Format
+
+**Success Response (202 Accepted):**
+```json
+{
+  "success": true,
+  "message": "Meeting join request accepted and processing started",
+  "data": {
+    "userId": "user123",
+    "teamId": "team123",
+    "status": "processing"
+  }
+}
+```
+
+**Busy Response (409 Conflict):**
+```json
+{
+  "success": false,
+  "message": "System is currently busy processing another meeting",
+  "error": "BUSY"
+}
+```
+
+
 ### Redis Message Queue (Alternative to REST API)
 
 Meeting Bot also supports adding meeting join requests via Redis message queue, which provides asynchronous processing and better scalability for high-throughput scenarios.
@@ -233,29 +259,6 @@ The following environment variables configure Redis connectivity:
 
 
 
-### Response Format
-
-**Success Response (202 Accepted):**
-```json
-{
-  "success": true,
-  "message": "Meeting join request accepted and processing started",
-  "data": {
-    "userId": "user123",
-    "teamId": "team123",
-    "status": "processing"
-  }
-}
-```
-
-**Busy Response (409 Conflict):**
-```json
-{
-  "success": false,
-  "message": "System is currently busy processing another meeting",
-  "error": "BUSY"
-}
-```
 
 ## ⚙️ Configuration
 
