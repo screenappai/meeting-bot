@@ -1,0 +1,119 @@
+# Meeting Bot - Cursor Rules
+
+## Project Overview
+This is a TypeScript-based meeting bot application that automates joining and recording meetings for Google Meet, Microsoft Teams, and Zoom. The project uses Playwright for browser automation, Redis for message brokering, and follows a modular architecture with abstract bot classes.
+
+## Code Style & Standards
+
+### TypeScript Configuration
+- Target: ES2020 with strict type checking
+- Use strict null checks and no implicit any
+- Prefer explicit type annotations over type inference
+- Use camelCase for variables and functions, PascalCase for classes and interfaces
+- Always use semicolons
+- Use single quotes for strings
+
+### File Organization
+- Keep files focused and single-purpose
+- Use descriptive file names that reflect their functionality
+- Group related functionality in appropriate directories (bots/, services/, tasks/, etc.)
+- Place shared types in `src/types.ts`
+- Use index files for clean exports
+
+### Naming Conventions
+- **Classes**: PascalCase (e.g., `GoogleMeetBot`, `AbstractMeetBot`)
+- **Interfaces**: PascalCase with descriptive names (e.g., `BotLaunchParams`, `JoinParams`)
+- **Types**: PascalCase (e.g., `ProviderType`, `AVMediaType`)
+- **Functions/Methods**: camelCase (e.g., `join()`, `launchBot()`)
+- **Variables**: camelCase (e.g., `bearerToken`, `teamId`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_RETRY_ATTEMPTS`)
+- **Files**: kebab-case for multi-word files (e.g., `disk-uploader.ts`)
+
+### Code Structure
+- Use abstract classes for common bot functionality
+- Implement interfaces for contracts between components
+- Prefer composition over inheritance
+- Use dependency injection for services
+- Keep functions small and focused (max 20-30 lines)
+- Use early returns to reduce nesting
+
+### Error Handling
+- Use custom error classes from `src/error.ts`
+- Always handle promises with try-catch or .catch()
+- Provide meaningful error messages
+- Log errors appropriately using the logger utility
+
+### Async/Await Patterns
+- Prefer async/await over raw promises
+- Use Promise.all() for concurrent operations
+- Handle timeouts appropriately for long-running operations
+- Use proper error boundaries
+
+### Testing
+- Write tests for critical bot functionality
+- Use Playwright for browser automation testing
+- Mock external dependencies in unit tests
+- Test error scenarios and edge cases
+
+## Architecture Patterns
+
+### Bot System
+- All bots extend `AbstractMeetBot`
+- Use the provider pattern for different meeting platforms
+- Implement common interfaces for consistency
+- Use dependency injection for uploaders and services
+
+### Service Layer
+- Services handle business logic
+- Use Redis for message brokering and caching
+- Implement proper error handling and retry logic
+- Use Winston for structured logging
+
+### Task System
+- Tasks should be atomic and idempotent
+- Use the Task class for complex operations
+- Implement proper cleanup and resource management
+
+## Dependencies & Imports
+- Use ES6 import/export syntax
+- Group imports: external libraries, internal modules, types
+- Use absolute imports from src/ when possible
+- Avoid circular dependencies
+
+## Performance Considerations
+- Implement proper cleanup for browser instances
+- Use connection pooling for Redis
+- Implement retry logic with exponential backoff
+- Monitor memory usage in long-running processes
+
+## Security
+- Never log sensitive information (tokens, passwords)
+- Validate all input parameters
+- Use environment variables for configuration
+- Implement proper authentication checks
+
+## Documentation
+- Use JSDoc for public APIs
+- Keep README and CHANGELOG updated
+- Document complex business logic
+- Include examples for common use cases
+
+## Docker & Deployment
+- Use multi-stage builds for production
+- Implement graceful shutdown handling
+- Use environment-specific configurations
+- Monitor container health and logs
+
+## When Writing Code
+1. **Think about the bot lifecycle**: launch → join → record → cleanup
+2. **Consider error scenarios**: network issues, authentication failures, meeting not found
+3. **Plan for scalability**: multiple bots, concurrent operations, resource management
+4. **Focus on reliability**: retry mechanisms, fallback strategies, monitoring
+5. **Maintain consistency**: follow established patterns, use shared utilities, respect interfaces
+
+## Common Patterns to Follow
+- Use the logger utility for all logging
+- Implement proper cleanup in bot destructors
+- Use the global job store for task management
+- Follow the established error handling patterns
+- Use the resilience utilities for retry logic
