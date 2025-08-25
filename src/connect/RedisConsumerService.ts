@@ -153,7 +153,7 @@ export class RedisConsumerService {
         
         switch (meetingParams.provider) {
           case 'google':
-            const googleBot = new GoogleMeetBot(logger);
+            const googleBot = new GoogleMeetBot(logger, correlationId);
             await googleBot.join(joinParams);
             logger.info('Joined Google Meet event successfully.', meetingParams.userId, meetingParams.teamId);
             break;

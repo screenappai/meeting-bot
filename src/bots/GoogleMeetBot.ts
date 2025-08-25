@@ -1,11 +1,9 @@
-import { chromium } from 'playwright-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus, ContentType, WaitPromise } from '../types';
 import config from '../config';
-import { WaitingAtLobbyRetryError } from '../error';
+import { UnsupportedMeetingError, WaitingAtLobbyRetryError } from '../error';
 import { patchBotStatus } from '../services/botService';
-import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
+import { handleUnsupportedMeetingError, handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
 import { v4 } from 'uuid';
 import { IUploader } from '../middleware/disk-uploader';
 import { Logger } from 'winston';
@@ -13,40 +11,41 @@ import { browserLogCaptureCallback } from '../util/logger';
 import { getWaitingPromise } from '../lib/promise';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
-
-const stealthPlugin = StealthPlugin();
-stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
-stealthPlugin.enabledEvasions.delete('media.codecs');
-chromium.use(stealthPlugin);
-
-// Detect these dynamically and leave the meeting when necessary...
-export const GOOGLE_REQUEST_DENIED = 'Someone in the call denied your request to join';
-export const GOOGLE_REQUEST_TIMEOUT = 'No one responded to your request to join the call';
+import createBrowserContext from '../lib/chromium';
+import { GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
 
 export class GoogleMeetBot extends MeetBotBase {
   private _logger: Logger;
-  constructor(logger: Logger) {
+  private _correlationId: string;
+  constructor(logger: Logger, correlationId: string) {
     super();
     this.slightlySecretId = v4();
     this._logger = logger;
+    this._correlationId = correlationId;
   }
 
   async join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
 
     const handleUpload = async () => {
-      this._logger.info('Begin recording upload to server', userId, teamId);
+      this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToServer();
-      this._logger.info('Recording upload result', uploadResult, userId, teamId);
+      this._logger.info('Recording upload result', { uploadResult, userId, teamId });
+      return uploadResult;
     };
 
     try {
       const pushState = (st: BotStatus) => _state.push(st);
       await this.joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader, pushState });
-      await patchBotStatus({ botId, eventId, provider: 'google', status: _state, token: bearerToken }, this._logger);
 
       // Finish the upload from the temp video
-      await handleUpload();
+      const uploadResult = await handleUpload();
+
+      if (_state.includes('finished') && !uploadResult) {
+        _state.splice(_state.indexOf('finished'), 1, 'failed');
+      }
+
+      await patchBotStatus({ botId, eventId, provider: 'google', status: _state, token: bearerToken }, this._logger);
     } catch(error) {
       if (!_state.includes('finished')) 
         _state.push('failed');
@@ -57,6 +56,10 @@ export class GoogleMeetBot extends MeetBotBase {
         await handleWaitingAtLobbyError({ token: bearerToken, botId, eventId, provider: 'google', error }, this._logger);
       }
 
+      if (error instanceof UnsupportedMeetingError) {
+        await handleUnsupportedMeetingError({ token: bearerToken, botId, eventId, provider: 'google', error }, this._logger);
+      }
+
       throw error;
     }
   }
@@ -64,34 +67,7 @@ export class GoogleMeetBot extends MeetBotBase {
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
-    const browserArgs: string[] = [
-      '--enable-usermedia-screen-capturing',
-      '--allow-http-screen-capture',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-web-security',
-      '--use-gl=egl',
-      '--window-size=${width},${height}',
-      '--auto-accept-this-tab-capture',
-      '--enable-features=MediaRecorder',
-    ];
-    const size = { width: 1280, height: 720 };
-
-    const browser = await chromium.launch({
-      headless: false,
-      args: browserArgs,
-      ignoreDefaultArgs: ['--mute-audio'],
-      executablePath: config.chromeExecutablePath,
-    });
-
-    const context = await browser.newContext({
-      permissions: ['camera', 'microphone'],
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      viewport: size,
-    });
-    await context.grantPermissions(['microphone', 'camera'], { origin: url });
-
-    this.page = await context.newPage();
+    this.page = await createBrowserContext(url, this._correlationId);
 
     this._logger.info('Navigating to Google Meet URL...');
     await this.page.goto(url, { waitUntil: 'networkidle' });
@@ -118,6 +94,44 @@ export class GoogleMeetBot extends MeetBotBase {
     };
 
     await dismissDeviceCheck();
+
+    const verifyItIsOnGoogleMeetPage = async (): Promise<'SIGN_IN_PAGE' | 'GOOGLE_MEET_PAGE' | 'UNSUPPORTED_PAGE' | null> => {
+      try {
+        const detectSignInPage = async () => {
+          let result = false;
+          const url = await this.page.url();
+          if (url.startsWith('https://accounts.google.com/')) {
+            this._logger.info('Google Meet bot is on the sign in page...', { userId, teamId });
+            result = true;
+          }
+          const signInPage = await this.page.locator('h1', { hasText: 'Sign in' });
+          if (await signInPage.count() > 0 && await signInPage.isVisible()) {
+            this._logger.info('Google Meet bot is on the page with "Sign in" heading...', { userId, teamId });
+            result = result && true;
+          }
+          return result;
+        };
+        const pageUrl = await this.page.url();
+        if (!pageUrl.includes('meet.google.com')) {
+          const signInPage = await detectSignInPage();
+          return signInPage ? 'SIGN_IN_PAGE' : 'UNSUPPORTED_PAGE';
+        }
+        return 'GOOGLE_MEET_PAGE';
+      } catch(e) {
+        this._logger.error('Error verifying if Google Meet bot is on the Google Meet page...', { error: e, message: e?.message });
+        return null;
+      }
+    };
+
+    const googleMeetPageStatus = await verifyItIsOnGoogleMeetPage();
+    if (googleMeetPageStatus === 'SIGN_IN_PAGE') {
+      this._logger.info('Exiting now as meeting requires sign in...', { googleMeetPageStatus, userId, teamId });
+      throw new UnsupportedMeetingError('Meeting requires sign in', googleMeetPageStatus);
+    }
+
+    if (googleMeetPageStatus === 'UNSUPPORTED_PAGE') {
+      this._logger.info('Google Meet bot is on the unsupported page...', { googleMeetPageStatus, userId, teamId });
+    }
 
     this._logger.info('Waiting for the input field to be visible...');
     await retryActionWithWait(
@@ -195,8 +209,29 @@ export class GoogleMeetBot extends MeetBotBase {
 
         waitInterval = setInterval(async () => {
           try {
+            const detectLobbyModeHostWaitingText = async (): Promise<'WAITING_FOR_HOST_TO_ADMIT_BOT' | 'WAITING_REQUEST_TIMEOUT' | 'LOBBY_MODE_NOT_ACTIVE' | 'UNABLE_TO_DETECT_LOBBY_MODE'> => {
+              try {
+                const lobbyModeHostWaitingText = await this.page.getByText(GOOGLE_LOBBY_MODE_HOST_TEXT);
+                if (await lobbyModeHostWaitingText.count() > 0 && await lobbyModeHostWaitingText.isVisible()) {
+                  return 'WAITING_FOR_HOST_TO_ADMIT_BOT';
+                }
+
+                const lobbyModeRequestTimeoutText = await this.page.getByText(GOOGLE_REQUEST_TIMEOUT);
+                if (await lobbyModeRequestTimeoutText.count() > 0 && await lobbyModeRequestTimeoutText.isVisible()) {
+                  return 'WAITING_REQUEST_TIMEOUT';
+                }
+
+                return 'LOBBY_MODE_NOT_ACTIVE';
+              }
+              catch (e) {
+                this._logger.error('Error detecting lobby mode host waiting text...', { error: e, message: e?.message });
+                return 'UNABLE_TO_DETECT_LOBBY_MODE';
+              }
+            };
+
             let peopleElement;
             let callButtonElement;
+            let botWasDeniedAccess = false;
 
             try {
               peopleElement = await this.page.waitForSelector('button[aria-label="People"]', { timeout: 5000 });
@@ -217,10 +252,39 @@ export class GoogleMeetBot extends MeetBotBase {
             }
 
             if (peopleElement || callButtonElement) {
-              this._logger.info('Google Meet Bot is entering the meeting...', { userId, teamId });
+              // Here check the "lobby mode" that waits for the Host to join the meeting or for the Host to admit the bot
+              const lobbyModeHostWaitingText = await detectLobbyModeHostWaitingText();
+              if (lobbyModeHostWaitingText === 'WAITING_FOR_HOST_TO_ADMIT_BOT') {
+                this._logger.info('Lobbdy Mode: Google Meet Bot is waiting for the host to admit it...', { userId, teamId });
+              } else if (lobbyModeHostWaitingText === 'WAITING_REQUEST_TIMEOUT') {
+                this._logger.info('Lobby Mode: Google Meet Bot join request timed out...', { userId, teamId });
+                clearInterval(waitInterval);
+                clearTimeout(waitTimeout);
+                resolveWaiting(false);
+                return;
+              } else {
+                this._logger.info('Google Meet Bot is entering the meeting...', { userId, teamId });
+                clearInterval(waitInterval);
+                clearTimeout(waitTimeout);
+                resolveWaiting(true);
+                return;
+              }              
+            }
+
+            try {
+              const deniedText = await this.page.getByText(GOOGLE_REQUEST_DENIED);
+              if (await deniedText.count() > 0 && await deniedText.isVisible()) {
+                botWasDeniedAccess = true;
+              }
+            }
+            catch(e) {
+              //do nothing
+            }
+            if (botWasDeniedAccess) {
+              this._logger.info('Google Meet Bot is denied access to the meeting...', { userId, teamId });
               clearInterval(waitInterval);
               clearTimeout(waitTimeout);
-              resolveWaiting(true);
+              resolveWaiting(false);
             }
           } catch(e) {
             this._logger.error(
@@ -349,7 +413,9 @@ export class GoogleMeetBot extends MeetBotBase {
       async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes }: 
       { teamId:string, userId: string, duration: number, inactivityLimit: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number }) => {
         let timeoutId: NodeJS.Timeout;
-        let inactivityDetectionTimeout: NodeJS.Timeout;
+        let inactivityParticipantDetectionTimeout: NodeJS.Timeout;
+        let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
+        let isOnValidGoogleMeetPageInterval: NodeJS.Timeout;
 
         const sendChunkToServer = async (chunk: ArrayBuffer) => {
           function arrayBufferToBase64(buffer: ArrayBuffer) {
@@ -424,6 +490,9 @@ export class GoogleMeetBot extends MeetBotBase {
           const chunkDuration = 2000;
           mediaRecorder.start(chunkDuration);
 
+          let dismissModalsInterval: NodeJS.Timeout;
+          let lastDimissError: Error | null = null;
+
           const stopTheRecording = async () => {
             mediaRecorder.stop();
             stream.getTracks().forEach((track) => track.stop());
@@ -432,8 +501,26 @@ export class GoogleMeetBot extends MeetBotBase {
             clearTimeout(timeoutId);
 
             // Cancel the perpetural checks
-            if (inactivityDetectionTimeout) {
-              clearTimeout(inactivityDetectionTimeout);
+            if (inactivityParticipantDetectionTimeout) {
+              clearTimeout(inactivityParticipantDetectionTimeout);
+            }
+            if (inactivitySilenceDetectionTimeout) {
+              clearTimeout(inactivitySilenceDetectionTimeout);
+            }
+
+            if (loneTest) {
+              clearTimeout(loneTest);
+            }
+
+            if (isOnValidGoogleMeetPageInterval) {
+              clearInterval(isOnValidGoogleMeetPageInterval);
+            }
+
+            if (dismissModalsInterval) {
+              clearInterval(dismissModalsInterval);
+              if (lastDimissError && lastDimissError instanceof Error) {
+                console.error('Error dismissing modals:', { lastDimissError, message: lastDimissError?.message });
+              }
             }
 
             // Begin browser cleanup
@@ -442,88 +529,106 @@ export class GoogleMeetBot extends MeetBotBase {
 
           let loneTest: NodeJS.Timeout;
           let detectionFailures = 0;
+          let loneTestDetectionActive = true;
           const maxDetectionFailures = 10; // Track up to 10 consecutive failures
+
+          function detectLoneParticipantResilient(): void {
+            const re = /^[0-9]+$/;
           
-          // Simple check to verify we're still on a supported Google Meet page
-          const isOnValidGoogleMeetPage = () => {
-            try {
-              // Check if we're still on a Google Meet URL
-              const currentUrl = window.location.href;
-              if (!currentUrl.includes('meet.google.com')) {
-                console.warn('No longer on Google Meet page - URL changed to:', currentUrl);
-                return false;
-              }
-
-              const currentBodyText = document.body.innerText;
-              if (currentBodyText.includes('You\'ve been removed from the meeting')) {
-                console.warn('User was removed from the meeting - ending recording on team:', userId, teamId);
-                return false;
-              }
-
-              // Check for basic Google Meet UI elements
-              const hasMeetElements = document.querySelector('button[aria-label="People"]') !== null ||
-                                    document.querySelector('button[aria-label="Leave call"]') !== null;
-
-              if (!hasMeetElements) {
-                console.warn('Google Meet UI elements not found - page may have changed state');
-                return false;
-              }
-
-              return true;
-            } catch (error) {
-              console.error('Error checking page validity:', error);
-              return false;
-            }
-          };
-          
-          const detectLoneParticipant = () => {
-            loneTest = setInterval(() => {
-              try {
-                // First check if we're still on a valid Google Meet page
-                if (!isOnValidGoogleMeetPage()) {
-                  console.log('Google Meet page state changed - ending recording on team:', userId, teamId);
-                  clearInterval(loneTest);
-                  stopTheRecording();
-                  return;
+            function getContributorsCount(): number | undefined {
+              function findPeopleButton() {
+                try {
+                  // 1. Try to locate using attribute "starts with"
+                  let btn: Element | null | undefined = document.querySelector('button[aria-label^="People -"]');
+                  if (btn) return btn;
+                
+                  // 2. Try to locate using attribute "contains"
+                  btn = document.querySelector('button[aria-label*="People"]');
+                  if (btn) return btn;
+                
+                  // 3. Try via regex on aria-label (for more complex patterns)
+                  const allBtns = Array.from(document.querySelectorAll('button[aria-label]'));
+                  btn = allBtns.find(b => {
+                    const label = b.getAttribute('aria-label');
+                    return label && /^People - \d+ joined$/.test(label);
+                  });
+                  if (btn) return btn;
+                
+                  // 4. Fallback: Look for button with a child icon containing "people"
+                  btn = allBtns.find(b =>
+                    Array.from(b.querySelectorAll('i')).some(i =>
+                      i.textContent && i.textContent.trim() === 'people'
+                    )
+                  );
+                  if (btn) return btn;
+                
+                  // 5. Not found
+                  return null;
+                } catch (error) {
+                  console.log('Error finding people button:', error);
+                  return null;
                 }
+              }
 
-                const re = new RegExp(/^[0-9]$/g);
-  
-                const contributors = Array.from(document.querySelector('button[aria-label="People"]')?.parentNode?.parentNode?.querySelectorAll('div') ?? [])
-                    .filter(x => (re.test(x.innerText)))[0]
-                    ?.innerText;
-
-                if (typeof contributors === 'undefined') {
-                  detectionFailures++;
-                  console.error('Possibly Google Meet presence detection did not work on team:', teamId, 'Failure count:', detectionFailures);
-                  
-                  if (detectionFailures >= maxDetectionFailures) {
-                    console.error('Presence detection consistently failing - this may indicate a Google Meet UI change or technical issue. Meeting will continue until max duration.', { bodyText: document?.body?.innerText });
-                    clearInterval(loneTest);
+              // 1. Try main DOM with aria-label first
+              try {
+                const peopleBtn = findPeopleButton();
+                if (peopleBtn) {
+                  const divs = Array.from((peopleBtn.parentNode as HTMLElement)?.parentNode?.querySelectorAll('div') ?? []);
+                  for (const node of divs) {
+                    if (typeof (node as HTMLElement).innerText === 'string' && re.test((node as HTMLElement).innerText.trim())) {
+                      return Number((node as HTMLElement).innerText.trim());
+                    }
+                  }
+                }
+              } catch {
+                console.log('1 Error getting contributors count:', { root: document.body.innerText });
+              }
+          
+              return undefined;
+            }
+          
+            function retryWithBackoff(): void {
+              loneTest = setTimeout(function check() {
+                if (!loneTestDetectionActive) {
+                  if (loneTest) {
+                    clearTimeout(loneTest);
                   }
                   return;
                 }
-
-                // Reset failure count on success
-                detectionFailures = 0;
-                const isBotAlone = Number(contributors) < 2;
-  
-                if (isBotAlone) {
-                  console.log('Detected meeting bot is alone in meeting, ending recording on team:', userId, teamId);
-                  clearInterval(loneTest);
-                  stopTheRecording();
+                let contributors: number | undefined;
+                try {
+                  contributors = getContributorsCount();
+                  if (typeof contributors === 'undefined') {
+                    detectionFailures++;
+                    console.warn('Meet participant detection failed, retrying. Failure count:', detectionFailures);
+                    // Log for debugging
+                    if (detectionFailures >= maxDetectionFailures) {
+                      console.log('Persistent detection failures:', { bodyText: `${document.body.innerText?.toString()}` });
+                      loneTestDetectionActive = false;
+                    }
+                    retryWithBackoff();
+                    return;
+                  }
+                  detectionFailures = 0;
+                  if (contributors < 2) {
+                    console.log('Bot is alone, ending meeting.');
+                    loneTestDetectionActive = false;
+                    stopTheRecording();
+                    return;
+                  }
+                } catch (err) {
+                  detectionFailures++;
+                  console.error('Detection error:', err, detectionFailures);
+                  retryWithBackoff();
+                  return;
                 }
-              } catch (error) {
-                detectionFailures++;
-                console.error('Google Meet presence detection failed on team:', userId, teamId, error, 'Failure count:', detectionFailures);
-                
-                if (detectionFailures >= maxDetectionFailures) {
-                  console.error('Presence detection consistently failing - this may indicate a Google Meet UI change or technical issue. Meeting will continue until max duration.');
-                  clearInterval(loneTest);
-                }
-              }
-            }, 5000); // Detect every 5 seconds
-          };
+                retryWithBackoff();
+              }, 5000);
+            }
+          
+            retryWithBackoff();
+          }
 
           const detectIncrediblySilentMeeting = () => {
             // Only run silence detection if we have audio tracks
@@ -601,11 +706,88 @@ export class GoogleMeetBot extends MeetBotBase {
           /**
            * Perpetual checks for inactivity detection
            */
-          inactivityDetectionTimeout = setTimeout(() => {
-            detectLoneParticipant();
+          inactivityParticipantDetectionTimeout = setTimeout(() => {
+            detectLoneParticipantResilient();
+          }, activateInactivityDetectionAfterMinutes * 60 * 1000);
+
+          inactivitySilenceDetectionTimeout = setTimeout(() => {
             detectIncrediblySilentMeeting();
           }, activateInactivityDetectionAfterMinutes * 60 * 1000);
 
+          const detectModalsAndDismiss = () => {
+            let dismissModalErrorCount = 0;
+            const maxDismissModalErrorCount = 10;
+            dismissModalsInterval = setInterval(() => {
+              try {
+                const buttons = document.querySelectorAll('button');
+                const dismissButtons = Array.from(buttons).filter((button) => button?.offsetParent !== null && button?.innerText?.includes('Got it'));
+                if (dismissButtons.length > 0) {
+                  console.log('Found "Got it" button, clicking it...', dismissButtons[0]);
+                  dismissButtons[0].click();
+                }
+              } catch(error) {
+                lastDimissError = error;
+                dismissModalErrorCount += 1;
+                if (dismissModalErrorCount > maxDismissModalErrorCount) {
+                  console.error(`Failed to detect and dismiss "Got it" modals ${maxDismissModalErrorCount} times, will stop trying...`);
+                  clearInterval(dismissModalsInterval);
+                }
+              }
+            }, 2000);
+          };
+
+          const detectMeetingIsOnAValidPage = () => {
+            // Simple check to verify we're still on a supported Google Meet page
+            const isOnValidGoogleMeetPage = () => {
+              try {
+                // Check if we're still on a Google Meet URL
+                const currentUrl = window.location.href;
+                if (!currentUrl.includes('meet.google.com')) {
+                  console.warn('No longer on Google Meet page - URL changed to:', currentUrl);
+                  return false;
+                }
+
+                const currentBodyText = document.body.innerText;
+                if (currentBodyText.includes('You\'ve been removed from the meeting')) {
+                  console.warn('Bot was removed from the meeting - ending recording on team:', userId, teamId);
+                  return false;
+                }
+
+                if (currentBodyText.includes('No one responded to your request to join the call')) {
+                  console.warn('Bot was not admitted to the meeting - ending recording on team:', userId, teamId);
+                  return false;
+                }
+
+                // Check for basic Google Meet UI elements
+                const hasMeetElements = document.querySelector('button[aria-label="People"]') !== null ||
+                                      document.querySelector('button[aria-label="Leave call"]') !== null;
+
+                if (!hasMeetElements) {
+                  console.warn('Google Meet UI elements not found - page may have changed state');
+                  return false;
+                }
+
+                return true;
+              } catch (error) {
+                console.error('Error checking page validity:', error);
+                return false;
+              }
+            };
+
+            // check if we're still on a valid Google Meet page
+            isOnValidGoogleMeetPageInterval = setInterval(() => {
+              if (!isOnValidGoogleMeetPage()) {
+                console.log('Google Meet page state changed - ending recording on team:', userId, teamId);
+                clearInterval(isOnValidGoogleMeetPageInterval);
+                stopTheRecording();
+              }
+            }, 10000);
+          };
+
+          detectModalsAndDismiss();
+
+          detectMeetingIsOnAValidPage();
+          
           // Cancel this timeout when stopping the recording
           // Stop recording after `duration` minutes upper limit
           timeoutId = setTimeout(async () => {

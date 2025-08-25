@@ -122,3 +122,73 @@ export type WaitingAtLobbyCategory = {
   category: 'WaitingAtLobby',
   subCategory: 'Timeout' | 'StuckInLobby' | 'UserDeniedRequest',
 }
+export type UnsupportedMeetingCategory = {
+  category: 'UnsupportedMeeting',
+  subCategory: 'RequiresSignIn' | 'RestrictedMeeting' | 'PrivateMeeting',
+}
+
+export const categories = [
+  'WaitingAtLobby', 
+  'Recording', 
+  'Integration',
+  'UnsupportedMeeting',
+  'Platform',
+] as const;
+export const subCategories = [
+  'Timeout',
+  'StuckInLobby',
+  'Start',
+  'End',
+  'UserDeniedRequest',
+  'InactiveIntegration',
+  'ReconnectRequired',
+  'RequiresSignIn',
+  'RestrictedMeeting',
+  'PrivateMeeting',
+  'BotCrashed',
+  'BotNotResponding',
+] as const;
+export const logCategories: {
+  category: typeof categories[number], 
+  subCategory: typeof subCategories[number][], 
+}[] = [
+  {
+    category: 'WaitingAtLobby',
+    subCategory: [
+      'Timeout',
+      'StuckInLobby',
+      'UserDeniedRequest'
+    ] as const,
+  },
+  {
+    category: 'Recording',
+    subCategory: [
+      'Start',
+      'End',
+    ] as const,
+  },
+  {
+    category: 'Integration',
+    subCategory: [
+      'InactiveIntegration',
+      'ReconnectRequired',
+    ] as const,
+  },
+  {
+    category: 'UnsupportedMeeting',
+    subCategory: [
+      'RequiresSignIn',
+      'RestrictedMeeting',
+      'PrivateMeeting',
+    ] as const,
+  },
+  {
+    category: 'Platform',
+    subCategory: [
+      'BotCrashed',
+      'BotNotResponding',
+    ] as const,
+  },
+] as const;
+export type LogCategory = typeof logCategories[number]['category'];
+export type LogSubCategory<C extends LogCategory> = (typeof logCategories[number] & { category: C })['subCategory'][number];
