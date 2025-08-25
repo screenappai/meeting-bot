@@ -158,12 +158,12 @@ export class RedisConsumerService {
             logger.info('Joined Google Meet event successfully.', meetingParams.userId, meetingParams.teamId);
             break;
           case 'microsoft':
-            const microsoftBot = new MicrosoftTeamsBot(logger);
+            const microsoftBot = new MicrosoftTeamsBot(logger, correlationId);
             await microsoftBot.join(joinParams);
             logger.info('Joined Microsoft Teams meeting successfully.', meetingParams.userId, meetingParams.teamId);
             break;
           case 'zoom':
-            const zoomBot = new ZoomBot(logger);
+            const zoomBot = new ZoomBot(logger, correlationId);
             await zoomBot.join(joinParams);
             logger.info('Joined Zoom meeting successfully.', meetingParams.userId, meetingParams.teamId);
             break;

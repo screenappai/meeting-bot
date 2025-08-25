@@ -4,13 +4,11 @@ import { loggerFactory } from '../util/logger';
 import { v4 } from 'uuid';
 
 async function mainDebug(userId: string, url: string) {
-  const logger = loggerFactory(v4(), 'debug');
+  const correlationId = v4();
+  const logger = loggerFactory(correlationId, 'debug');
   console.log('Launching browser...', { userId: userId });
 
-  const context = await createBrowserContext();
-  await context.grantPermissions(['microphone', 'camera'], { origin: url });
-
-  const page = await context.newPage();
+  const page = await createBrowserContext(url, correlationId);
 
   console.log('Navigating to URL...');
   await page.goto(url, { waitUntil: 'networkidle' });

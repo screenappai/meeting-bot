@@ -1,5 +1,3 @@
-import { chromium } from 'playwright-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus, ContentType, WaitPromise } from '../types';
 import config from '../config';
@@ -13,28 +11,25 @@ import { browserLogCaptureCallback } from '../util/logger';
 import { getWaitingPromise } from '../lib/promise';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
-
-const stealthPlugin = StealthPlugin();
-stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
-stealthPlugin.enabledEvasions.delete('media.codecs');
-chromium.use(stealthPlugin);
-
-export const MICROSOFT_REQUEST_DENIED = 'Sorry, but you were denied access to the meeting';
+import createBrowserContext from '../lib/chromium';
+import { MICROSOFT_REQUEST_DENIED } from '../constants';
 
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
-  constructor(logger: Logger) {
+  private _correlationId: string;
+  constructor(logger: Logger, correlationId: string) {
     super();
     this.slightlySecretId = v4();
     this._logger = logger;
+    this._correlationId = correlationId;
   }
   async join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
 
     const handleUpload = async () => {
-      this._logger.info('Begin recording upload to server', userId, teamId);
+      this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToServer();
-      this._logger.info('Recording upload result', uploadResult, userId, teamId);
+      this._logger.info('Recording upload result', { uploadResult, userId, teamId });
     };
 
     try {
@@ -60,34 +55,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   private async joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
-    const browserArgs: string[] = [
-      '--enable-usermedia-screen-capturing',
-      '--allow-http-screen-capture',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-web-security',
-      '--use-gl=egl',
-      '--window-size=${width},${height}',
-      '--auto-accept-this-tab-capture',
-      '--enable-features=MediaRecorder',
-    ];
-    const size = { width: 1280, height: 720 };
-
-    const browser = await chromium.launch({
-      headless: false,
-      args: browserArgs,
-      ignoreDefaultArgs: ['--mute-audio'],
-      executablePath: config.chromeExecutablePath,
-    });
-    const context = await browser.newContext({
-      permissions: ['camera', 'microphone'],
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      viewport: size,
-      ignoreHTTPSErrors: true,
-    });
-    await context.grantPermissions(['microphone', 'camera'], { origin: url });
-    
-    this.page = await context.newPage();
+    this.page = await createBrowserContext(url, this._correlationId);
 
     await this.page.waitForTimeout(1000);
 
@@ -97,14 +65,31 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     this._logger.info('Waiting for 10 seconds...');
     await this.page.waitForTimeout(10000);
 
-    this._logger.info('Waiting for Join meeting from browser field to be visible...');
-    await this.page.waitForSelector('button[aria-label="Join meeting from this browser"]', { timeout: 60000 });
-    
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
+    let joinFromBrowserButtonFound = false;
 
-    this._logger.info('Clicking Join meeting from this browser button...');
-    await this.page.click('button[aria-label="Join meeting from this browser"]');
+    try {
+      this._logger.info('Waiting for Join meeting from browser field to be visible...');
+      await retryActionWithWait(
+        'Waiting for Join meeting from browser field to be visible',
+        async () => {
+          await this.page.waitForSelector('button[aria-label="Join meeting from this browser"]', { timeout: 60000 });
+          joinFromBrowserButtonFound = true;
+
+          this._logger.info('Waiting for 10 seconds...');
+          await this.page.waitForTimeout(10000);
+        },
+        this._logger,
+        1,
+        15000,
+      );
+    } catch (error) {
+      this._logger.info('Join meeting from browser button is probably missing!...', { error });
+    }
+
+    if (joinFromBrowserButtonFound) {
+      this._logger.info('Clicking Join meeting from this browser button...');
+      await this.page.click('button[aria-label="Join meeting from this browser"]');
+    }
 
     const dismissDeviceCheck = async () => {
       try {
@@ -125,7 +110,18 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     };
 
     this._logger.info('Waiting for the input field to be visible...');
-    await this.page.waitForSelector('input[type="text"]', { timeout: 60000 });
+    await retryActionWithWait(
+      'Waiting for the input field to be visible',
+      async () => {
+        await this.page.waitForSelector('input[type="text"]', { timeout: 20000 });
+      },
+      this._logger,
+      2,
+      15000,
+      async () => {
+        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'input-field-visible', userId, this._logger, botId);
+      }
+    );
     
     await dismissDeviceCheck();
 
@@ -174,15 +170,78 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
     pushState('joined');
 
-    try {
-      this._logger.info('Waiting for the "Close" button...');
-      await this.page.waitForSelector('button[aria-label=Close]', { timeout: 5000 });
-      this._logger.info('Clicking the "Close" button...');
-      await this.page.click('button[aria-label=Close]');
-    } catch (error) {
-      // Log and ignore this error
-      this._logger.info('Turn On notification might be missing...', error);
-    }
+    const dismissDeviceChecksAndNotifications = async () => {
+      const notificationCheck = async () => {
+        try {
+          this._logger.info('Waiting for the "Close" button...');
+          await this.page.waitForSelector('button[aria-label=Close]', { timeout: 5000 });
+          this._logger.info('Clicking the "Close" button...');
+          await this.page.click('button[aria-label=Close]', { timeout: 2000 });
+        } catch (error) {
+          // Log and ignore this error
+          this._logger.info('Turn On notification might be missing...', error);
+        }
+      };
+
+      const deviceCheck = async () => {
+        try {
+          this._logger.info('Waiting for the "Close" button...');
+          await this.page.waitForSelector('button[title="Close"]', { timeout: 5000 });
+    
+          this._logger.info('Going to click all visible "Close" buttons...');
+    
+          let closeButtonsClicked = 0;
+          let previousButtonCount = -1;
+          let consecutiveNoChangeCount = 0;
+          const maxConsecutiveNoChange = 2; // Stop if button count doesn't change for 2 consecutive iterations
+    
+          while (true) {
+            const visibleButtons = await this.page.locator('button[title="Close"]:visible').all();
+          
+            const currentButtonCount = visibleButtons.length;
+            
+            if (currentButtonCount === 0) {
+              break;
+            }
+            
+            // Check if button count hasn't changed (indicating we might be stuck)
+            if (currentButtonCount === previousButtonCount) {
+              consecutiveNoChangeCount++;
+              if (consecutiveNoChangeCount >= maxConsecutiveNoChange) {
+                this._logger.warn(`Button count hasn't changed for ${maxConsecutiveNoChange} iterations, stopping`);
+                break;
+              }
+            } else {
+              consecutiveNoChangeCount = 0;
+            }
+            
+            previousButtonCount = currentButtonCount;
+    
+            for (const btn of visibleButtons) {
+              try {
+                await btn.click({ timeout: 5000 });
+                closeButtonsClicked++;
+                this._logger.info(`Clicked a "Close" button #${closeButtonsClicked}`);
+                
+                await this.page.waitForTimeout(2000);
+              } catch (err) {
+                this._logger.warn('Click failed, possibly already dismissed', { error: err });
+              }
+            }
+          
+            await this.page.waitForTimeout(2000);
+          }
+        } catch (error) {
+          // Log and ignore this error
+          this._logger.info('Device permissions modals might be missing...', { error });
+        }
+      };
+
+      await notificationCheck();
+      await deviceCheck();
+      this._logger.info('Finished dismissing device checks and notifications...');
+    };
+    await dismissDeviceChecksAndNotifications();
 
     // Recording the meeting page
     this._logger.info('Begin recording...');
