@@ -41,9 +41,9 @@ export class ZoomBot extends BotBase {
     const _state: BotStatus[] = ['processing'];
 
     const handleUpload = async () => {
-      this._logger.info('Begin recording upload to server', userId, teamId);
+      this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToServer();
-      this._logger.info('Recording upload result', uploadResult, userId, teamId);
+      this._logger.info('Recording upload result', { uploadResult, userId, teamId });
     };
     
     try {
@@ -440,6 +440,17 @@ export class ZoomBot extends BotBase {
     }
     catch(err) {
       this._logger.info('Caught notifications close error', err.message);
+    }
+
+    // Dismiss annoucements OK button if present
+    try {
+      const okButton = await iframe.locator('button', { hasText: 'OK' }).first();
+      if (await okButton.isVisible()) {
+        await okButton.click({ timeout: 5000 });
+        this._logger.info('Dismissed the OK button...');
+      }
+    } catch (error) {
+      this._logger.info('OK button might be missing...', error);
     }
 
     pushState('joined');
