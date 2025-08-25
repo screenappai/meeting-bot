@@ -314,7 +314,7 @@ class DiskUploader implements IUploader {
       partNumber++;
     }
 
-    this.finish();
+    await this.finish();
 
     this._logger.info(`Finished uploading ${partNumber - 1} parts.`, this._userId, this._teamId);
   }

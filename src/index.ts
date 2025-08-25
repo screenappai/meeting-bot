@@ -43,6 +43,14 @@ const initiateGracefulShutdown = async () => {
   }
 };
 
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received. Starting Graceful Shutdown');
   initiateGracefulShutdown();
