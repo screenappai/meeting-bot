@@ -27,6 +27,21 @@ if (missingSettings.length > 0) {
   );
 }
 
+const constructRedisUri = () => {
+  const host = process.env.REDIS_HOST || 'redis';
+  const port = process.env.REDIS_PORT || 6379;
+  const username = process.env.REDIS_USERNAME;
+  const password = process.env.REDIS_PASSWORD;
+  
+  if (username && password) {
+    return `redis://${username}:${password}@${host}:${port}`;
+  } else if (password) {
+    return `redis://:${password}@${host}:${port}`;
+  } else {
+    return `redis://${host}:${port}`;
+  }
+};
+
 export default {
   port: process.env.PORT || 3000,
   db: {
@@ -48,4 +63,6 @@ export default {
   region: process.env.GCP_DEFAULT_REGION,
   accessKey: process.env.GCP_ACCESS_KEY_ID ?? '',
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
+  redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
+  redisUri: constructRedisUri(),
 };

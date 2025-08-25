@@ -12,7 +12,8 @@ An open-source automation bot for joining and recording video meetings across mu
 - **Multi-Platform Support**: Join meetings on Google Meet, Microsoft Teams, and Zoom
 - **Automated Recording**: Capture meeting recordings with configurable duration limits
 - **Single Job Execution**: Ensures only one meeting is processed at a time across the entire system
-- **RESTful API**: Simple HTTP endpoints for easy integration
+- **Dual Integration Options**: RESTful API endpoints and Redis message queue for flexible integration
+- **Asynchronous Processing**: Redis queue support for high-throughput, scalable meeting requests
 - **Docker Support**: Containerized deployment with Docker and Docker Compose
 - **Graceful Shutdown**: Proper cleanup and resource management
 - **Prometheus Metrics**: Built-in monitoring and metrics collection
@@ -59,7 +60,15 @@ The server will start on `http://localhost:3000`
 
 ## 📖 Usage
 
+### How Meeting Bot Works
+
+Meeting Bot operates with a single job execution model to ensure reliable meeting processing:
+
+- **Single Job Processing**: Meeting Bot accepts only one job at a time and works until it's completely finished before accepting another job
+- **Automatic Retry**: The bot automatically retries on certain errors such as automation failures or when it takes too long to admit the bot into a meeting
+
 ### API Endpoints
+
 
 #### Join a Google Meet
 ```bash
@@ -119,6 +128,7 @@ GET /isbusy
 GET /metrics
 ```
 
+
 ### Response Format
 
 **Success Response (202 Accepted):**
@@ -143,6 +153,113 @@ GET /metrics
 }
 ```
 
+
+### Redis Message Queue (Alternative to REST API)
+
+Meeting Bot also supports adding meeting join requests via Redis message queue, which provides asynchronous processing and better scalability for high-throughput scenarios.
+
+#### Redis Message Structure
+
+```typescript
+interface MeetingJoinRedisParams {
+  url: string;
+  name: string;
+  teamId: string;
+  userId: string;
+  bearerToken: string;
+  timezone: string;
+  botId?: string;
+  eventId?: string;
+  provider: 'google' | 'microsoft' | 'zoom';  // Required for Redis
+}
+```
+
+#### Adding Messages to Redis Queue
+
+**Using RPUSH (Recommended):**
+```bash
+# Connect to Redis and add a message to the queue
+redis-cli RPUSH jobs:meetbot:list '{
+  "url": "https://meet.google.com/abc-defg-hij",
+  "name": "Meeting Notetaker",
+  "teamId": "team123",
+  "timezone": "UTC",
+  "userId": "user123",
+  "botId": "UUID",
+  "provider": "google",
+  "bearerToken": "your-auth-token"
+}'
+```
+
+**Using Redis Client Libraries:**
+
+**Node.js (ioredis):**
+```javascript
+import Redis from 'ioredis';
+
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  password: 'your-password'
+});
+
+const message = {
+  url: "https://meet.google.com/abc-defg-hij",
+  name: "Meeting Notetaker",
+  teamId: "team123",
+  timezone: "UTC",
+  userId: "user123",
+  botId: "UUID",
+  provider: "google",
+  bearerToken: "your-auth-token"
+};
+
+await redis.rpush('jobs:meetbot:list', JSON.stringify(message));
+```
+
+**Python (redis-py):**
+```python
+import redis
+import json
+
+r = redis.Redis(host='localhost', port=6379, password='your-password')
+
+message = {
+    "url": "https://meet.google.com/abc-defg-hij",
+    "name": "Meeting Notetaker",
+    "teamId": "team123",
+    "timezone": "UTC",
+    "userId": "user123",
+    "botId": "UUID",
+    "provider": "google",
+    "bearerToken": "your-auth-token"
+}
+
+r.rpush('jobs:meetbot:list', json.dumps(message))
+```
+
+#### Queue Processing
+
+- **FIFO Queue**: Messages are processed in First-In-First-Out order
+- **BLPOP Processing**: The bot uses `BLPOP` to consume messages from the queue
+- **Automatic Processing**: Messages are automatically picked up and processed by the Redis consumer service
+- **Single Job Execution**: Only one meeting is processed at a time across the entire system
+
+#### Redis Configuration
+
+The following environment variables configure Redis connectivity:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REDIS_HOST` | Redis server hostname | `redis` |
+| `REDIS_PORT` | Redis server port | `6379` |
+| `REDIS_USERNAME` | Redis username (optional) | - |
+| `REDIS_PASSWORD` | Redis password (optional) | - |
+| `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+
+
+
+
 ## ⚙️ Configuration
 
 ### Environment Variables
@@ -152,6 +269,11 @@ GET /metrics
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `60` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
+| `REDIS_HOST` | Redis server hostname | `redis` |
+| `REDIS_PORT` | Redis server port | `6379` |
+| `REDIS_USERNAME` | Redis username (optional) | - |
+| `REDIS_PASSWORD` | Redis password (optional) | - |
+| `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
 
 ### Docker Configuration
 
@@ -191,6 +313,7 @@ docker run -d \
 src/
 ├── app/           # Express application and route handlers
 ├── bots/          # Platform-specific bot implementations
+├── connect/       # Redis message broker and consumer services
 ├── lib/           # Core libraries and utilities
 ├── middleware/    # Express middleware
 ├── services/      # Business logic services
@@ -205,6 +328,8 @@ src/
 - **JobStore**: Manages single job execution across the system
 - **RecordingTask**: Handles meeting recording functionality
 - **ContextBridgeTask**: Manages browser context and automation
+- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLPOP)
+- **RedisConsumerService**: Processes messages from Redis queue asynchronously
 
 ## ⚠️ Limitations
 
@@ -257,10 +382,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Zoom support
 - ✅ Recording functionality
 - ✅ Docker deployment
-- ✅ API documentation
-- 🔄 Recording Upload support - cloud bucket or a Docker volume (planned)
-- 🔄 Additional platform support (planned)
-- 🔄 Enhanced monitoring (planned)
+- ✅ REST API support
+- ✅ Redis message queue support
+- 🔄 Recording Upload support - Cloud bucket or a Docker volume (planned)
+- 🔄 Additional video format support (planned)
+- 🔄 Enhanced platform feature support (planned)
 
 ---
 
