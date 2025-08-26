@@ -105,6 +105,9 @@ export const getErrorType = (error: unknown): string => {
     if (error.constructor.name === 'WaitingAtLobbyRetryError') {
       return 'WaitingAtLobbyRetryError';
     }
+    if (error.constructor.name === 'UnsupportedMeetingError') {
+      return 'UnsupportedMeetingError';
+    }
     if (error.constructor.name === 'KnownError') {
       return 'KnownError';
     }
@@ -156,3 +159,7 @@ export class LogAggregator {
     }
   }
 }
+
+export const getCorrelationIdLog = (correlationId: string) => {
+  return `[correlationId: ${correlationId || 'None'}]`;
+};

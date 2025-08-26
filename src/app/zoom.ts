@@ -63,7 +63,7 @@ const joinZoom = async (req: Request, res: Response) => {
       );
 
       // Create and join the meeting
-      const bot = new ZoomBot(logger);
+      const bot = new ZoomBot(logger, correlationId);
       await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
       
       logger.info('Joined Zoom meeting successfully.', userId, teamId);

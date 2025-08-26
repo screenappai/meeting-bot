@@ -1,8 +1,8 @@
 import { Page } from 'playwright';
-import { ContentType } from '../types';
 import { Task } from '../lib/Task';
 import config from '../config';
 import { Logger } from 'winston';
+import { vp9MimeType, webmMimeType } from '../lib/recording';
 
 export class RecordingTask extends Task<null, void> {
   private userId: string;
@@ -31,8 +31,8 @@ export class RecordingTask extends Task<null, void> {
 
   protected async execute(): Promise<void> {
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes }:
-        { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number }) => {
+      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
+        { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivityDetectionTimeout: NodeJS.Timeout;
 
@@ -63,9 +63,6 @@ export class RecordingTask extends Task<null, void> {
             return;
           }
 
-          const contentType: ContentType = 'video/webm';
-          const mimeType = `${contentType}; codecs="h264"`;
-
           const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
             video: true,
             audio: {
@@ -78,13 +75,14 @@ export class RecordingTask extends Task<null, void> {
             preferCurrentTab: true,
           });
 
-          let options: MediaRecorderOptions = { mimeType: contentType };
-          if (MediaRecorder.isTypeSupported(mimeType)) {
-            console.log(`Media Recorder will use ${mimeType} codecs...`);
-            options = { mimeType };
+          let options: MediaRecorderOptions = {};
+          if (MediaRecorder.isTypeSupported(primaryMimeType)) {
+            console.log(`Media Recorder will use ${primaryMimeType} codecs...`);
+            options = { mimeType: primaryMimeType };
           }
           else {
-            console.warn('Media Recorder did not find codecs, Using webm default');
+            console.warn(`Media Recorder did not find primary mime type codecs ${primaryMimeType}, Using fallback codecs ${secondaryMimeType}`);
+            options = { mimeType: secondaryMimeType };
           }
 
           const mediaRecorder = new MediaRecorder(stream, { ...options });
@@ -268,7 +266,9 @@ export class RecordingTask extends Task<null, void> {
         userId: this.userId, 
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
-        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString()
+        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
+        primaryMimeType: webmMimeType,
+        secondaryMimeType: vp9MimeType
       }
     );
   }

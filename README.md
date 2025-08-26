@@ -269,6 +269,7 @@ The following environment variables configure Redis connectivity:
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `60` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
+| `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
 | `REDIS_HOST` | Redis server hostname | `redis` |
 | `REDIS_PORT` | Redis server port | `6379` |
 | `REDIS_USERNAME` | Redis username (optional) | - |

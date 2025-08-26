@@ -12,26 +12,27 @@ import createBrowserContext from '../lib/chromium';
 import { uploadDebugImage } from '../services/bugService';
 import { Logger } from 'winston';
 import { handleWaitingAtLobbyError } from './MeetBotBase';
+import { ZOOM_REQUEST_DENIED } from '../constants';
 
 class BotBase extends AbstractMeetBot {
   protected page: Page;
   protected slightlySecretId: symbol; // Use any hard-to-guess identifier
   protected _logger: Logger;
-  constructor(logger: Logger) {
+  protected _correlationId: string;
+  constructor(logger: Logger, correlationId: string) {
     super();
     this.slightlySecretId = Symbol(v4());
     this._logger = logger;
+    this._correlationId = correlationId;
   }
   join(params: JoinParams): Promise<void> {
     throw new Error('Function not implemented.');
   }
 }
 
-export const ZOOM_REQUEST_DENIED = 'You have been removed';
-
 export class ZoomBot extends BotBase {
-  constructor(logger: Logger) {
-    super(logger);
+  constructor(logger: Logger, correlationId: string) {
+    super(logger, correlationId);
   }
 
   // TODO use base class for shared functions such as bot status and bot logging
@@ -40,9 +41,9 @@ export class ZoomBot extends BotBase {
     const _state: BotStatus[] = ['processing'];
 
     const handleUpload = async () => {
-      this._logger.info('Begin recording upload to server', userId, teamId);
+      this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToServer();
-      this._logger.info('Recording upload result', uploadResult, userId, teamId);
+      this._logger.info('Recording upload result', { uploadResult, userId, teamId });
     };
     
     try {
@@ -70,9 +71,7 @@ export class ZoomBot extends BotBase {
     const { url, name } = params;
     this._logger.info('Launching browser for Zoom...', { userId: params.userId });
     
-    const context = await createBrowserContext();
-    await context.grantPermissions(['microphone', 'camera'], { origin: url });
-    this.page = await context.newPage();
+    this.page = await createBrowserContext(url, this._correlationId);
 
     await this.page.route('**/*.exe', (route) => {
       this._logger.info(`Detected .exe download: ${route.request().url()?.split('download')[0]}`);
@@ -441,6 +440,17 @@ export class ZoomBot extends BotBase {
     }
     catch(err) {
       this._logger.info('Caught notifications close error', err.message);
+    }
+
+    // Dismiss annoucements OK button if present
+    try {
+      const okButton = await iframe.locator('button', { hasText: 'OK' }).first();
+      if (await okButton.isVisible()) {
+        await okButton.click({ timeout: 5000 });
+        this._logger.info('Dismissed the OK button...');
+      }
+    } catch (error) {
+      this._logger.info('OK button might be missing...', error);
     }
 
     pushState('joined');
