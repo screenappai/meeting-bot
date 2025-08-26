@@ -66,4 +66,5 @@ export default {
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
   redisUri: constructRedisUri(),
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
+  isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
 };
