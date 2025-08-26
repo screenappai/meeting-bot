@@ -1,5 +1,5 @@
 import { JoinParams } from './AbstractMeetBot';
-import { BotStatus, ContentType, WaitPromise } from '../types';
+import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
 import { UnsupportedMeetingError, WaitingAtLobbyRetryError } from '../error';
 import { patchBotStatus } from '../services/botService';
@@ -13,6 +13,7 @@ import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
 import { GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
+import { vp9MimeType, webmMimeType } from '../lib/recording';
 
 export class GoogleMeetBot extends MeetBotBase {
   private _logger: Logger;
@@ -410,8 +411,8 @@ export class GoogleMeetBot extends MeetBotBase {
 
     // Inject the MediaRecorder code into the browser context using page.evaluate
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes }: 
-      { teamId:string, userId: string, duration: number, inactivityLimit: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number }) => {
+      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }: 
+      { teamId:string, userId: string, duration: number, inactivityLimit: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivityParticipantDetectionTimeout: NodeJS.Timeout;
         let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
@@ -438,9 +439,6 @@ export class GoogleMeetBot extends MeetBotBase {
             console.error('MediaDevices or getDisplayMedia not supported in this browser.');
             return;
           }
-
-          const contentType: ContentType = 'video/webm';
-          const mimeType = `${contentType}; codecs="h264"`;
           
           const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
             video: true,
@@ -462,13 +460,14 @@ export class GoogleMeetBot extends MeetBotBase {
             console.warn('No audio tracks available for silence detection. Will rely only on presence detection.');
           }
 
-          let options: MediaRecorderOptions = { mimeType: contentType };
-          if (MediaRecorder.isTypeSupported(mimeType)) {
-            console.log(`Media Recorder will use ${mimeType} codecs...`);
-            options = { mimeType };
+          let options: MediaRecorderOptions = {};
+          if (MediaRecorder.isTypeSupported(primaryMimeType)) {
+            console.log(`Media Recorder will use ${primaryMimeType} codecs...`);
+            options = { mimeType: primaryMimeType };
           }
           else {
-            console.warn('Media Recorder did not find codecs, Using webm default');
+            console.warn(`Media Recorder did not find primary mime type codecs ${primaryMimeType}, Using fallback codecs ${secondaryMimeType}`);
+            options = { mimeType: secondaryMimeType };
           }
 
           const mediaRecorder = new MediaRecorder(stream, { ...options });
@@ -805,7 +804,9 @@ export class GoogleMeetBot extends MeetBotBase {
         userId,
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
-        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString()
+        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
+        primaryMimeType: webmMimeType,
+        secondaryMimeType: vp9MimeType
       }
     );
   

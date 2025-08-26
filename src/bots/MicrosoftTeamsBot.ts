@@ -1,5 +1,5 @@
 import { JoinParams } from './AbstractMeetBot';
-import { BotStatus, ContentType, WaitPromise } from '../types';
+import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
 import { WaitingAtLobbyRetryError } from '../error';
 import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
@@ -13,6 +13,7 @@ import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
 import { MICROSOFT_REQUEST_DENIED } from '../constants';
+import { vp9MimeType, webmMimeType } from '../lib/recording';
 
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
@@ -286,8 +287,8 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
     // Inject the MediaRecorder code into the browser context using page.evaluate
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes }: 
-      { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number }) => {
+      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }: 
+      { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivityDetectionTimeout: NodeJS.Timeout;
 
@@ -317,9 +318,6 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             console.error('MediaDevices or getDisplayMedia not supported in this browser.');
             return;
           }
-
-          const contentType: ContentType = 'video/webm';
-          const mimeType = `${contentType}; codecs="h264"`;
           
           const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
             video: true,
@@ -333,13 +331,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             preferCurrentTab: true,
           });
 
-          let options: MediaRecorderOptions = { mimeType: contentType };
-          if (MediaRecorder.isTypeSupported(mimeType)) {
-            console.log(`Media Recorder will use ${mimeType} codecs...`);
-            options = { mimeType };
+          let options: MediaRecorderOptions = {};
+          if (MediaRecorder.isTypeSupported(primaryMimeType)) {
+            console.log(`Media Recorder will use ${primaryMimeType} codecs...`);
+            options = { mimeType: primaryMimeType };
           }
           else {
-            console.warn('Media Recorder did not find codecs, Using webm default');
+            console.warn(`Media Recorder did not find primary mime type codecs ${primaryMimeType}, Using fallback codecs ${secondaryMimeType}`);
+            options = { mimeType: secondaryMimeType };
           }
 
           const mediaRecorder = new MediaRecorder(stream, { ...options });
@@ -473,7 +472,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         userId, 
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
-        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString()
+        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
+        primaryMimeType: webmMimeType,
+        secondaryMimeType: vp9MimeType
       }
     );
   

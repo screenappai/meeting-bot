@@ -5,10 +5,11 @@ import {
   initializeMultipartUpload,
   uploadChunkToStorage
 } from '../services/uploadService';
-import { ContentType, FileType } from '../types';
+import { ContentType, extensionToContentType, FileType } from '../types';
 import fs, { createWriteStream } from 'fs';
 import path from 'path';
 import { LogAggregator } from '../util/logger';
+import config from '../config';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -38,7 +39,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 }
 
 export interface IUploader {
-  uploadRecordingToServer(): Promise<boolean>;
+  uploadRecordingToServer(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
 }
 
@@ -62,13 +63,16 @@ class DiskUploader implements IUploader {
   private readonly MAX_GLOBAL_FAILURES = 5;
 
   private folderId = 'private'; // Assume meetings belong to an individual 
-  private contentType: ContentType = 'video/webm'; // Default video format
+  private contentType: ContentType = extensionToContentType[config.uploaderFileExtension] ?? 'video/webm'; // Default video format
+  private fileExtension: string = config.uploaderFileExtension;
   private fileId: string;
   private uploadId: string;
 
   private queue: Buffer[];
   private writing: boolean;
   private diskWriteSuccess: LogAggregator;
+
+  private forceUpload: boolean;
 
   private constructor(
     token: string,
@@ -92,6 +96,7 @@ class DiskUploader implements IUploader {
     this.queue = [];
     this.writing = false;
     this.diskWriteSuccess = new LogAggregator(this._logger, `Success writing temp chunk to disk ${this._userId}`);
+    this.forceUpload = false;
   }
 
   public static async initialize(
@@ -180,7 +185,7 @@ class DiskUploader implements IUploader {
   }
 
   private writeChunkToDisk(chunk: Buffer): Promise<void> {
-    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId);
+    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
 
     return new Promise((resolve, reject) => {
       const stream = createWriteStream(filePath, {
@@ -261,6 +266,11 @@ class DiskUploader implements IUploader {
 
   public async saveDataToTempFile(data: Buffer) {
     try {
+      if (this.forceUpload) {
+        // Stop disk writes when the upload or data recovery has started!
+        this._logger.info('Force upload is enabled. Stopping disk writes...', this._userId, this._teamId);
+        return false;
+      }
       this.enqueue(data);
       return true;
     } catch(err) {
@@ -274,15 +284,15 @@ class DiskUploader implements IUploader {
     return folderPath;
   }
 
-  private static getFilePath(userId: string, tempFileId: string) {
-    const fileName = `${tempFileId}.webm`;
+  private static getFilePath(userId: string, tempFileId: string, fileExtension: string) {
+    const fileName = `${tempFileId}${fileExtension}`;
     const folderPath = DiskUploader.getFolderPath(userId);
     const filePath = path.join(folderPath, fileName);
     return filePath;
   }
 
   private async processRecordingUpload() {
-    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId);
+    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
     const chunkSize = this.UPLOAD_CHUNK_SIZE;
 
     await this.connect();
@@ -365,7 +375,7 @@ class DiskUploader implements IUploader {
 
   private async deleteTempFileAsync(): Promise<void> {
     try {
-      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId);
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
       const absPath = path.resolve(filePath);
       await fs.promises.unlink(absPath);
       this._logger.info(`Temp File deleted from disk: ${absPath}`, this._userId);
@@ -376,7 +386,7 @@ class DiskUploader implements IUploader {
 
   private async tempFileExists(): Promise<boolean> {
     try {
-      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId);
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
       await fs.promises.access(filePath);
       return true;
     } catch {
@@ -419,15 +429,21 @@ class DiskUploader implements IUploader {
     }
   }
 
-  public async uploadRecordingToServer() {
+  public async uploadRecordingToServer(options?: { forceUpload?: boolean }) {
     try {
+      if (typeof options?.forceUpload === 'boolean') {
+        this.forceUpload = options.forceUpload;
+      }
+
       if (!await this.tempFileExists()) {
         throw new Error(`Unable to access the temp recording file on disk: ${this._userId} ${this._botId}`);
       }
 
       const goodToGo = await this.finalizeDiskWriting();
       
-      if (!goodToGo) {
+      if (this.forceUpload) {
+        this._logger.info('Force upload is enabled. Ignoring disk writing check results...', { goodToGo });
+      } else if (!goodToGo) {
         throw new Error(`Unable to finalise the temp recording file: ${this._userId} ${this._botId}`);
       }
 
