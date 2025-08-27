@@ -67,8 +67,10 @@ RUN npx playwright install --with-deps
 # Copy source code
 COPY . .
 
-# Copy xvfb-run-wrapper and set permissions
-COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
+# Set environment variables
+ENV NODE_ENV=production
+
+# Set xvfb-run-wrapper permissions
 RUN dos2unix /usr/src/app/xvfb-run-wrapper && \
     chmod +x /usr/src/app/xvfb-run-wrapper
 
