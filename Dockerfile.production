@@ -77,6 +77,12 @@ RUN dos2unix /usr/src/app/xvfb-run-wrapper && \
 # Build the TypeScript code
 RUN npm run build
 
+USER root
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
+RUN mkdir -p /usr/src/app/dist/_tempvideo \
+    && chmod -R 777 /usr/src/app/dist/_tempvideo
+
 # Switch to non-root user
 USER nodejs
 
