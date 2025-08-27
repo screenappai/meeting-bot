@@ -16,6 +16,8 @@ export const NODE_ENV: Environment = ENVIRONMENTS.includes(
   ? (process.env.NODE_ENV as Environment)
   : 'staging';
 
+console.log('NODE_ENV', process.env.NODE_ENV);
+
 const requiredSettings = [
   'GCP_DEFAULT_REGION',
   'GCP_MISC_BUCKET',
@@ -66,4 +68,5 @@ export default {
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
   redisUri: constructRedisUri(),
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
+  isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
 };

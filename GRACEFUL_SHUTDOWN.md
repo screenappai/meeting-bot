@@ -279,3 +279,31 @@ kill -TERM <application_pid>
 
 # Check logs for graceful shutdown sequence
 ``` 
+
+## Redis Integration
+
+### Conditional Redis Shutdown
+
+When Redis is disabled (`REDIS_CONSUMER_ENABLED=false`), the graceful shutdown process skips Redis-related cleanup:
+
+```typescript
+// In src/index.ts
+export const gracefulShutdownApp = () => {
+  server.close(async () => {
+    console.log('HTTP server closed. Exiting application');
+    
+    // Only shutdown Redis services if Redis is enabled
+    if (config.isRedisEnabled) {
+      await redisConsumerService.shutdown();
+      await messageBroker.quitClientGracefully();
+    } else {
+      console.log('Redis services not running - skipping Redis shutdown');
+    }
+    
+    console.log('Exiting.....');
+    process.exit(0);
+  });
+};
+```
+
+This ensures that the application can gracefully shutdown even when Redis connectivity is not required.

@@ -1,6 +1,6 @@
 import express from 'express';
 import client from 'prom-client';
-import { NODE_ENV } from '../config';
+import config, { NODE_ENV } from '../config';
 import mainDebug from '../test/debug';
 import googleRouter from './google';
 import microsoftRouter from './microsoft';
@@ -79,9 +79,13 @@ export const setIsBusy = (val: number) =>
 
 export const getIsBusy = () => isbusy;
 
-// Start Redis consumer service
-redisConsumerService.start().catch((error) => {
-  console.error('Failed to start Redis consumer service:', error);
-});
+// Start Redis consumer service only if Redis is enabled
+if (config.isRedisEnabled) {
+  redisConsumerService.start().catch((error) => {
+    console.error('Failed to start Redis consumer service:', error);
+  });
+} else {
+  console.info('Redis consumer service not started - Redis is disabled');
+}
 
 export default app;

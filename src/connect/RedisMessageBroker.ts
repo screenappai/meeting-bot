@@ -7,28 +7,30 @@ import config from '../config';
  * Uses FIFO queue (RPUSH + BLPOP)
  */
 export class RedisMessageBroker extends EventEmitter {
-  private meetbot: ReturnType<typeof createClient>;
+  private meetbot: ReturnType<typeof createClient> | null = null;
 
   constructor() {
     super();
 
-    this.meetbot = createClient({
-      url: config.redisUri,
-      name: 'backend-meetbot',
-    });
-    this.meetbot.on('error', (err) =>
-      console.error('meetbot redis client error', err)
-    );
-    Promise.all([
-      this.meetbot.connect(),
-    ]).then(() => {
-      console.log('Redis message broker connected.');
-    });
+    if (config.isRedisEnabled) {
+      this.meetbot = createClient({
+        url: config.redisUri,
+        name: 'backend-meetbot',
+      });
+      this.meetbot.on('error', (err) =>
+        console.error('meetbot redis client error', err)
+      );
+      Promise.all([
+        this.meetbot.connect(),
+      ]).then(() => {
+        console.log('Redis message broker connected.');
+      });
 
-    console.log('Redis message broker initialized:', config.redisUri);
+      console.log('Redis message broker initialized:', config.redisUri);
+    } else {
+      console.log('Redis message broker disabled - Redis is disabled');
+    }
   }
-
-
 
   /**
    * Return a job to the head of the meetbot Redis queue.
@@ -41,7 +43,7 @@ export class RedisMessageBroker extends EventEmitter {
    */
   async returnMeetingbotJobs(message: string) {
     // Set/update data, even if the item is already in the queue.
-    return await this.meetbot.lPush(
+    return await this.meetbot?.lPush(
       config.redisQueueName,
       message
     );
@@ -55,7 +57,7 @@ export class RedisMessageBroker extends EventEmitter {
    * @return The message acquired from meetbot Redis queue
    */
   async getMeetingbotJobsWithTimeout(timeout: number) {
-    return await this.meetbot.blPop(
+    return await this.meetbot?.blPop(
       config.redisQueueName,
       timeout
     );
@@ -66,10 +68,8 @@ export class RedisMessageBroker extends EventEmitter {
    * @return boolean indicating connection status
    */
   isConnected(): boolean {
-    return this.meetbot.isOpen;
+    return this.meetbot?.isOpen ?? false;
   }
-
-
 
   /**
    * This function accompanies container shutdown and closes redis connection to free up server resources
@@ -77,8 +77,8 @@ export class RedisMessageBroker extends EventEmitter {
    */
   async quitClientGracefully() {
     try {
-      if (this.meetbot.isOpen) {
-        await this.meetbot.quit();
+      if (this.meetbot?.isOpen) {
+        await this.meetbot?.quit();
       }
       console.log('Closed redis connection');      
     } catch(quitError) {

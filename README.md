@@ -256,6 +256,9 @@ The following environment variables configure Redis connectivity:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
+
+**Note**: When `REDIS_CONSUMER_ENABLED` is set to `false`, the Redis consumer service will not start, and the application will only support REST API endpoints for meeting requests. Redis message queue functionality will be disabled.
 
 
 
@@ -275,6 +278,7 @@ The following environment variables configure Redis connectivity:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 
 ### Docker Configuration
 
@@ -300,6 +304,7 @@ docker run -d \
   -p 3000:3000 \
   -e MAX_RECORDING_DURATION_MINUTES=60 \
   -e NODE_ENV=production \
+  -e REDIS_CONSUMER_ENABLED=false \
   ghcr.io/screenappai/meeting-bot:latest
 ```
 

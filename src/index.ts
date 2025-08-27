@@ -2,6 +2,7 @@ import http from 'http';
 import app, { redisConsumerService, setGracefulShutdown } from './app';
 import { globalJobStore } from './lib/globalJobStore';
 import messageBroker from './connect/messageBroker';
+import config from './config';
 
 const port = 3000;
 
@@ -70,8 +71,15 @@ export const gracefulShutdownApp = () => {
   // Complete existing requests, close database connections, etc.
   server.close(async () => {
     console.log('HTTP server closed. Exiting application');
-    await redisConsumerService.shutdown();
-    await messageBroker.quitClientGracefully();
+    
+    // Only shutdown Redis services if Redis is enabled
+    if (config.isRedisEnabled) {
+      await redisConsumerService.shutdown();
+      await messageBroker.quitClientGracefully();
+    } else {
+      console.log('Redis services not running - skipping Redis shutdown');
+    }
+    
     console.log('Exiting.....');
     process.exit(0);
   });

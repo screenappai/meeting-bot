@@ -9,6 +9,7 @@ import { encodeFileNameSafebase64 } from '../util/strings';
 import { JoinParams } from '../bots/AbstractMeetBot';
 import { MicrosoftTeamsBot } from '../bots/MicrosoftTeamsBot';
 import { ZoomBot } from '../bots/ZoomBot';
+import config from '../config';
 
 export class RedisConsumerService {
   private _isRunning: boolean = false;
@@ -20,6 +21,12 @@ export class RedisConsumerService {
   async start(): Promise<void> {
     if (this._isRunning) {
       console.warn('Redis consumer service is already running');
+      return;
+    }
+
+    // Check if Redis is enabled
+    if (!config.isRedisEnabled) {
+      console.info('Redis consumer service not started - Redis is disabled');
       return;
     }
 
@@ -220,11 +227,5 @@ export class RedisConsumerService {
   // Setter methods for controlled state changes
   private setShutdownRequested(value: boolean): void {
     this._isShutdownRequested = value;
-  }
-
-  async waitForCompletion(): Promise<void> {
-    while (this._isRunning) {
-      await new Promise(resolve => setTimeout(resolve, 1000));  // 1 second delay
-    }
   }
 }
