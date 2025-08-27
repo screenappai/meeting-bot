@@ -1,26 +1,8 @@
-# Multi-stage build for production
-FROM node:18 AS builder
+# Use the official Node.js image as a base image
+FROM node:18
 
 # Set the working directory
 WORKDIR /usr/src/app
-
-# Copy package files
-COPY package*.json ./
-
-# Install all dependencies (including dev dependencies for build)
-RUN npm ci && npm cache clean --force
-
-# Install Playwright and its dependencies
-RUN npx playwright install --with-deps
-
-# Copy source code
-COPY . .
-
-# Build the TypeScript code
-RUN npm run build
-
-# Production stage
-FROM node:18 AS production
 
 # Install system dependencies, including WebGL support
 RUN apt-get update && \
@@ -65,31 +47,34 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
 # Create symlink for Playwright compatibility (ARM64 only)
 RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then ln -sf /usr/bin/chromium /usr/bin/google-chrome; fi
 
-# Create app directory
-WORKDIR /usr/src/app
-
 # Create non-root user
 RUN groupadd -g 1001 nodejs && \
     useradd -r -u 1001 -g nodejs nodejs
 
-# Copy built application from builder stage
-COPY --from=builder --chown=nodejs:nodejs /usr/src/app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /usr/src/app/package*.json ./
+# Copy Chrome policy to allow protocol launching
+RUN mkdir -p /etc/opt/chrome/policies/managed
+COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/managed/auto_launch_protocols.json
+    
+# Copy package files
+COPY package*.json ./
 
-# Install only production dependencies in final stage
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci && npm cache clean --force
+
+# Install Playwright and its dependencies
+RUN npx playwright install --with-deps
+
+# Copy source code
+COPY . .
 
 # Copy xvfb-run-wrapper and set permissions
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/xvfb-run-wrapper ./
 RUN dos2unix /usr/src/app/xvfb-run-wrapper && \
     chmod +x /usr/src/app/xvfb-run-wrapper
 
-    # Copy Chrome policy to allow protocol launching
-RUN mkdir -p /etc/opt/chrome/policies/managed
-COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/managed/auto_launch_protocols.json
-    
-# Set environment variables
-ENV NODE_ENV=production
+# Build the TypeScript code
+RUN npm run build
+
 # Switch to non-root user
 USER nodejs
 

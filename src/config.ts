@@ -16,6 +16,8 @@ export const NODE_ENV: Environment = ENVIRONMENTS.includes(
   ? (process.env.NODE_ENV as Environment)
   : 'staging';
 
+console.log('NODE_ENV', process.env.NODE_ENV);
+
 const requiredSettings = [
   'GCP_DEFAULT_REGION',
   'GCP_MISC_BUCKET',
