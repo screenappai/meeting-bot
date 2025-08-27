@@ -304,6 +304,7 @@ docker run -d \
   -p 3000:3000 \
   -e MAX_RECORDING_DURATION_MINUTES=60 \
   -e NODE_ENV=production \
+  -e REDIS_CONSUMER_ENABLED=false \
   ghcr.io/screenappai/meeting-bot:latest
 ```
 
