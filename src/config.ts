@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { UploadType } from './types';
 dotenv.config();
 
 const ENVIRONMENTS = [
@@ -69,4 +70,13 @@ export default {
   redisUri: constructRedisUri(),
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
+  s3CompatibleStorage: {
+    endpoint: process.env.S3_ENDPOINT,
+    region: process.env.S3_REGION,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    bucket: process.env.S3_BUCKET_NAME,
+    forcePathStyle: process.env.S3_USE_MINIO_COMPATIBILITY === 'true',
+  },
+  uploadType: process.env.UPLOAD_TYPE ? (process.env.UPLOAD_TYPE as UploadType) : 's3' as UploadType,
 };
