@@ -260,8 +260,64 @@ The following environment variables configure Redis connectivity:
 
 **Note**: When `REDIS_CONSUMER_ENABLED` is set to `false`, the Redis consumer service will not start, and the application will only support REST API endpoints for meeting requests. Redis message queue functionality will be disabled.
 
+### Recording Upload Configuration
 
+Meeting Bot automatically uploads meeting recording to S3-compatible bucket storage when a meeting end. This feature is enabled by default and supports various cloud storage providers:
 
+- **AWS S3** - Amazon Web Services Simple Storage Service
+- **GCP Cloud Storage** - Google Cloud Platform S3-compatible storage
+- **MinIO** - Self-hosted S3-compatible object storage
+- **Other S3-compatible services** - Any service that implements the S3 API
+
+#### Environment Variables for Upload Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `S3_ENDPOINT` | S3-compatible service endpoint URL | - | Yes for non-AWS |
+| `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - | Yes |
+| `S3_SECRET_ACCESS_KEY` | Secret key for bucket authentication | - | Yes |
+| `S3_BUCKET_NAME` | Target bucket name for uploads | - | Yes |
+| `S3_REGION` | AWS region (for AWS S3) | - | Yes |
+| `S3_USE_MINIO_COMPATIBILITY` | Enable MinIO compatibility mode | `false` | No |
+
+#### Configuration Examples
+
+**AWS S3:**
+```bash
+S3_ENDPOINT=https://s3.amazonaws.com
+S3_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+S3_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+S3_BUCKET_NAME=meeting-recordings
+S3_REGION=us-west-2
+```
+
+**Google Cloud Storage (S3-compatible):**
+```bash
+S3_ENDPOINT=https://storage.googleapis.com
+S3_ACCESS_KEY_ID=your-gcp-access-key
+S3_SECRET_ACCESS_KEY=your-gcp-secret-key
+S3_BUCKET_NAME=meeting-recordings
+S3_FORCE_PATH_STYLE=true
+```
+
+**MinIO:**
+```bash
+S3_ENDPOINT=http://localhost:9000
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+S3_BUCKET_NAME=meeting-recordings
+S3_REGION=us-west-2
+S3_USE_MINIO_COMPATIBILITY=true
+```
+
+#### How Upload Works
+
+1. **Automatic Upload**: When a meeting recording completes, the bot automatically uploads the file to the configured S3-compatible bucket
+2. **File Naming**: Recordings are uploaded with descriptive names including meeting details and timestamps
+3. **Error Handling**: If upload fails, the bot will automatically retry upload
+4. **Cleanup**: Local recording files are cleaned up after successful upload
+
+**Note**: The upload feature is enabled by default when S3 environment variables are configured. No additional configuration is required.
 
 ## ⚙️ Configuration
 
@@ -279,6 +335,12 @@ The following environment variables configure Redis connectivity:
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
+| `S3_ENDPOINT` | S3-compatible service endpoint URL | - |
+| `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - |
+| `S3_SECRET_ACCESS_KEY` | Secret key for bucket authentication | - |
+| `S3_BUCKET_NAME` | Target bucket name for uploads | - |
+| `S3_REGION` | AWS region (for AWS S3) | `us-east-1` |
+| `S3_USE_MINIO_COMPATIBILITY` | Enable MinIO compatibility mode | `false` |
 
 ### Docker Configuration
 
@@ -305,6 +367,11 @@ docker run -d \
   -e MAX_RECORDING_DURATION_MINUTES=60 \
   -e NODE_ENV=production \
   -e REDIS_CONSUMER_ENABLED=false \
+  -e S3_ENDPOINT= \
+  -e S3_ACCESS_KEY_ID= \
+  -e S3_SECRET_ACCESS_KEY= \
+  -e S3_BUCKET_NAME= \
+  -e S3_REGION= \
   ghcr.io/screenappai/meeting-bot:latest
 ```
 
@@ -390,7 +457,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Docker deployment
 - ✅ REST API support
 - ✅ Redis message queue support
-- 🔄 Recording Upload support - Cloud bucket or a Docker volume (planned)
+- ✅ Recording Upload support - S3-compatible bucket storage (AWS, GCP, MinIO)
 - 🔄 Additional video format support (planned)
 - 🔄 Enhanced platform feature support (planned)
 
