@@ -42,7 +42,7 @@ export class ZoomBot extends BotBase {
 
     const handleUpload = async () => {
       this._logger.info('Begin recording upload to server', { userId, teamId });
-      const uploadResult = await uploader.uploadRecordingToServer();
+      const uploadResult = await uploader.uploadRecordingToRemoteStorage();
       this._logger.info('Recording upload result', { uploadResult, userId, teamId });
     };
     

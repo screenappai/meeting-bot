@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.787.0",
+    "@aws-sdk/lib-storage": "^3.876.0",
     "@google-cloud/storage": "^7.16.0",
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",

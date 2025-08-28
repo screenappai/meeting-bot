@@ -196,3 +196,5 @@ export const logCategories: {
 ] as const;
 export type LogCategory = typeof logCategories[number]['category'];
 export type LogSubCategory<C extends LogCategory> = (typeof logCategories[number] & { category: C })['subCategory'][number];
+
+export type UploadType = 'screenapp' | 's3';

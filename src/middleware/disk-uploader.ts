@@ -1,6 +1,7 @@
 import { Logger } from 'winston';
 import {
   createPartUploadUrl,
+  fileNameTemplate,
   finalizeUpload,
   initializeMultipartUpload,
   uploadChunkToStorage
@@ -10,6 +11,8 @@ import fs, { createWriteStream } from 'fs';
 import path from 'path';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
+import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
+import { getTimeString } from '../lib/datetime';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -39,7 +42,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 }
 
 export interface IUploader {
-  uploadRecordingToServer(options?: { forceUpload?: boolean }): Promise<boolean>;
+  uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
 }
 
@@ -429,7 +432,81 @@ class DiskUploader implements IUploader {
     }
   }
 
-  public async uploadRecordingToServer(options?: { forceUpload?: boolean }) {
+  private async uploadRecordingToScreenApp(): Promise<boolean> {
+    let attempt = 0;
+    let success = false;
+    do {
+      try {
+        this.diskWriteSuccess.flush();
+
+        await this.processRecordingUpload();
+        success = true;
+      } catch (err) {
+        if (isNoSuchUploadError(err, this._userId, this._logger)) {
+          attempt += 1;
+          this._logger.info('Processing NoSuchUpload error...', this._userId);
+          if (attempt >= this.MAX_FILE_UPLOAD_RETRIES) {
+            throw err;
+          }
+          this._logger.info('NoSuchUpload detected, restarting upload session...', this._userId);
+        } else {
+          throw err;
+        }
+      }
+    } while (!success);
+
+    return success;
+  }
+
+  private async uploadRecordingToS3CompatibleStorage(): Promise<boolean> {
+    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+    const chunkSize = this.UPLOAD_CHUNK_SIZE;
+
+    if (!config.s3CompatibleStorage.region || !config.s3CompatibleStorage.accessKeyId || !config.s3CompatibleStorage.secretAccessKey || !config.s3CompatibleStorage.bucket) {
+      throw new Error('S3 compatible storage configuration is not set. Will not upload to s3 compatible storage...');
+    }
+
+    const fileName = fileNameTemplate(this._namePrefix, getTimeString(this._timezone, this._logger));
+    const key = `meeting-bot/${this._userId}/${fileName}${this.fileExtension}`;
+
+    const uploadConfig = {
+      endpoint: config.s3CompatibleStorage.endpoint,
+      region: config.s3CompatibleStorage.region,
+      accessKeyId: config.s3CompatibleStorage.accessKeyId,
+      secretAccessKey: config.s3CompatibleStorage.secretAccessKey,
+      bucket: config.s3CompatibleStorage.bucket,
+      forcePathStyle: config.s3CompatibleStorage.forcePathStyle,
+    };
+
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        this._logger.info(`S3 compatible storage upload attempt ${attempt} of ${maxAttempts}.`);
+        const uploadSuccess = await uploadMultipartS3(uploadConfig, filePath, key, this._logger, chunkSize);
+
+        if (!uploadSuccess) {
+          throw new Error('Failed to upload recording to S3 compatible storage');
+        }
+
+        this._logger.info('S3 compatible storage upload success.');
+        return true;
+      } catch (err) {
+        if (attempt >= maxAttempts) {
+          this._logger.error(`Permanently failed to upload recording to S3 compatible storage after ${maxAttempts} attempts`, err);
+          throw err;
+        } else {
+          this._logger.error(`Failed to upload recording to S3 compatible storage attempt ${attempt} of ${maxAttempts}`, err);
+          const delay = this.RETRY_UPLOAD_DELAY_BASE_MS * Math.pow(2, attempt);
+          await this.delayPromise(delay);
+        }
+      }
+    }
+
+    return false;
+  }
+
+  public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {
     try {
       if (typeof options?.forceUpload === 'boolean') {
         this.forceUpload = options.forceUpload;
@@ -447,27 +524,12 @@ class DiskUploader implements IUploader {
         throw new Error(`Unable to finalise the temp recording file: ${this._userId} ${this._botId}`);
       }
 
-      let attempt = 0;
-      let success = false;
-      do {
-        try {
-          this.diskWriteSuccess.flush();
-
-          await this.processRecordingUpload();
-          success = true;
-        } catch (err) {
-          if (isNoSuchUploadError(err, this._userId, this._logger)) {
-            attempt += 1;
-            this._logger.info('Processing NoSuchUpload error...', this._userId);
-            if (attempt >= this.MAX_FILE_UPLOAD_RETRIES) {
-              throw err;
-            }
-            this._logger.info('NoSuchUpload detected, restarting upload session...', this._userId);
-          } else {
-            throw err;
-          }
-        }
-      } while (!success);
+      // Upload recording to configured storage
+      if (config.uploadType === 'screenapp') {
+        await this.uploadRecordingToScreenApp();
+      } else if (config.uploadType === 's3') {
+        await this.uploadRecordingToS3CompatibleStorage();
+      }
 
       // Delete temp file after the upload is finished
       await this.deleteTempFileAsync();

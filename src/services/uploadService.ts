@@ -1,8 +1,10 @@
 import axios from 'axios';
-import moment from 'moment-timezone';
 import { ContentType, FileType, IVFSResponse } from '../types';
 import { createApiV2 } from '../util/auth';
 import { Logger } from 'winston';
+import { getTimeString } from '../lib/datetime';
+
+export const fileNameTemplate = (namePrefix: string, time: string) => `${namePrefix} ${time}`;
 
 interface InitializeMultipartUploadOptions {
   teamId: string;
@@ -90,22 +92,14 @@ export const finalizeUpload = async ({
   botId,
 }: FinalizeUploadOptions, logger: Logger) => {
   const apiV2 = createApiV2(token);
-  let time;
-  try {
-    if (!moment.tz.zone(timezone))
-      throw new Error(`Unsupported timezone: ${timezone}`);
-
-    time = moment().tz(timezone).format('h:mma MMM DD YYYY');
-  } catch (error) {
-    logger.warn('Using UTC time, found an invalid timezone on team:', teamId, timezone, error);
-    time = moment().format('h:mma MMM DD YYYY');
-  }
+  const time = getTimeString(timezone, logger);
+  
   const response = await apiV2.put<IVFSResponse<FinalizeUploadResponseBody>>(
     `/files/upload/multipart/finalize/${teamId}/${folderId}/${fileId}/${uploadId}`,
     {
       file: {
         contentType,
-        name: `${namePrefix} ${time}`,
+        name: fileNameTemplate(namePrefix, time),
         botId: botId,
       },
     }
