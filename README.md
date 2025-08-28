@@ -297,7 +297,7 @@ S3_ENDPOINT=https://storage.googleapis.com
 S3_ACCESS_KEY_ID=your-gcp-access-key
 S3_SECRET_ACCESS_KEY=your-gcp-secret-key
 S3_BUCKET_NAME=meeting-recordings
-S3_FORCE_PATH_STYLE=true
+S3_REGION=us-west1
 ```
 
 **MinIO:**
@@ -339,7 +339,7 @@ S3_USE_MINIO_COMPATIBILITY=true
 | `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - |
 | `S3_SECRET_ACCESS_KEY` | Secret key for bucket authentication | - |
 | `S3_BUCKET_NAME` | Target bucket name for uploads | - |
-| `S3_REGION` | AWS region (for AWS S3) | `us-east-1` |
+| `S3_REGION` | AWS region (for AWS S3) | - |
 | `S3_USE_MINIO_COMPATIBILITY` | Enable MinIO compatibility mode | `false` |
 
 ### Docker Configuration
