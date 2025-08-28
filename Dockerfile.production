@@ -47,9 +47,9 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearm
 # Create symlink for Playwright compatibility (ARM64 only)
 RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then ln -sf /usr/bin/chromium /usr/bin/google-chrome; fi
 
-# Create non-root user
+# Create non-root user with a home directory
 RUN groupadd -g 1001 nodejs && \
-    useradd -r -u 1001 -g nodejs nodejs
+    useradd -m -d /home/nodejs -r -u 1001 -g nodejs nodejs
 
 # Copy Chrome policy to allow protocol launching
 RUN mkdir -p /etc/opt/chrome/policies/managed
