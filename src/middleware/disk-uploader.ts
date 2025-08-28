@@ -483,7 +483,7 @@ class DiskUploader implements IUploader {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         this._logger.info(`S3 compatible storage upload attempt ${attempt} of ${maxAttempts}.`);
-        const uploadSuccess = await uploadMultipartS3(uploadConfig, filePath, key, this._logger, chunkSize);
+        const uploadSuccess = await uploadMultipartS3(uploadConfig, filePath, key, this.contentType, this._logger, chunkSize);
 
         if (!uploadSuccess) {
           throw new Error('Failed to upload recording to S3 compatible storage');

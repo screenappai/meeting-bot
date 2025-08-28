@@ -1,6 +1,7 @@
 import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { createReadStream } from 'fs';
+import { ContentType } from '../types';
 import { Logger } from 'winston';
 
 /**
@@ -26,6 +27,7 @@ export async function uploadMultipartS3(
   uploadConfig: UploadConfig,
   filePath: string,
   key: string,
+  contentType: ContentType,
   logger: Logger,
   partSize: number = 50 * 1024 * 1024,
   queueSize: number = 4
@@ -52,7 +54,7 @@ export async function uploadMultipartS3(
         Bucket: uploadConfig.bucket,
         Key: key,
         Body: createReadStream(filePath),
-        ContentType: 'video/mp4',
+        ContentType: contentType,
       },
       queueSize,
       partSize,
