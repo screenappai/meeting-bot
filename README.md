@@ -325,7 +325,9 @@ S3_USE_MINIO_COMPATIBILITY=true
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `60` |
+| `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `180` |
+| `MEETING_INACTIVITY_MINUTES` | Continuous inactivity duration after which the bot will end meeting recording | `1` |
+| `INACTIVITY_DETECTION_START_DELAY_MINUTES` | Initial grace period at the start of recording before inactivity detection begins | `1` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
