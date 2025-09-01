@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { UploadType } from './types';
+import { UploaderType } from './types';
 dotenv.config();
 
 const ENVIRONMENTS = [
@@ -78,5 +78,5 @@ export default {
     bucket: process.env.S3_BUCKET_NAME,
     forcePathStyle: process.env.S3_USE_MINIO_COMPATIBILITY === 'true',
   },
-  uploadType: process.env.UPLOAD_TYPE ? (process.env.UPLOAD_TYPE as UploadType) : 's3' as UploadType,
+  uploaderType: process.env.UPLOADER_TYPE ? (process.env.UPLOADER_TYPE as UploaderType) : 's3' as UploaderType,
 };

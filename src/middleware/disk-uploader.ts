@@ -433,6 +433,7 @@ class DiskUploader implements IUploader {
   }
 
   private async uploadRecordingToScreenApp(): Promise<boolean> {
+    this._logger.info('Uploading recording to screenapp...');
     let attempt = 0;
     let success = false;
     do {
@@ -459,6 +460,7 @@ class DiskUploader implements IUploader {
   }
 
   private async uploadRecordingToS3CompatibleStorage(): Promise<boolean> {
+    this._logger.info('Uploading recording to S3 compatible storage...');
     const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
     const chunkSize = this.UPLOAD_CHUNK_SIZE;
 
@@ -524,19 +526,22 @@ class DiskUploader implements IUploader {
         throw new Error(`Unable to finalise the temp recording file: ${this._userId} ${this._botId}`);
       }
 
+      let uploadResult = false;
       // Upload recording to configured storage
-      if (config.uploadType === 'screenapp') {
-        await this.uploadRecordingToScreenApp();
-      } else if (config.uploadType === 's3') {
-        await this.uploadRecordingToS3CompatibleStorage();
+      if (config.uploaderType === 'screenapp') {
+        uploadResult = await this.uploadRecordingToScreenApp();
+      } else if (config.uploaderType === 's3') {
+        uploadResult = await this.uploadRecordingToS3CompatibleStorage();
+      } else {
+        throw new Error(`Unsupported UPLOADER_TYPE configuration: ${config.uploaderType}`);
       }
 
       // Delete temp file after the upload is finished
       await this.deleteTempFileAsync();
 
-      return true;
+      return uploadResult;
     } catch (err) {
-      this._logger.info('Unable to upload recording to server...', this._userId, this._teamId, err);
+      this._logger.info('Unable to upload recording to server...', { error: err, userId: this._userId, teamId: this._teamId });
       return false;
     }
   }
