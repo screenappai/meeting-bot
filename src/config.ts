@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { UploadType } from './types';
+import { UploaderType } from './types';
 dotenv.config();
 
 const ENVIRONMENTS = [
@@ -57,8 +57,8 @@ export default {
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
     180, // There's an upper limit on meeting duration 3 hours 
   chromeExecutablePath: '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
-  inactivityLimit: 0.5,
-  activateInactivityDetectionAfter: 0.5,
+  inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
+  activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
   joinWaitTime: 10,
   miscStorageBucket: process.env.GCP_MISC_BUCKET,
@@ -78,5 +78,5 @@ export default {
     bucket: process.env.S3_BUCKET_NAME,
     forcePathStyle: process.env.S3_USE_MINIO_COMPATIBILITY === 'true',
   },
-  uploadType: process.env.UPLOAD_TYPE ? (process.env.UPLOAD_TYPE as UploadType) : 's3' as UploadType,
+  uploaderType: process.env.UPLOADER_TYPE ? (process.env.UPLOADER_TYPE as UploaderType) : 's3' as UploaderType,
 };
