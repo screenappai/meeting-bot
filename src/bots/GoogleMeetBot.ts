@@ -371,6 +371,11 @@ export class GoogleMeetBot extends MeetBotBase {
 
     // Recording the meeting page
     this._logger.info('Begin recording...');
+
+    await this.toogleParticipant();
+    
+    await this.detectLoneParticipant();
+
     await this.recordMeetingPage({ teamId, eventId, userId, botId, uploader });
 
     pushState('finished');
@@ -825,12 +830,20 @@ export class GoogleMeetBot extends MeetBotBase {
   }
 
 
-  async toogleParticipant() {
+  private async toogleParticipant() {
+    /**
+   * Toggles the participant panel once after joining the meeting.
+   * 
+   * This needs to be done only one time per meeting session.
+   * Once the participant tab has been opened once,
+   * `page.evaluate` can continuously access the latest list of participants
+   * without reopening this tab again.
+   */
     await this.page.click('button[jscontroller][data-panel-id="1"]');
     await this.page.click('button[jscontroller][data-panel-id="1"]');
   }
 
-  async detectLoneParticipant() {
+  private async detectLoneParticipant() {
     console.log('Detecting lone participant...');
     await this.page.waitForSelector('button[jscontroller][data-panel-id="1"]', {
       timeout: 30000,
