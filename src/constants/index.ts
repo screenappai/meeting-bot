@@ -5,3 +5,14 @@ export const GOOGLE_REQUEST_TIMEOUT = 'No one responded to your request to join 
 export const GOOGLE_LOBBY_MODE_HOST_TEXT = 'Please wait until a meeting host brings you';
 
 export const ZOOM_REQUEST_DENIED = 'You have been removed';
+
+
+export const BOT_IDENTIFIERS = [
+  'bot',
+  '.ai',
+  'fireflies',
+  'recall',
+  'read.ai',
+  'notetaker',
+  'replay.ai',
+];

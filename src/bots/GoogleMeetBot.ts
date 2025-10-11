@@ -12,7 +12,7 @@ import { getWaitingPromise } from '../lib/promise';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
-import { GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
+import { BOT_IDENTIFIERS, GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
 import { vp9MimeType, webmMimeType } from '../lib/recording';
 
 export class GoogleMeetBot extends MeetBotBase {
@@ -822,5 +822,73 @@ export class GoogleMeetBot extends MeetBotBase {
     });
 
     await waitingPromise.promise;
+  }
+
+
+  async toogleParticipant() {
+    await this.page.click('button[jscontroller][data-panel-id="1"]');
+    await this.page.click('button[jscontroller][data-panel-id="1"]');
+  }
+
+  async detectLoneParticipant() {
+    console.log('Detecting lone participant...');
+    await this.page.waitForSelector('button[jscontroller][data-panel-id="1"]', {
+      timeout: 30000,
+    });
+
+    let cachedParticipantNames: string[] = [];
+
+    async function getParticipantNames(page: any): Promise<string[]> {
+      try {
+        return await page.evaluate(() => {
+          const items = document.querySelectorAll(
+            'div[role="listitem"][aria-label]'
+          );
+          return Array.from(items).map((item) =>
+            item.getAttribute('aria-label')
+          );
+        });
+      } catch (error) {
+        console.log('Error getting participant names:');
+        return [];
+      }
+    }
+
+    const interval = setInterval(async () => {
+      const names = await getParticipantNames(this.page);
+
+      console.log('Participant names:', names);
+
+      const totalParticipants = names.length;
+      
+      const botParticipants = names.filter((name) =>
+        BOT_IDENTIFIERS.some((identifier) =>
+          name.toLowerCase().trim().includes(identifier)
+        )
+      );
+
+      console.log('Bot participants:', botParticipants);
+
+      const participantNames = names.filter(
+        (name) =>
+          !BOT_IDENTIFIERS.some((identifier) =>
+            name.toLowerCase().trim().includes(identifier)
+          )
+      );
+
+      cachedParticipantNames =
+        participantNames?.length > cachedParticipantNames?.length
+          ? participantNames
+          : cachedParticipantNames;
+
+      // Check if only 1 participant and it's a bot
+      if (totalParticipants - botParticipants.length == 0) {
+        console.log('Only bot is in the call. Leaving...');
+
+        clearInterval(interval); // Stop the interval
+
+        // TODO: Stop the recording
+      }
+    }, 10000);
   }
 }
