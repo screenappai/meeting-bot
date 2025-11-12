@@ -264,11 +264,51 @@ export class GoogleMeetBot extends MeetBotBase {
                 resolveWaiting(false);
                 return;
               } else {
-                this._logger.info('Google Meet Bot is entering the meeting...', { userId, teamId });
-                clearInterval(waitInterval);
-                clearTimeout(waitTimeout);
-                resolveWaiting(true);
-                return;
+                // Additional check: Verify we can actually see participants (not just UI buttons)
+                // The "Leave call" button can exist even in lobby waiting state
+                try {
+                  const participantCountDetected = await this.page.evaluate(() => {
+                    try {
+                      // Look for People button with participant count
+                      const peopleButton = document.querySelector('button[aria-label^="People"]');
+                      if (peopleButton) {
+                        const ariaLabel = peopleButton.getAttribute('aria-label');
+                        // Check if we can see participant count (e.g., "People - 2 joined")
+                        const match = ariaLabel?.match(/People.*?(\d+)/);
+                        if (match && parseInt(match[1]) >= 1) {
+                          return true;
+                        }
+                      }
+
+                      // Alternative: Check if participant count is visible in the DOM
+                      const allButtons = Array.from(document.querySelectorAll('button'));
+                      for (const btn of allButtons) {
+                        const label = btn.getAttribute('aria-label');
+                        if (label && /People.*?\d+/.test(label)) {
+                          return true;
+                        }
+                      }
+
+                      return false;
+                    } catch (e) {
+                      return false;
+                    }
+                  });
+
+                  if (participantCountDetected) {
+                    this._logger.info('Google Meet Bot is entering the meeting...', { userId, teamId });
+                    clearInterval(waitInterval);
+                    clearTimeout(waitTimeout);
+                    resolveWaiting(true);
+                    return;
+                  } else {
+                    this._logger.info('People button found but participant count not visible yet - continuing to wait...', { userId, teamId });
+                    return;
+                  }
+                } catch (e) {
+                  this._logger.error('Error checking participant visibility', { error: e });
+                  return;
+                }
               }              
             }
 
