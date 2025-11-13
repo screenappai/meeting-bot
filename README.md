@@ -262,14 +262,26 @@ The following environment variables configure Redis connectivity:
 
 ### Recording Upload Configuration
 
-Meeting Bot automatically uploads meeting recording to S3-compatible bucket storage when a meeting end. This feature is enabled by default and supports various cloud storage providers:
+Meeting Bot automatically uploads the meeting recording to object storage when a meeting ends. You can choose between S3-compatible storage and Microsoft Azure Blob Storage at runtime using a configuration flag.
 
 - **AWS S3** - Amazon Web Services Simple Storage Service
 - **GCP Cloud Storage** - Google Cloud Platform S3-compatible storage
 - **MinIO** - Self-hosted S3-compatible object storage
 - **Other S3-compatible services** - Any service that implements the S3 API
+- **Azure Blob Storage** - Native Azure object storage
 
-#### Environment Variables for Upload Configuration
+#### Storage Provider Selection
+
+Select the storage backend without code changes:
+
+```bash
+# s3 (default) or azure
+STORAGE_PROVIDER=s3
+```
+
+When `STORAGE_PROVIDER` is not set, it defaults to `s3` to preserve backward compatibility.
+
+#### Environment Variables for S3-Compatible Upload Configuration
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
@@ -310,14 +322,65 @@ S3_REGION=us-west-2
 S3_USE_MINIO_COMPATIBILITY=true
 ```
 
+#### Azure Blob Storage Configuration
+
+If you prefer Azure Blob Storage, set `STORAGE_PROVIDER=azure` and configure one of the supported authentication methods below. The bot will preserve the same folder structure and naming used by S3.
+
+Required:
+
+- `AZURE_STORAGE_CONTAINER` — Target container name
+- One of the following auth options:
+  - `AZURE_STORAGE_CONNECTION_STRING`
+  - `AZURE_STORAGE_ACCOUNT` + `AZURE_STORAGE_ACCOUNT_KEY`
+  - `AZURE_STORAGE_ACCOUNT` + `AZURE_STORAGE_SAS_TOKEN` (starts with `?sv=`)
+  - `AZURE_STORAGE_ACCOUNT` + `AZURE_USE_MANAGED_IDENTITY=true` (requires appropriate RBAC on the container)
+
+Optional:
+
+- `AZURE_SIGNED_URL_TTL_SECONDS` — Expiry for generated SAS URLs (default: `3600`)
+- `AZURE_UPLOAD_CONCURRENCY` — Parallelism for uploads (default: `4`)
+- `AZURE_BLOB_PREFIX` — Optional prefix path within the container (defaults to none; the bot already includes a `meeting-bot/...` path in object keys)
+
+Examples
+
+Connection string:
+
+```bash
+STORAGE_PROVIDER=azure
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=example;AccountKey=redacted;EndpointSuffix=core.windows.net
+AZURE_STORAGE_CONTAINER=meeting-recordings
+```
+
+Account + Key:
+
+```bash
+STORAGE_PROVIDER=azure
+AZURE_STORAGE_ACCOUNT=example
+AZURE_STORAGE_ACCOUNT_KEY=redacted
+AZURE_STORAGE_CONTAINER=meeting-recordings
+```
+
+Managed Identity (AAD):
+
+```bash
+STORAGE_PROVIDER=azure
+AZURE_STORAGE_ACCOUNT=example
+AZURE_USE_MANAGED_IDENTITY=true
+AZURE_STORAGE_CONTAINER=meeting-recordings
+```
+
 #### How Upload Works
 
-1. **Automatic Upload**: When a meeting recording completes, the bot automatically uploads the file to the configured S3-compatible bucket
+1. **Automatic Upload**: When a meeting recording completes, the bot automatically uploads the file to the configured object storage (S3-compatible or Azure Blob)
 2. **File Naming**: Recordings are uploaded with descriptive names including meeting details and timestamps
 3. **Error Handling**: If upload fails, the bot will automatically retry upload
 4. **Cleanup**: Local recording files are cleaned up after successful upload
 
-**Note**: The upload feature is enabled by default when S3 environment variables are configured. No additional configuration is required.
+Notes:
+
+- The default object key layout is: `meeting-bot/{userId}/{fileName}{extension}` (e.g., `meeting-bot/1234/My Meeting - 2025-11-13 14-42.webm`). This same layout is used for both S3 and Azure to ensure parity.
+- When `STORAGE_PROVIDER=azure` is set and Azure environment variables are provided, the upload will go to Azure Blob Storage instead of S3.
+- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`.
 
 ## ⚙️ Configuration
 
