@@ -50,7 +50,7 @@ const joinZoom = async (req: Request, res: Response) => {
       const tempId = `${userId}${entityId}0`; // Using 0 as retry count
       const tempFileId = encodeFileNameSafebase64(tempId);
       const namePrefix = getRecordingNamePrefix('zoom');
-      
+
       const uploader: IUploader = await DiskUploader.initialize(
         bearerToken,
         teamId,
@@ -60,12 +60,13 @@ const joinZoom = async (req: Request, res: Response) => {
         namePrefix,
         tempFileId,
         logger,
+        url,
       );
 
       // Create and join the meeting
       const bot = new ZoomBot(logger, correlationId);
       await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-      
+
       logger.info('Joined Zoom meeting successfully.', userId, teamId);
     }, logger);
 
@@ -79,14 +80,14 @@ const joinZoom = async (req: Request, res: Response) => {
 
     // Job was accepted, return immediate response
     logger.info('Zoom job accepted and started processing', { userId, teamId });
-    
+
     return res.status(202).json({
       success: true,
       message: 'Zoom join request accepted and processing started',
-      data: { 
-        userId, 
-        teamId, 
-        eventId, 
+      data: {
+        userId,
+        teamId,
+        eventId,
         botId,
         status: 'processing'
       }
@@ -94,20 +95,20 @@ const joinZoom = async (req: Request, res: Response) => {
 
   } catch (error) {
     logger.error('Error setting up Zoom job:', { userId, teamId, botId, eventId, error });
-    
+
     if (error instanceof AxiosError) {
-      logger.error('axios error', { 
-        userId, 
-        teamId, 
-        botId, 
-        data: error?.response?.data, 
-        config: error?.response?.config 
+      logger.error('axios error', {
+        userId,
+        teamId,
+        botId,
+        data: error?.response?.data,
+        config: error?.response?.config
       });
     }
 
     // Return appropriate error response
     const statusCode = error instanceof AxiosError ? (error.response?.status || 500) : 500;
-    
+
     return res.status(statusCode).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
