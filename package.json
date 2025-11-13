@@ -1,6 +1,6 @@
 {
   "name": "meeting-bot",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Run meeting bots for Google Meet, Microsoft Teams and Zoom",
   "main": "index.js",
   "license": "MIT",
@@ -27,6 +27,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.787.0",
     "@aws-sdk/lib-storage": "^3.876.0",
+    "@azure/identity": "^4.13.0",
+    "@azure/storage-blob": "^12.29.1",
     "@google-cloud/storage": "^7.16.0",
     "axios": "^1.7.7",
     "dotenv": "^16.4.5",

@@ -12,6 +12,7 @@ import path from 'path';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
 import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
+import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
 
@@ -473,6 +474,55 @@ class DiskUploader implements IUploader {
     return success;
   }
 
+  private async uploadRecordingToObjectStorage(): Promise<boolean> {
+    const provider = getStorageProvider();
+    this._logger.info(`Uploading recording to object storage using provider: ${provider.name}...`);
+
+    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+    const chunkSize = this.UPLOAD_CHUNK_SIZE;
+
+    // Compose key to preserve existing S3 layout for parity
+    const fileName = fileNameTemplate(this._namePrefix, getTimeString(this._timezone, this._logger));
+    const key = `meeting-bot/${this._userId}/${fileName}${this.fileExtension}`;
+
+    // Validate provider configuration before attempting upload
+    provider.validateConfig();
+
+    const maxAttempts = 2;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        this._logger.info(`Object storage upload attempt ${attempt} of ${maxAttempts} via ${provider.name}.`);
+        const startedAt = Date.now();
+        const uploadSuccess = await provider.uploadFile({
+          filePath,
+          key,
+          contentType: this.contentType,
+          logger: this._logger,
+          partSize: chunkSize,
+          concurrency: 4,
+        });
+
+        if (!uploadSuccess) {
+          throw new Error(`Failed to upload recording to ${provider.name}`);
+        }
+        const durationMs = Date.now() - startedAt;
+        this._logger.info(`Object storage upload success via ${provider.name}. Duration: ${durationMs} ms, Size: unknown (streamed). Key: ${key}`);
+        return true;
+      } catch (err) {
+        if (attempt >= maxAttempts) {
+          this._logger.error(`Permanently failed to upload recording to object storage (${provider.name}) after ${maxAttempts} attempts`, err);
+          throw err;
+        } else {
+          this._logger.error(`Failed to upload recording to object storage (${provider.name}) attempt ${attempt} of ${maxAttempts}`, err);
+          const delay = this.RETRY_UPLOAD_DELAY_BASE_MS * Math.pow(2, attempt);
+          await this.delayPromise(delay);
+        }
+      }
+    }
+
+    return false;
+  }
+
   private async uploadRecordingToS3CompatibleStorage(): Promise<boolean> {
     this._logger.info('Uploading recording to S3 compatible storage...');
     const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
@@ -567,7 +617,8 @@ class DiskUploader implements IUploader {
       if (config.uploaderType === 'screenapp') {
         uploadResult = await this.uploadRecordingToScreenApp();
       } else if (config.uploaderType === 's3') {
-        uploadResult = await this.uploadRecordingToS3CompatibleStorage();
+        // Route to selected object storage provider (S3 or Azure) based on configuration
+        uploadResult = await this.uploadRecordingToObjectStorage();
       } else {
         throw new Error(`Unsupported UPLOADER_TYPE configuration: ${config.uploaderType}`);
       }
