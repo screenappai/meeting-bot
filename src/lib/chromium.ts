@@ -129,11 +129,13 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     viewport: size,
     ignoreHTTPSErrors: true,
     userAgent: linuxX11UserAgent,
-    // Record video from the very beginning for debugging
-    recordVideo: {
-      dir: './debug-videos/',
-      size: size,
-    },
+    // Record video only in development for debugging
+    ...(process.env.NODE_ENV === 'development' && {
+      recordVideo: {
+        dir: './debug-videos/',
+        size: size,
+      },
+    }),
   });
 
   // Grant permissions so Teams will play audio (Teams requires this unlike Google Meet)
