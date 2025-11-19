@@ -10,6 +10,7 @@ import { Logger } from 'winston';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
+import { browserLogCaptureCallback } from '../util/logger';
 import { MICROSOFT_REQUEST_DENIED } from '../constants';
 import { FFmpegRecorder } from '../lib/ffmpegRecorder';
 import * as path from 'path';
@@ -325,7 +326,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     { teamId, userId, eventId, botId, uploader }:
     { teamId: string, userId: string, eventId?: string, botId?: string, uploader: IUploader }
   ): Promise<void> {
+    // Use config max recording duration (3 hours default) - only for safety
     const duration = config.maxRecordingDuration * 60 * 1000;
+    this._logger.info(`Recording max duration set to ${duration / 60000} minutes (safety limit only)`);
+
     const outputPath = path.join(process.cwd(), `recording-${botId || Date.now()}.mp4`);
 
     this._logger.info('Starting ffmpeg recording...', { outputPath, duration });
@@ -344,13 +348,30 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         meetingEnded = true;
       });
 
+      // Capture and forward browser console logs to Node.js logger
+      this.page.on('console', async msg => {
+        try {
+          await browserLogCaptureCallback(this._logger, msg);
+        } catch(err) {
+          this._logger.info('Playwright chrome logger: Failed to log browser messages...', err?.message);
+        }
+      });
+
       // Inject inactivity detection script
       await this.page.evaluate(
-        ({ inactivityLimit, activateAfterMinutes }: { inactivityLimit: number, activateAfterMinutes: number }) => {
+        ({ activateAfterMinutes, maxDuration }: { activateAfterMinutes: number, maxDuration: number }) => {
+          // Max duration timeout - safety limit (3 hours default in production)
           setTimeout(() => {
-            console.log('Activating inactivity detection...');
+            console.log(`Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`);
+            (window as any).screenAppMeetEnd();
+          }, maxDuration);
+          console.log(`Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`);
 
-            // Simple inactivity detection - check if bot is alone
+          // Activate participant detection after delay
+          setTimeout(() => {
+            console.log('Activating participant count detection...');
+
+            // Participant count detection
             const detectLoneParticipant = () => {
               const interval = setInterval(() => {
                 try {
@@ -372,12 +393,13 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               }, 5000);
             };
 
+            // Start participant detection
             detectLoneParticipant();
           }, activateAfterMinutes * 60 * 1000);
         },
         {
-          inactivityLimit: config.inactivityLimit * 60 * 1000,
           activateAfterMinutes: config.activateInactivityDetectionAfter,
+          maxDuration: duration,
         }
       );
 
