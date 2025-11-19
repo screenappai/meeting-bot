@@ -2,13 +2,15 @@ FROM node:18
 
 WORKDIR /usr/src/app
 
-# Install system dependencies, including WebGL support
+# Install system dependencies, including WebGL support and audio
 RUN apt-get update && \
   apt-get install -y \
   ffmpeg \
   libnss3 \
   libxss1 \
   libasound2 \
+  pulseaudio \
+  alsa-utils \
   libatk1.0-0 \
   libatk-bridge2.0-0 \
   libcups2 \

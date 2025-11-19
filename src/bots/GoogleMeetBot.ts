@@ -68,7 +68,7 @@ export class GoogleMeetBot extends MeetBotBase {
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
-    this.page = await createBrowserContext(url, this._correlationId);
+    this.page = await createBrowserContext(url, this._correlationId, 'google');
 
     this._logger.info('Navigating to Google Meet URL...');
     await this.page.goto(url, { waitUntil: 'networkidle' });

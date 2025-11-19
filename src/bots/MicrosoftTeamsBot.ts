@@ -1,5 +1,5 @@
 import { JoinParams } from './AbstractMeetBot';
-import { BotStatus, WaitPromise } from '../types';
+import { BotStatus } from '../types';
 import config from '../config';
 import { WaitingAtLobbyRetryError } from '../error';
 import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
@@ -7,13 +7,13 @@ import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
 import { IUploader } from '../middleware/disk-uploader';
 import { Logger } from 'winston';
-import { browserLogCaptureCallback } from '../util/logger';
-import { getWaitingPromise } from '../lib/promise';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
 import { MICROSOFT_REQUEST_DENIED } from '../constants';
-import { vp9MimeType, webmMimeType } from '../lib/recording';
+import { FFmpegRecorder } from '../lib/ffmpegRecorder';
+import * as path from 'path';
+import * as fs from 'fs';
 
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
@@ -56,7 +56,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   private async joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
-    this.page = await createBrowserContext(url, this._correlationId);
+    this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
 
     await this.page.waitForTimeout(1000);
 
@@ -92,61 +92,127 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       await this.page.click('button[aria-label="Join meeting from this browser"]');
     }
 
-    const dismissDeviceCheck = async () => {
+    this._logger.info('Waiting for pre-join screen to load...');
+    await this.page.waitForTimeout(5000);
+
+    // Try to fill name if input field exists (optional, won't fail if missing)
+    try {
+      this._logger.info('Looking for name input field...');
+
+      // Use the specific Teams pre-join name input selector
+      const nameInput = this.page.locator('input[data-tid="prejoin-display-name-input"]');
+
+      // Wait for the field to be visible
+      await nameInput.waitFor({ state: 'visible', timeout: 120000 });
+
+      this._logger.info('Found name input field, filling with bot name...');
+      await nameInput.fill(name ? name : 'ScreenApp Notetaker');
+      await this.page.waitForTimeout(1000);
+    } catch (err) {
+      this._logger.info('Name input field not found after 60s, skipping...', err?.message);
+    }
+
+    // Toggle off camera and mute microphone before joining
+    const toggleDevices = async () => {
       try {
-        this._logger.info('Clicking Continue without audio or video button...');
-        await retryActionWithWait(
-          'Clicking the "Continue without audio or video" button',
-          async () => {
-            await this.page.getByRole('button', { name: 'Continue without audio or video' }).waitFor({ timeout: 20000 });
-            await this.page.getByRole('button', { name: 'Continue without audio or video' }).click();
-          },
-          this._logger,
-          1,
-          15000,
-        );
-      } catch (dismissError) {
-        this._logger.info('Continue without audio or video button is probably missing!...');
+        this._logger.info('Attempting to turn off camera and mute microphone...');
+        await this.page.waitForTimeout(2000);
+
+        // Turn off camera
+        try {
+          const cameraSelectors = [
+            'input[data-tid="toggle-video"][checked]',
+            'input[type="checkbox"][title*="Turn camera off" i]',
+            'input[role="switch"][data-tid="toggle-video"]',
+            'button[aria-label*="Turn camera off" i]',
+            'button[aria-label*="Camera off" i]',
+          ];
+
+          for (const selector of cameraSelectors) {
+            const cameraButton = this.page.locator(selector).first();
+            const isVisible = await cameraButton.isVisible({ timeout: 2000 }).catch(() => false);
+            if (isVisible) {
+              const label = await cameraButton.getAttribute('aria-label');
+              this._logger.info(`Clicking camera toggle: ${label}`);
+              await cameraButton.click();
+              await this.page.waitForTimeout(500);
+              break;
+            }
+          }
+        } catch (err) {
+          this._logger.info('Could not toggle camera', err?.message);
+        }
+
+        // Mute microphone
+        try {
+          const micSelectors = [
+            'input[data-tid="toggle-mute"]:not([checked])',
+            'input[type="checkbox"][title*="Mute mic" i]',
+            'input[role="switch"][data-tid="toggle-mute"]',
+            'button[aria-label*="Mute microphone" i]',
+            'button[aria-label*="Mute mic" i]',
+          ];
+
+          for (const selector of micSelectors) {
+            const micButton = this.page.locator(selector).first();
+            const isVisible = await micButton.isVisible({ timeout: 2000 }).catch(() => false);
+            if (isVisible) {
+              const label = await micButton.getAttribute('aria-label');
+              this._logger.info(`Clicking microphone toggle: ${label}`);
+              await micButton.click();
+              await this.page.waitForTimeout(500);
+              break;
+            }
+          }
+        } catch (err) {
+          this._logger.info('Could not toggle microphone', err?.message);
+        }
+
+        this._logger.info('Finished toggling camera and microphone');
+      } catch (error) {
+        this._logger.warn('Error toggling devices', error?.message);
       }
     };
 
-    this._logger.info('Waiting for the input field to be visible...');
+    await toggleDevices();
+
+    this._logger.info('Clicking the join button...');
     await retryActionWithWait(
-      'Waiting for the input field to be visible',
+      'Clicking the join button',
       async () => {
-        await this.page.waitForSelector('input[type="text"]', { timeout: 20000 });
-      },
-      this._logger,
-      2,
-      15000,
-      async () => {
-        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'input-field-visible', userId, this._logger, botId);
-      }
-    );
-    
-    await dismissDeviceCheck();
+        // Try different possible button texts
+        const possibleTexts = [
+          'Join now',
+          'Join',
+          'Ask to join',
+          'Join meeting',
+        ];
 
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
+        let buttonClicked = false;
 
-    this._logger.info('Filling the input field with the name...');
-    await this.page.fill('input[type="text"]', name ? name : 'ScreenApp Notetaker');
+        for (const text of possibleTexts) {
+          try {
+            const button = this.page.getByRole('button', { name: new RegExp(text, 'i') });
+            if (await button.isVisible({ timeout: 3000 }).catch(() => false)) {
+              await button.click();
+              buttonClicked = true;
+              this._logger.info(`Successfully clicked "${text}" button`);
+              break;
+            }
+          } catch (err) {
+            this._logger.info(`Unable to click "${text}" button, trying next...`);
+          }
+        }
 
-    this._logger.info('Waiting for 5 seconds...');
-    await this.page.waitForTimeout(5000);
-
-    this._logger.info('Clicking the "Join now" button...');
-    await retryActionWithWait(
-      'Clicking the "Join now" button',
-      async () => {
-        await this.page.getByRole('button', { name: 'Join now' }).waitFor({ state: 'visible', timeout: 15000 });
-        await this.page.getByRole('button', { name: 'Join now' }).click();
+        if (!buttonClicked) {
+          throw new Error('Unable to find any join button variant');
+        }
       },
       this._logger,
       3,
       15000,
       async () => {
-        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'join-now-button-click', userId, this._logger, botId);
+        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'join-button-click', userId, this._logger, botId);
       }
     );
 
@@ -244,251 +310,111 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     };
     await dismissDeviceChecksAndNotifications();
 
-    // Recording the meeting page
-    this._logger.info('Begin recording...');
-    await this.recordMeetingPage({ teamId, userId, eventId, botId, uploader });
-    
+    // Wait for mic to be fully muted and any initial beeps to stop
+    this._logger.info('Waiting 5 seconds for audio to stabilize before recording...');
+    await this.page.waitForTimeout(5000);
+
+    // Recording the meeting page with ffmpeg
+    this._logger.info('Begin recording with ffmpeg...');
+    await this.recordMeetingPageWithFFmpeg({ teamId, userId, eventId, botId, uploader });
+
     pushState('finished');
   }
 
-  private async recordMeetingPage(
-    { teamId, userId, eventId, botId, uploader }: 
+  private async recordMeetingPageWithFFmpeg(
+    { teamId, userId, eventId, botId, uploader }:
     { teamId: string, userId: string, eventId?: string, botId?: string, uploader: IUploader }
   ): Promise<void> {
     const duration = config.maxRecordingDuration * 60 * 1000;
-    const inactivityLimit = config.inactivityLimit * 60 * 1000;
+    const outputPath = path.join(process.cwd(), `recording-${botId || Date.now()}.mp4`);
 
-    // Capture and send the browser console logs to Node.js context
-    this.page?.on('console', async msg => {
-      try {
-        await browserLogCaptureCallback(this._logger, msg);
-      } catch(err) {
-        this._logger.info('Failed to log browser messages...', err?.message);
-      }
-    });
+    this._logger.info('Starting ffmpeg recording...', { outputPath, duration });
 
-    // These functions are exposed to browser while on trusted sites such as Microsoft Teams Web client - and within docker environment
-    // A third-party script wouldn't have a unique accessId to call these functions
-    await this.page.exposeFunction('screenAppSendData', async (slightlySecretId: string, data: string) => {
-      if (slightlySecretId !== this.slightlySecretId) return;
+    // Create and start ffmpeg recorder
+    const recorder = new FFmpegRecorder(outputPath, this._logger);
 
-      const buffer = Buffer.from(data, 'base64');
-      await uploader.saveDataToTempFile(buffer);
-    });
+    try {
+      await recorder.start();
+      this._logger.info('FFmpeg recording started successfully');
 
-    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string) => {
-      if (slightlySecretId !== this.slightlySecretId) return;
-      try {
-        waitingPromise.resolveEarly();
-      } catch (error) {
-        this._logger.error('Could not process meeting end event', error);
-      }
-    });
+      // Set up browser-based inactivity detection
+      let meetingEnded = false;
+      await this.page.exposeFunction('screenAppMeetEnd', () => {
+        this._logger.info('Meeting ended signal received from browser');
+        meetingEnded = true;
+      });
 
-    // Inject the MediaRecorder code into the browser context using page.evaluate
-    await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }: 
-      { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
-        let timeoutId: NodeJS.Timeout;
-        let inactivityDetectionTimeout: NodeJS.Timeout;
+      // Inject inactivity detection script
+      await this.page.evaluate(
+        ({ inactivityLimit, activateAfterMinutes }: { inactivityLimit: number, activateAfterMinutes: number }) => {
+          setTimeout(() => {
+            console.log('Activating inactivity detection...');
 
-        /**
-         * @summary A simple method to reliably send chunks over exposeFunction
-         * @param chunk Array buffer to send
-         * @returns void
-         */
-        const sendChunkToServer = async (chunk: ArrayBuffer) => {
-          function arrayBufferToBase64(buffer: ArrayBuffer) {
-            let binary = '';
-            const bytes = new Uint8Array(buffer);
-            for (let i = 0; i < bytes.byteLength; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
-            return btoa(binary);
-          }
-          const base64 = arrayBufferToBase64(chunk);
-          await (window as any).screenAppSendData(slightlySecretId, base64);
-        };
+            // Simple inactivity detection - check if bot is alone
+            const detectLoneParticipant = () => {
+              const interval = setInterval(() => {
+                try {
+                  const regex = /\d+/;
+                  const contributors = Array.from(document.querySelectorAll('button[aria-label=People]') ?? [])
+                    .filter(x => regex.test(x?.textContent ?? ''))[0]?.textContent;
+                  const match = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
 
-        async function startRecording() {
-          console.log('Will activate the inactivity detection after', activateInactivityDetectionAfter);
+                  if (match && Number(match[0]) >= 2) {
+                    return; // Still has participants
+                  }
 
-          // Check for the availability of the mediaDevices API
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-            console.error('MediaDevices or getDisplayMedia not supported in this browser.');
-            return;
-          }
-          
-          const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
-            video: true,
-            audio: {
-              autoGainControl: false,
-              channels: 2,
-              channelCount: 2,
-              echoCancellation: false,
-              noiseSuppression: false,
-            },
-            preferCurrentTab: true,
-          });
-
-          let options: MediaRecorderOptions = {};
-          if (MediaRecorder.isTypeSupported(primaryMimeType)) {
-            console.log(`Media Recorder will use ${primaryMimeType} codecs...`);
-            options = { mimeType: primaryMimeType };
-          }
-          else {
-            console.warn(`Media Recorder did not find primary mime type codecs ${primaryMimeType}, Using fallback codecs ${secondaryMimeType}`);
-            options = { mimeType: secondaryMimeType };
-          }
-
-          const mediaRecorder = new MediaRecorder(stream, { ...options });
-
-          mediaRecorder.ondataavailable = async (event: BlobEvent) => {
-            if (!event.data.size) {
-              console.warn('Received empty chunk...');
-              return;
-            }
-            try {
-              const arrayBuffer = await event.data.arrayBuffer();
-              await sendChunkToServer(arrayBuffer);
-            } catch (error) {
-              console.error('Error uploading chunk:', error.message, error);
-            }
-          };
-
-          // Start recording with 2-second intervals
-          const chunkDuration = 2000;
-          mediaRecorder.start(chunkDuration);
-
-          const stopTheRecording = async () => {
-            mediaRecorder.stop();
-            stream.getTracks().forEach((track) => track.stop());
-
-            // Cleanup recording timer
-            clearTimeout(timeoutId);
-
-            // Cancel the perpetural checks
-            if (inactivityDetectionTimeout) {
-              clearTimeout(inactivityDetectionTimeout);
-            }
-
-            // Begin browser cleanup
-            (window as any).screenAppMeetEnd(slightlySecretId);
-          };
-
-          let loneTest: NodeJS.Timeout;
-          const detectLoneParticipant = () => {
-            loneTest = setInterval(() => {
-              try {
-                const regex = new RegExp(/\d+/);
-                const contributors = Array.from(document.querySelectorAll('button[aria-label=People]') ?? [])
-                  .filter(x => (regex.test(x?.textContent ?? '')))[0]
-                  ?.textContent;
-                const match: null | RegExpMatchArray = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
-                if (match && Number(match[0]) >= 2) {
-                  return;
+                  console.log('Bot is alone, ending meeting');
+                  clearInterval(interval);
+                  (window as any).screenAppMeetEnd();
+                } catch (error) {
+                  console.error('Participant detection error:', error);
                 }
-
-                console.log('Detected meeting bot is alone in meeting, ending recording on team:', userId, teamId, userId);
-                clearInterval(loneTest);
-                stopTheRecording();
-              } catch (error) {
-                console.error('Microsoft Teams Meeting presence detection failed on team:', userId, teamId, error.message, error);
-              }
-            }, 5000); // Detect every 5 seconds
-          };
-
-          const detectIncrediblySilentMeeting = () => {
-            const audioContext = new AudioContext();
-            const mediaSource = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-
-            /* Use a value suitable for the given use case of silence detection
-               |
-               |____ Relatively smaller FFT size for faster processing and less sampling
-            */
-            analyser.fftSize = 256;
-
-            mediaSource.connect(analyser);
-
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            
-            // Sliding silence period
-            let silenceDuration = 0;
-
-            // Audio gain/volume
-            const silenceThreshold = 10;
-
-            let monitor = true;
-
-            const monitorSilence = () => {
-              analyser.getByteFrequencyData(dataArray);
-
-              const audioActivity = dataArray.reduce((a, b) => a + b) / dataArray.length;
-
-              if (audioActivity < silenceThreshold) {
-                silenceDuration += 100; // Check every 100ms
-                if (silenceDuration >= inactivityLimit) {
-                    console.warn('Detected silence in Microsoft Teams Meeting and ending the recording on team:', userId, teamId);
-                    monitor = false;
-                    stopTheRecording();
-                }
-              } else {
-                silenceDuration = 0;
-              }
-
-              if (monitor) {
-                // Recursively queue the next check
-                setTimeout(monitorSilence, 100);
-              }
+              }, 5000);
             };
 
-            // Go silence monitor
-            monitorSilence();
-          };
-
-          /**
-           * Perpetual checks for inactivity detection
-           */
-          inactivityDetectionTimeout = setTimeout(() => {
             detectLoneParticipant();
-            detectIncrediblySilentMeeting();
-          }, activateInactivityDetectionAfterMinutes * 60 * 1000);
-
-          // Cancel this timeout when stopping the recording
-          // Stop recording after `duration` minutes upper limit
-          timeoutId = setTimeout(async () => {
-            stopTheRecording();
-          }, duration);
+          }, activateAfterMinutes * 60 * 1000);
+        },
+        {
+          inactivityLimit: config.inactivityLimit * 60 * 1000,
+          activateAfterMinutes: config.activateInactivityDetectionAfter,
         }
+      );
 
-        // Start the recording
-        await startRecording();
-      },
-      { 
-        teamId, 
-        duration, 
-        inactivityLimit, 
-        userId, 
-        slightlySecretId: this.slightlySecretId,
-        activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
-        activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
-        primaryMimeType: webmMimeType,
-        secondaryMimeType: vp9MimeType
+      // Wait for either timeout or meeting end
+      const startTime = Date.now();
+      while (!meetingEnded && (Date.now() - startTime) < duration) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    );
-  
-    this._logger.info('Waiting for recording duration', config.maxRecordingDuration, 'minutes...');
-    const processingTime = 0.2 * 60 * 1000;
-    const waitingPromise: WaitPromise = getWaitingPromise(processingTime + duration);
 
-    waitingPromise.promise.then(async () => {
+      this._logger.info('Recording period ended', {
+        meetingEnded,
+        recordedDuration: Math.floor((Date.now() - startTime) / 1000) + 's'
+      });
+
+    } finally {
+      // Always stop ffmpeg
+      this._logger.info('Stopping ffmpeg recording...');
+      await recorder.stop();
+
+      // Upload the recorded file
+      this._logger.info('Uploading recorded file...', { outputPath });
+
+      if (fs.existsSync(outputPath)) {
+        const fileBuffer = fs.readFileSync(outputPath);
+        await uploader.saveDataToTempFile(fileBuffer);
+
+        // Clean up the temporary file
+        fs.unlinkSync(outputPath);
+        this._logger.info('Recording uploaded and temporary file cleaned up');
+      } else {
+        this._logger.error('Recording file not found!', { outputPath });
+      }
+
+      // Close browser
       this._logger.info('Closing the browser...');
       await this.page.context().browser()?.close();
-
       this._logger.info('All done ✨', { botId, eventId, userId, teamId });
-    });
-
-    await waitingPromise.promise;
+    }
   }
 }

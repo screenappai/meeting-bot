@@ -11,3 +11,5 @@ __pycache__/
 gcp-key
 assets/screenshots
 /data
+debug-videos/
+.env.native
