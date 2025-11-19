@@ -109,7 +109,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       await nameInput.fill(name ? name : 'ScreenApp Notetaker');
       await this.page.waitForTimeout(1000);
     } catch (err) {
-      this._logger.info('Name input field not found after 60s, skipping...', err?.message);
+      this._logger.info('Name input field not found after 120s, skipping...', err?.message);
     }
 
     // Toggle off camera and mute microphone before joining
