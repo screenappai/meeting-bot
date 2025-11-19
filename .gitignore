@@ -6,6 +6,7 @@ node_modules/
 dist/
 assets/videos
 *.y4m
+*.wav
 __pycache__/
 .env
 gcp-key
