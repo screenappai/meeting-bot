@@ -3,12 +3,48 @@
 # Forward SIGTERM to child processes
 trap 'echo "sending SIGABRT to child"; kill -SIGABRT "$child" 2>/dev/null' SIGTERM SIGINT
 
+# Set up PulseAudio runtime directory for non-root user
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+echo "Using XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+
 # Start Xvfb
 Xvfb :99 -screen 0 1280x720x24 &
 xvfb_pid=$!
 
 # Wait a moment for Xvfb to start
 sleep 1
+
+# Initialize PulseAudio for audio capture
+echo "Initializing PulseAudio..."
+pulseaudio --kill 2>/dev/null || true
+sleep 1
+
+# Start PulseAudio in user mode
+pulseaudio -D --exit-idle-time=-1 --log-level=info 2>&1
+sleep 5
+
+# Verify PulseAudio is running and set up virtual devices
+if pgrep -x "pulseaudio" > /dev/null; then
+    echo "✓ PulseAudio is running (PID: $(pgrep -x pulseaudio))"
+
+    # Load null sink module (virtual audio output device)
+    SINK_ID=$(pactl load-module module-null-sink sink_name=virtual_output sink_properties=device.description="Virtual_Output" 2>&1)
+    echo "✓ Loaded null sink module (ID: $SINK_ID)"
+
+    # Set as default sink (Teams will play audio here)
+    pactl set-default-sink virtual_output 2>&1
+    echo "✓ Set virtual_output as default sink"
+
+    # Verify monitor source exists for ffmpeg
+    if pactl list sources short | grep -q "virtual_output.monitor"; then
+        echo "✓ Monitor source virtual_output.monitor is available for ffmpeg"
+    else
+        echo "✗ WARNING: Monitor source not found!"
+    fi
+else
+    echo "✗ ERROR: PulseAudio failed to start"
+    ps aux | grep pulse
+fi
 
 # Start your application
 DISPLAY=:99 "$@" &

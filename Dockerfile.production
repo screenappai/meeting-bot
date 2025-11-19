@@ -4,13 +4,15 @@ FROM node:18
 # Set the working directory
 WORKDIR /usr/src/app
 
-# Install system dependencies, including WebGL support
+# Install system dependencies, including WebGL support and audio
 RUN apt-get update && \
   apt-get install -y \
   ffmpeg \
   libnss3 \
   libxss1 \
   libasound2 \
+  pulseaudio \
+  alsa-utils \
   libatk1.0-0 \
   libatk-bridge2.0-0 \
   libcups2 \
@@ -82,6 +84,15 @@ RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
 
 RUN mkdir -p /usr/src/app/dist/_tempvideo \
     && chmod -R 777 /usr/src/app/dist/_tempvideo
+
+# Create PulseAudio directories for non-root user
+RUN mkdir -p /run/user/1001 \
+    && chown -R nodejs:nodejs /run/user/1001 \
+    && chmod 700 /run/user/1001
+
+# Create PulseAudio config directory
+RUN mkdir -p /home/nodejs/.config/pulse \
+    && chown -R nodejs:nodejs /home/nodejs/.config
 
 # Switch to non-root user
 USER nodejs

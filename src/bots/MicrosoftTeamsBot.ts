@@ -32,15 +32,21 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToRemoteStorage();
       this._logger.info('Recording upload result', { uploadResult, userId, teamId });
+      return uploadResult;
     };
 
     try {
       const pushState = (st: BotStatus) => _state.push(st);
       await this.joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader });
-      await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
 
       // Finish the upload from the temp video
-      await handleUpload();
+      const uploadResult = await handleUpload();
+
+      if (_state.includes('finished') && !uploadResult) {
+        _state.splice(_state.indexOf('finished'), 1, 'failed');
+      }
+
+      await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
     } catch(error) {
       if (!_state.includes('finished')) 
         _state.push('failed');
@@ -54,7 +60,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     }
   }
 
-  private async joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
+  private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
     this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
