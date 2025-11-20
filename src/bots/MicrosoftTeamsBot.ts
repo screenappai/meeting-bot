@@ -136,59 +136,37 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     this._logger.info('Navigating to Microsoft Teams Meeting URL...');
     await this.page.goto(url, { waitUntil: 'networkidle' });
 
-    // Function to dismiss Chrome dialogs
-    const dismissChromeDialogs = async (timeoutMs: number = 5000) => {
+    // Try to find and click "Join from browser" button
+    this._logger.info('Waiting for Join meeting from browser button...');
+    const joinButtonSelectors = [
+      'button[aria-label="Join meeting from this browser"]',
+      'button[aria-label="Continue on this browser"]',
+      'button[aria-label="Join on this browser"]',
+      'button:has-text("Continue on this browser")',
+      'button:has-text("Join from browser")',
+    ];
+
+    let buttonClicked = false;
+    for (const selector of joinButtonSelectors) {
       try {
-        this._logger.info('Checking for Chrome dialogs to dismiss...');
-        const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("ok"), button:has-text("No thanks"), button:has-text("Don\'t send"), button:has-text("Got it"), button[class*="blue" i]').first();
-        if (await dialogButton.isVisible({ timeout: timeoutMs })) {
-          this._logger.info('Found Chrome dialog, dismissing...');
-          await dialogButton.click();
-          await this.page.waitForTimeout(1000);
-          this._logger.info('Chrome dialog dismissed successfully');
-        }
-      } catch (error) {
-        this._logger.info('No Chrome dialogs found to dismiss');
+        this._logger.info(`Trying selector: ${selector}`);
+        await this.page.waitForSelector(selector, { timeout: 60000 });
+        this._logger.info(`Found button, clicking: ${selector}`);
+        await this.page.click(selector, { force: true });
+        buttonClicked = true;
+        this._logger.info('Successfully clicked join from browser button');
+        break;
+      } catch (err) {
+        this._logger.info(`Selector not found: ${selector}`);
+        continue;
       }
-    };
-
-    // First attempt to dismiss dialogs immediately after page load
-    await dismissChromeDialogs(3000);
-
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
-
-    // Second attempt to dismiss dialogs (dialog might appear after initial load)
-    await dismissChromeDialogs(2000);
-
-    let joinFromBrowserButtonFound = false;
-
-    try {
-      this._logger.info('Waiting for Join meeting from browser field to be visible...');
-      await retryActionWithWait(
-        'Waiting for Join meeting from browser field to be visible',
-        async () => {
-          await this.page.waitForSelector('button[aria-label="Join meeting from this browser"]', { timeout: 60000 });
-          joinFromBrowserButtonFound = true;
-
-          this._logger.info('Waiting for 10 seconds...');
-          await this.page.waitForTimeout(10000);
-        },
-        this._logger,
-        1,
-        15000,
-      );
-    } catch (error) {
-      this._logger.info('Join meeting from browser button is probably missing!...', { error });
     }
 
-    if (joinFromBrowserButtonFound) {
-      this._logger.info('Clicking Join meeting from this browser button...');
-      await this.page.click('button[aria-label="Join meeting from this browser"]');
+    if (!buttonClicked) {
+      this._logger.info('Join from browser button not found, proceeding anyway...');
     }
 
     this._logger.info('Waiting for pre-join screen to load...');
-    await this.page.waitForTimeout(5000);
 
     // Try to fill name if input field exists (optional, won't fail if missing)
     try {
@@ -408,23 +386,6 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     // Wait for mic to be fully muted and any initial beeps to stop
     this._logger.info('Waiting 5 seconds for audio to stabilize before recording...');
     await this.page.waitForTimeout(5000);
-
-    // Final check for Chrome dialogs before starting recording
-    const dismissChromeDialogsFinal = async () => {
-      try {
-        this._logger.info('Final check for Chrome dialogs before recording...');
-        const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("ok"), button:has-text("No thanks"), button:has-text("Don\'t send"), button:has-text("Got it"), button[class*="blue" i]').first();
-        if (await dialogButton.isVisible({ timeout: 2000 })) {
-          this._logger.info('Found Chrome dialog, dismissing...');
-          await dialogButton.click();
-          await this.page.waitForTimeout(500);
-          this._logger.info('Chrome dialog dismissed before recording');
-        }
-      } catch (error) {
-        this._logger.info('No Chrome dialogs found before recording');
-      }
-    };
-    await dismissChromeDialogsFinal();
 
     // Recording the meeting page with ffmpeg
     this._logger.info('Begin recording with ffmpeg...');
