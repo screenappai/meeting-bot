@@ -82,6 +82,10 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     '--enable-features=MediaRecorder',
     '--enable-audio-service-out-of-process',
     '--autoplay-policy=no-user-gesture-required',
+    '--no-default-browser-check',
+    '--disable-crash-reporter',
+    '--disable-breakpad',
+    '--disable-infobars',
   ];
 
   // Fake device args - only for Microsoft Teams
