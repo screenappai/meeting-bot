@@ -79,24 +79,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   }
 
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
-    // Warm up Chrome to trigger first-run dialogs before the actual meeting
-    this._logger.info('Warming up Chrome browser...');
-    try {
-      const { chromium } = await import('playwright');
-      const warmupBrowser = await chromium.launch({
-        headless: false,
-        executablePath: config.chromeExecutablePath,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      });
-      this._logger.info('Warmup browser opened, waiting 3 seconds...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      await warmupBrowser.close();
-      this._logger.info('Chrome warmup complete');
-    } catch (error) {
-      this._logger.warn('Chrome warmup failed (non-fatal):', error);
-    }
-
-    this._logger.info('Launching browser for meeting...');
+    this._logger.info('Launching browser...');
 
     this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
 

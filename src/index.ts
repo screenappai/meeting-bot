@@ -3,14 +3,44 @@ import app, { redisConsumerService, setGracefulShutdown } from './app';
 import { globalJobStore } from './lib/globalJobStore';
 import messageBroker from './connect/messageBroker';
 import config from './config';
+import { chromium } from 'playwright';
 
 const port = 3000;
+
+// Warm up Chrome on startup to trigger first-run dialogs
+// This prevents the dialog from appearing during actual meetings
+async function warmupChrome() {
+  console.log('🔥 Warming up Chrome browser...');
+  try {
+    const browser = await chromium.launch({
+      headless: false,
+      executablePath: config.chromeExecutablePath,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    console.log('Chrome opened, waiting 10 seconds to trigger first-run dialogs...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    await browser.close();
+    console.log('✓ Chrome warmup complete - first-run dialogs triggered');
+  } catch (error) {
+    console.error('Chrome warmup failed (non-fatal):', error);
+  }
+}
 
 // Create Express server
 const server = http.createServer(app);
 
-server.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+// Warm up Chrome before starting server
+warmupChrome().then(() => {
+  server.listen(port, () => {
+    console.log(`🚀 Server is running on http://localhost:${port}`);
+  });
+}).catch(err => {
+  console.error('Failed to warm up Chrome, starting server anyway:', err);
+  server.listen(port, () => {
+    console.log(`🚀 Server is running on http://localhost:${port}`);
+  });
 });
 
 // Flag to prevent multiple shutdown attempts
