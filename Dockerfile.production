@@ -98,7 +98,7 @@ RUN mkdir -p /home/nodejs/.config/pulse \
 USER nodejs
 
 # Install Playwright and its dependencies
-RUN npx playwright install --with-deps
+RUN npx playwright Install
 
 # Expose the port your app runs on
 EXPOSE 3000
