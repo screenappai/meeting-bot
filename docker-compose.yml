@@ -11,7 +11,7 @@ services:
       - .:/usr/src/app
       - ./assets/screenshots:/usr/src/app/assets/screenshots
       - ./debug-videos:/usr/src/app/debug-videos
-      - /usr/src/app/node_modules
+      - /usr/src/app/node_modules  # Persist node_modules
     command: ["/bin/bash", "./start.sh"]
 
 

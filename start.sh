@@ -2,6 +2,21 @@
 
 export DISPLAY=:99
 
+# Note: Playwright is installed during Docker build as root
+# Browsers are in /root/.cache/ms-playwright/ which is readable by nodejs user
+echo "✓ Using Playwright browsers from Docker image"
+
+# Set up PulseAudio runtime directory
+# For root user (local Docker), use /run/user/0
+# For nodejs user (production), use /run/user/1001
+USER_ID=$(id -u)
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/${USER_ID}}
+echo "Using XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
+
+# Create runtime directory if it doesn't exist
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
 # Kill any existing PulseAudio processes
 pulseaudio --kill 2>/dev/null || true
 sleep 1

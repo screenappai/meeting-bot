@@ -5,10 +5,18 @@ export class FFmpegRecorder {
   private ffmpegProcess: ChildProcess | null = null;
   private outputPath: string;
   private logger: Logger;
+  private exitCallback: ((code: number | null) => void) | null = null;
 
   constructor(outputPath: string, logger: Logger) {
     this.outputPath = outputPath;
     this.logger = logger;
+  }
+
+  /**
+   * Register a callback to be notified when FFmpeg process exits
+   */
+  onProcessExit(callback: (code: number | null) => void): void {
+    this.exitCallback = callback;
   }
 
   async start(): Promise<void> {
@@ -67,6 +75,13 @@ export class FFmpegRecorder {
           DISPLAY: process.env.DISPLAY || ':99'
         };
 
+        this.logger.info('FFmpeg environment:', {
+          XDG_RUNTIME_DIR: ffmpegEnv.XDG_RUNTIME_DIR,
+          DISPLAY: ffmpegEnv.DISPLAY,
+          USER: process.env.USER,
+          HOME: process.env.HOME
+        });
+
         this.ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
           stdio: ['pipe', 'pipe', 'pipe'],  // Enable stdin to send 'q' quit signal
           env: ffmpegEnv
@@ -79,33 +94,56 @@ export class FFmpegRecorder {
 
         // Buffer to accumulate stderr for better error reporting
         let stderrBuffer = '';
+        const startTime = Date.now();
 
         // Handle stderr (ffmpeg outputs progress here)
         this.ffmpegProcess.stderr?.on('data', (data) => {
           const output = data.toString();
           stderrBuffer += output;
 
+          const isStartupPhase = (Date.now() - startTime) < 5000; // First 5 seconds
+
           // Log errors and important messages
           if (output.includes('error') || output.includes('Error') || output.includes('Invalid') || output.includes('Failed')) {
             this.logger.error('ffmpeg error:', output);
           } else if (output.includes('Duration') || output.includes('Stream #') || output.includes('video:') || output.includes('audio:')) {
             this.logger.info('ffmpeg info:', output.trim());
+          } else if (isStartupPhase) {
+            // Log all stderr at info level during startup (first 5 seconds) to catch initialization errors
+            this.logger.info('ffmpeg startup:', output.trim().substring(0, 200));
           } else {
-            // Log all stderr at info level during startup (first 5 seconds)
-            // to catch initialization errors
+            // After startup, only debug log progress updates
             this.logger.debug('ffmpeg progress:', output.substring(0, 150));
           }
         });
+
+        // Track if we already resolved/rejected
+        let settled = false;
 
         // Handle process exit
         this.ffmpegProcess.on('exit', (code, signal) => {
           this.logger.info('ffmpeg process exited', { code, signal });
 
+          // Notify callback if registered
+          if (this.exitCallback) {
+            this.exitCallback(code);
+          }
+
           // If exited with error, log the full stderr buffer
           if (code !== 0 && code !== null) {
             this.logger.error('FFmpeg failed with exit code', code);
-            if (stderrBuffer) {
-              this.logger.error('FFmpeg stderr output:', stderrBuffer.trim());
+            const trimmedBuffer = stderrBuffer.trim();
+            if (trimmedBuffer) {
+              this.logger.error('FFmpeg stderr output:', trimmedBuffer);
+            } else {
+              this.logger.error('FFmpeg stderr was empty - process may have crashed without error message');
+              this.logger.error('Common causes: screen size mismatch (check Xvfb resolution vs capture area + offset), PulseAudio not running, X11 display not available');
+            }
+
+            // If we haven't settled yet (early failure during startup), reject
+            if (!settled) {
+              settled = true;
+              reject(new Error(`FFmpeg exited with code ${code}: ${trimmedBuffer || 'no error details'}`));
             }
           }
         });
@@ -113,15 +151,26 @@ export class FFmpegRecorder {
         // Handle errors
         this.ffmpegProcess.on('error', (error) => {
           this.logger.error('ffmpeg process error:', error);
-          reject(error);
+          if (!settled) {
+            settled = true;
+            reject(error);
+          }
         });
 
         // Wait a bit to ensure ffmpeg starts successfully
         setTimeout(() => {
-          if (this.ffmpegProcess && !this.ffmpegProcess.killed) {
+          if (settled) {
+            // Already rejected due to early exit/error
+            return;
+          }
+
+          if (this.ffmpegProcess && !this.ffmpegProcess.killed && this.ffmpegProcess.exitCode === null) {
             this.logger.info('ffmpeg recording started successfully');
+            settled = true;
             resolve();
           } else {
+            this.logger.error('ffmpeg failed to start or already exited');
+            settled = true;
             reject(new Error('ffmpeg failed to start'));
           }
         }, 2000);

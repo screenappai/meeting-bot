@@ -15,6 +15,8 @@ import { MICROSOFT_REQUEST_DENIED } from '../constants';
 import { FFmpegRecorder } from '../lib/ffmpegRecorder';
 import * as path from 'path';
 import * as fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
@@ -44,16 +46,32 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
+        this._logger.error('Recording completed but upload failed', { botId, userId, teamId });
+        await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
+        throw new Error('Recording upload failed');
+      } else if (uploadResult) {
+        this._logger.info('Recording and upload completed successfully', { botId, userId, teamId });
       }
 
       await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
     } catch(error) {
-      if (!_state.includes('finished')) 
+      // Log the actual error that occurred
+      this._logger.error('Error in Microsoft Teams bot join process', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        botId,
+        userId,
+        teamId,
+        currentState: _state
+      });
+
+      if (!_state.includes('finished'))
         _state.push('failed');
 
+      // Try to update bot status (may fail if API is unreachable, but that's OK)
       await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
-      
-      if (error instanceof WaitingAtLobbyRetryError) 
+
+      if (error instanceof WaitingAtLobbyRetryError)
         await handleWaitingAtLobbyError({ token: bearerToken, botId, eventId, provider: 'microsoft', error }, this._logger);
 
       throw error;
@@ -340,12 +358,86 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
     this._logger.info('Starting ffmpeg recording...', { outputPath, duration });
 
+    // Verify PulseAudio is ready before starting FFmpeg
+    this._logger.info('Verifying PulseAudio status before starting FFmpeg...');
+    try {
+      const execAsync = promisify(exec);
+
+      // Check if PulseAudio process is running
+      try {
+        const { stdout: psOutput } = await execAsync('ps aux | grep pulseaudio | grep -v grep');
+        this._logger.info('PulseAudio process status:', psOutput.trim());
+      } catch (err) {
+        this._logger.error('PulseAudio process not found!', err);
+      }
+
+      // Check XDG_RUNTIME_DIR
+      this._logger.info('Environment check:', {
+        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
+        USER: process.env.USER,
+        HOME: process.env.HOME
+      });
+
+      // Check if PulseAudio socket exists
+      try {
+        const socketPath = `${process.env.XDG_RUNTIME_DIR}/pulse/native`;
+        const { stdout: socketCheck } = await execAsync(`ls -la ${socketPath}`);
+        this._logger.info('PulseAudio socket exists:', socketCheck.trim());
+      } catch (err) {
+        this._logger.error('PulseAudio socket not found!', err);
+      }
+
+      // Try to list sources
+      const { stdout: paStatus } = await execAsync('pactl list sources short');
+      this._logger.info('PulseAudio sources available:', paStatus.trim() || '(empty - no sources found)');
+
+      if (!paStatus.includes('virtual_output.monitor')) {
+        this._logger.error('WARNING: virtual_output.monitor not found in PulseAudio sources!');
+        this._logger.info('Attempting to restart PulseAudio and recreate virtual audio device...');
+
+        // Try to restart PulseAudio
+        try {
+          await execAsync('pulseaudio --kill || true');
+          await execAsync('sleep 1');
+          await execAsync('pulseaudio -D --exit-idle-time=-1 --log-level=info');
+          await execAsync('sleep 2');
+          this._logger.info('Restarted PulseAudio');
+
+          // Recreate the null sink
+          await execAsync('pactl load-module module-null-sink sink_name=virtual_output sink_properties=device.description="Virtual_Output"');
+          await execAsync('pactl set-default-sink virtual_output');
+          this._logger.info('Recreated virtual_output sink and monitor');
+
+          // Verify it worked
+          const { stdout: newStatus } = await execAsync('pactl list sources short');
+          this._logger.info('PulseAudio sources after restart:', newStatus.trim());
+        } catch (err) {
+          this._logger.error('Failed to restart PulseAudio or recreate virtual audio device:', err);
+        }
+      }
+    } catch (err) {
+      this._logger.error('Error checking PulseAudio status:', err);
+    }
+
     // Create and start ffmpeg recorder
     const recorder = new FFmpegRecorder(outputPath, this._logger);
+
+    // Track FFmpeg status
+    let ffmpegFailed = false;
+    let ffmpegError: Error | null = null;
 
     try {
       await recorder.start();
       this._logger.info('FFmpeg recording started successfully');
+
+      // Monitor FFmpeg process - if it dies, stop recording immediately
+      recorder.onProcessExit((code) => {
+        if (code !== 0 && code !== null) {
+          this._logger.error('FFmpeg died unexpectedly during recording', { exitCode: code });
+          ffmpegFailed = true;
+          ffmpegError = new Error(`FFmpeg exited with code ${code} during recording`);
+        }
+      });
 
       // Set up browser-based inactivity detection
       let meetingEnded = false;
@@ -409,17 +501,30 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         }
       );
 
-      // Wait for either timeout or meeting end
+      // Wait for either timeout, meeting end, or FFmpeg failure
       const startTime = Date.now();
-      while (!meetingEnded && (Date.now() - startTime) < duration) {
+      while (!meetingEnded && !ffmpegFailed && (Date.now() - startTime) < duration) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       this._logger.info('Recording period ended', {
         meetingEnded,
+        ffmpegFailed,
         recordedDuration: Math.floor((Date.now() - startTime) / 1000) + 's'
       });
 
+      // If FFmpeg failed during recording, throw the error
+      if (ffmpegFailed && ffmpegError) {
+        throw ffmpegError;
+      }
+
+    } catch (error) {
+      // If recorder.start() failed or any other error occurred, mark FFmpeg as failed
+      this._logger.error('Error during recording:', error);
+      ffmpegFailed = true;
+      ffmpegError = error instanceof Error ? error : new Error(String(error));
+      // Re-throw to be caught by outer try/catch in joinMeeting
+      throw error;
     } finally {
       // Always stop ffmpeg
       this._logger.info('Stopping ffmpeg recording...');
@@ -428,6 +533,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       // Upload the recorded file
       this._logger.info('Uploading recorded file...', { outputPath });
 
+      let uploadSuccess = false;
       if (fs.existsSync(outputPath)) {
         const fileBuffer = fs.readFileSync(outputPath);
         await uploader.saveDataToTempFile(fileBuffer);
@@ -435,6 +541,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         // Clean up the temporary file
         fs.unlinkSync(outputPath);
         this._logger.info('Recording uploaded and temporary file cleaned up');
+        uploadSuccess = true;
       } else {
         this._logger.error('Recording file not found!', { outputPath });
       }
@@ -442,7 +549,15 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       // Close browser
       this._logger.info('Closing the browser...');
       await this.page.context().browser()?.close();
-      this._logger.info('All done ✨', { botId, eventId, userId, teamId });
+
+      // Log final status
+      if (ffmpegFailed) {
+        this._logger.error('Recording failed due to FFmpeg error', { botId, eventId, userId, teamId });
+      } else if (!uploadSuccess) {
+        this._logger.error('Recording completed but file upload failed', { botId, eventId, userId, teamId });
+      } else {
+        this._logger.info('Recording completed successfully ✨', { botId, eventId, userId, teamId });
+      }
     }
   }
 }
