@@ -95,6 +95,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     '--metrics-recording-only',
     '--disable-default-apps',
     '--disable-default-browser-promo',
+    '--disable-crash-reporter',
     '--disable-blink-features=AutomationControlled',
   ];
 
