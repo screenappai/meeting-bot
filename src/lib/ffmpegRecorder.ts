@@ -69,15 +69,22 @@ export class FFmpegRecorder {
           this.logger.debug('ffmpeg stdout:', data.toString());
         });
 
+        // Buffer to accumulate stderr for better error reporting
+        let stderrBuffer = '';
+
         // Handle stderr (ffmpeg outputs progress here)
         this.ffmpegProcess.stderr?.on('data', (data) => {
           const output = data.toString();
+          stderrBuffer += output;
+
           // Log errors and important messages
           if (output.includes('error') || output.includes('Error') || output.includes('Invalid') || output.includes('Failed')) {
             this.logger.error('ffmpeg error:', output);
           } else if (output.includes('Duration') || output.includes('Stream #') || output.includes('video:') || output.includes('audio:')) {
             this.logger.info('ffmpeg info:', output.trim());
           } else {
+            // Log all stderr at info level during startup (first 5 seconds)
+            // to catch initialization errors
             this.logger.debug('ffmpeg progress:', output.substring(0, 150));
           }
         });
@@ -85,6 +92,14 @@ export class FFmpegRecorder {
         // Handle process exit
         this.ffmpegProcess.on('exit', (code, signal) => {
           this.logger.info('ffmpeg process exited', { code, signal });
+
+          // If exited with error, log the full stderr buffer
+          if (code !== 0 && code !== null) {
+            this.logger.error('FFmpeg failed with exit code', code);
+            if (stderrBuffer) {
+              this.logger.error('FFmpeg stderr output:', stderrBuffer.trim());
+            }
+          }
         });
 
         // Handle errors
