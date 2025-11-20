@@ -60,8 +60,16 @@ export class FFmpegRecorder {
 
         this.logger.info('Starting ffmpeg with args:', { args: ffmpegArgs.join(' ') });
 
+        // Ensure FFmpeg can connect to PulseAudio
+        const ffmpegEnv = {
+          ...process.env,
+          XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || '/run/user/1001',
+          DISPLAY: process.env.DISPLAY || ':99'
+        };
+
         this.ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
-          stdio: ['pipe', 'pipe', 'pipe']  // Enable stdin to send 'q' quit signal
+          stdio: ['pipe', 'pipe', 'pipe'],  // Enable stdin to send 'q' quit signal
+          env: ffmpegEnv
         });
 
         // Handle stdout
