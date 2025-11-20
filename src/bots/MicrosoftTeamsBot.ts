@@ -79,7 +79,55 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   }
 
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
-    this._logger.info('Launching browser...');
+    // First run: Navigate to pre-join screen to trigger Chrome dialogs, then close
+    this._logger.info('Pre-warming: Opening browser to trigger first-run dialogs...');
+    try {
+      const warmupPage = await createBrowserContext(url, this._correlationId, 'microsoft');
+      this._logger.info('Pre-warming: Navigating to Teams meeting...');
+      await warmupPage.goto(url, { waitUntil: 'networkidle' });
+
+      await warmupPage.waitForTimeout(2000);
+
+      // Try to click "Join from browser" button
+      this._logger.info('Pre-warming: Looking for Join from browser button...');
+      const joinButtonSelectors = [
+        'button[aria-label="Join meeting from this browser"]',
+        'button[aria-label="Continue on this browser"]',
+        'button[aria-label="Join on this browser"]',
+        'button:has-text("Continue on this browser")',
+        'button:has-text("Join from browser")',
+      ];
+
+      for (const selector of joinButtonSelectors) {
+        try {
+          await warmupPage.waitForSelector(selector, { timeout: 5000 });
+          this._logger.info(`Pre-warming: Found button with selector: ${selector}`);
+          await warmupPage.click(selector, { force: true });
+          this._logger.info('Pre-warming: Clicked join from browser button');
+          break;
+        } catch (err) {
+          continue;
+        }
+      }
+
+      // Wait for pre-join screen to load
+      this._logger.info('Pre-warming: Waiting for pre-join screen...');
+      await warmupPage.waitForTimeout(5000);
+
+      // Close the warmup browser
+      this._logger.info('Pre-warming: Closing warmup browser...');
+      await warmupPage.context().browser()?.close();
+      this._logger.info('Pre-warming complete - dialogs triggered');
+
+      // Wait 10 seconds for Chrome to fully close and save state before opening again
+      this._logger.info('Waiting 10 seconds before opening browser for actual meeting...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    } catch (error) {
+      this._logger.warn('Pre-warming failed (non-fatal):', error);
+    }
+
+    // Second run: Actual meeting join
+    this._logger.info('Launching browser for actual meeting...');
 
     this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
 
