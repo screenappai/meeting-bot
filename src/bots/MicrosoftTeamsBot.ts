@@ -354,7 +354,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     const duration = config.maxRecordingDuration * 60 * 1000;
     this._logger.info(`Recording max duration set to ${duration / 60000} minutes (safety limit only)`);
 
-    const outputPath = path.join(process.cwd(), `recording-${botId || Date.now()}.mp4`);
+    // Use the same temp folder as Google Meet bot (has proper permissions)
+    const tempFolder = path.join(process.cwd(), 'dist', '_tempvideo');
+    const outputPath = path.join(tempFolder, `recording-${botId || Date.now()}.mp4`);
 
     this._logger.info('Starting ffmpeg recording...', { outputPath, duration });
 
