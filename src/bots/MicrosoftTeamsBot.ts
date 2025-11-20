@@ -88,21 +88,30 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     this._logger.info('Navigating to Microsoft Teams Meeting URL...');
     await this.page.goto(url, { waitUntil: 'networkidle' });
 
-    // Dismiss Chrome default browser and crash reporter dialogs if they appear
-    try {
-      this._logger.info('Checking for Chrome dialogs to dismiss...');
-      const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("No thanks"), button:has-text("Don\'t send")').first();
-      if (await dialogButton.isVisible({ timeout: 2000 })) {
-        this._logger.info('Dismissing Chrome dialog...');
-        await dialogButton.click();
-        await this.page.waitForTimeout(1000);
+    // Function to dismiss Chrome dialogs
+    const dismissChromeDialogs = async (timeoutMs: number = 5000) => {
+      try {
+        this._logger.info('Checking for Chrome dialogs to dismiss...');
+        const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("ok"), button:has-text("No thanks"), button:has-text("Don\'t send"), button:has-text("Got it"), button[class*="blue" i]').first();
+        if (await dialogButton.isVisible({ timeout: timeoutMs })) {
+          this._logger.info('Found Chrome dialog, dismissing...');
+          await dialogButton.click();
+          await this.page.waitForTimeout(1000);
+          this._logger.info('Chrome dialog dismissed successfully');
+        }
+      } catch (error) {
+        this._logger.info('No Chrome dialogs found to dismiss');
       }
-    } catch (error) {
-      this._logger.info('No Chrome dialogs found to dismiss');
-    }
+    };
+
+    // First attempt to dismiss dialogs immediately after page load
+    await dismissChromeDialogs(3000);
 
     this._logger.info('Waiting for 10 seconds...');
     await this.page.waitForTimeout(10000);
+
+    // Second attempt to dismiss dialogs (dialog might appear after initial load)
+    await dismissChromeDialogs(2000);
 
     let joinFromBrowserButtonFound = false;
 
@@ -351,6 +360,23 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     // Wait for mic to be fully muted and any initial beeps to stop
     this._logger.info('Waiting 5 seconds for audio to stabilize before recording...');
     await this.page.waitForTimeout(5000);
+
+    // Final check for Chrome dialogs before starting recording
+    const dismissChromeDialogsFinal = async () => {
+      try {
+        this._logger.info('Final check for Chrome dialogs before recording...');
+        const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("ok"), button:has-text("No thanks"), button:has-text("Don\'t send"), button:has-text("Got it"), button[class*="blue" i]').first();
+        if (await dialogButton.isVisible({ timeout: 2000 })) {
+          this._logger.info('Found Chrome dialog, dismissing...');
+          await dialogButton.click();
+          await this.page.waitForTimeout(500);
+          this._logger.info('Chrome dialog dismissed before recording');
+        }
+      } catch (error) {
+        this._logger.info('No Chrome dialogs found before recording');
+      }
+    };
+    await dismissChromeDialogsFinal();
 
     // Recording the meeting page with ffmpeg
     this._logger.info('Begin recording with ffmpeg...');

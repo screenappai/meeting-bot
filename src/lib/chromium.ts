@@ -94,6 +94,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     '--disable-sync',
     '--metrics-recording-only',
     '--disable-default-apps',
+    '--disable-blink-features=AutomationControlled',
   ];
 
   // Fake device args - only for Microsoft Teams
