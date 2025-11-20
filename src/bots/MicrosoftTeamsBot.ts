@@ -88,6 +88,19 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     this._logger.info('Navigating to Microsoft Teams Meeting URL...');
     await this.page.goto(url, { waitUntil: 'networkidle' });
 
+    // Dismiss Chrome default browser and crash reporter dialogs if they appear
+    try {
+      this._logger.info('Checking for Chrome dialogs to dismiss...');
+      const dialogButton = await this.page.locator('button:has-text("OK"), button:has-text("No thanks"), button:has-text("Don\'t send")').first();
+      if (await dialogButton.isVisible({ timeout: 2000 })) {
+        this._logger.info('Dismissing Chrome dialog...');
+        await dialogButton.click();
+        await this.page.waitForTimeout(1000);
+      }
+    } catch (error) {
+      this._logger.info('No Chrome dialogs found to dismiss');
+    }
+
     this._logger.info('Waiting for 10 seconds...');
     await this.page.waitForTimeout(10000);
 
