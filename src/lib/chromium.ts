@@ -82,21 +82,23 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     '--enable-features=MediaRecorder',
     '--enable-audio-service-out-of-process',
     '--autoplay-policy=no-user-gesture-required',
-    '--no-default-browser-check',
-    '--disable-crash-reporter',
-    '--disable-breakpad',
-    '--disable-infobars',
-    '--no-first-run',
-    '--disable-popup-blocking',
-    '--disable-component-update',
-    '--disable-background-networking',
-    '--disable-client-side-phishing-detection',
-    '--disable-sync',
-    '--metrics-recording-only',
-    '--disable-default-apps',
-    '--disable-default-browser-promo',
-    '--disable-crash-reporter',
-    '--disable-blink-features=AutomationControlled',
+    // '--no-default-browser-check',
+    // '--disable-crash-reporter',
+    // '--disable-breakpad',
+    // '--disable-infobars',
+    // '--no-first-run',
+    // '--disable-popup-blocking',
+    // '--disable-component-update',
+    // '--disable-background-networking',
+    // '--disable-client-side-phishing-detection',
+    // '--disable-sync',
+    // '--metrics-recording-only',
+    // '--disable-default-apps',
+    // '--disable-default-browser-promo',
+    // '--disable-crash-reporter',
+    // '--disable-blink-features=AutomationControlled',
+    '--make-default-browser',
+    '--make-chrome-default'
   ];
 
   // Fake device args - only for Microsoft Teams
@@ -146,7 +148,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     userAgent: linuxX11UserAgent,
     // Record video for debugging in all environments
     recordVideo: {
-      dir: './debug-videos/',
+      dir: '/tmp/',
       size: size,
     },
   });
