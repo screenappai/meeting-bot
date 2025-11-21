@@ -14,6 +14,7 @@ import config from '../config';
 import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
+import { getStorageProvider } from '../uploader/providers/factory';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -72,8 +73,6 @@ class DiskUploader implements IUploader {
   private fileExtension: string = config.uploaderFileExtension;
   private fileId: string;
   private uploadId: string;
-  private lastUploadedBlobUrl?: string;
-  private lastRecordingId?: string;
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
   private lastStorageDetails?: Record<string, any>;
