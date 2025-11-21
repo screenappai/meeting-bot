@@ -9,6 +9,8 @@ stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
 stealthPlugin.enabledEvasions.delete('media.codecs');
 chromium.use(stealthPlugin);
 
+export type BotType = 'microsoft' | 'google' | 'zoom';
+
 function attachBrowserErrorHandlers(browser: Browser, context: BrowserContext, page: Page, correlationId: string) {
   const log = getCorrelationIdLog(correlationId);
 
@@ -53,7 +55,7 @@ async function launchBrowserWithTimeout(launchFn: () => Promise<Browser>, timeou
         }
       })
       .catch(err => {
-        console.error(`${getCorrelationIdLog(correlationId)} Error launching browser`, err);  
+        console.error(`${getCorrelationIdLog(correlationId)} Error launching browser`, err);
         if (!finished) {
           finished = true;
           clearTimeout(timeoutId);
@@ -63,10 +65,11 @@ async function launchBrowserWithTimeout(launchFn: () => Promise<Browser>, timeou
   });
 }
 
-async function createBrowserContext(url: string, correlationId: string): Promise<Page> {
+async function createBrowserContext(url: string, correlationId: string, botType: BotType = 'google'): Promise<Page> {
   const size = { width: 1280, height: 720 };
 
-  const browserArgs: string[] = [
+  // Base browser args used by all bots
+  const baseBrowserArgs: string[] = [
     '--enable-usermedia-screen-capturing',
     '--allow-http-screen-capture',
     '--no-sandbox',
@@ -77,12 +80,41 @@ async function createBrowserContext(url: string, correlationId: string): Promise
     `--window-size=${size.width},${size.height}`,
     '--auto-accept-this-tab-capture',
     '--enable-features=MediaRecorder',
+    '--enable-audio-service-out-of-process',
+    '--autoplay-policy=no-user-gesture-required',
   ];
+
+  // Fake device args - only for Microsoft Teams
+  // Teams needs fake devices to interact with pre-join screen toggles,
+  // but actual recording is done via ffmpeg (X11 + PulseAudio)
+  const fakeDeviceArgs: string[] = [
+    '--use-fake-ui-for-media-stream',
+    '--use-fake-device-for-media-stream',
+  ];
+
+  // Google Meet and Zoom use browser-based recording (getDisplayMedia + MediaRecorder)
+  // and don't need fake devices:
+  // - Google Meet: clicks "Continue without microphone and camera"
+  // - Zoom: expects "Cannot detect your camera/microphone" notifications
+  const browserArgs = botType === 'microsoft'
+    ? [...baseBrowserArgs, ...fakeDeviceArgs]
+    : baseBrowserArgs;
+
+  // Teams-specific display args: kiosk mode prevents address bar from showing in ffmpeg recording
+  // Google Meet and Zoom don't need this since they use tab capture (getDisplayMedia)
+  const displayArgs = botType === 'microsoft'
+    ? ['--kiosk', '--start-maximized']
+    : [];
+
+  console.log(`${getCorrelationIdLog(correlationId)} Launching browser for ${botType} bot (fake devices: ${botType === 'microsoft'})`);
 
   const browser = await launchBrowserWithTimeout(
     async () => await chromium.launch({
       headless: false,
-      args: browserArgs,
+      args: [
+        ...browserArgs,
+        ...displayArgs,
+      ],
       ignoreDefaultArgs: ['--mute-audio'],
       executablePath: config.chromeExecutablePath,
     }),
@@ -97,8 +129,16 @@ async function createBrowserContext(url: string, correlationId: string): Promise
     viewport: size,
     ignoreHTTPSErrors: true,
     userAgent: linuxX11UserAgent,
+    // Record video only in development for debugging
+    ...(process.env.NODE_ENV === 'development' && {
+      recordVideo: {
+        dir: './debug-videos/',
+        size: size,
+      },
+    }),
   });
 
+  // Grant permissions so Teams will play audio (Teams requires this unlike Google Meet)
   await context.grantPermissions(['microphone', 'camera'], { origin: url });
 
   const page = await context.newPage();

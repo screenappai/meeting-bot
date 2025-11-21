@@ -70,8 +70,8 @@ export class ZoomBot extends BotBase {
   private async joinMeeting({ pushState, ...params }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     const { url, name } = params;
     this._logger.info('Launching browser for Zoom...', { userId: params.userId });
-    
-    this.page = await createBrowserContext(url, this._correlationId);
+
+    this.page = await createBrowserContext(url, this._correlationId, 'zoom');
 
     await this.page.route('**/*.exe', (route) => {
       this._logger.info(`Detected .exe download: ${route.request().url()?.split('download')[0]}`);
