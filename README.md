@@ -18,6 +18,7 @@ An open-source automation bot for joining and recording video meetings across mu
 - **Graceful Shutdown**: Proper cleanup and resource management
 - **Prometheus Metrics**: Built-in monitoring and metrics collection
 - **Stealth Mode**: Advanced browser automation with anti-detection measures
+- **Completion Notifications**: Optional webhook and Redis notifications when a recording is completed
 
 ## 🚀 Quick Start
 
@@ -117,6 +118,60 @@ Content-Type: application/json
   "botId": "UUID"
 }
 ```
+
+### Recording Completion Notifications (Optional)
+
+You can configure Meeting Bot to notify external systems when a recording has finished and is ready. Two channels are supported:
+
+- Webhook HTTP POST
+- Redis list push (RPUSH) to a configurable DB and list
+
+Both are disabled by default.
+
+#### Environment Variables
+
+- NOTIFY_WEBHOOK_ENABLED: Enable webhook delivery (default: false)
+- NOTIFY_WEBHOOK_URL: Webhook endpoint URL
+- NOTIFY_WEBHOOK_SECRET: Optional secret to HMAC-SHA256 sign payloads. Signature header: X-Webhook-Signature
+
+- NOTIFY_REDIS_ENABLED: Enable Redis notifications (default: false)
+- NOTIFY_REDIS_URI: Optional Redis URI for notifications; if not set, falls back to REDIS_HOST/REDIS_PORT/etc via redisUri
+- NOTIFY_REDIS_DB: Redis database number to use for notifications (default: 1). Note: By default, DB 1 is used, not DB 0
+- NOTIFY_REDIS_LIST: Redis list key to RPUSH to (default: jobs:meetbot:recordings)
+
+Existing REDIS_* connection envs are used to derive a default redisUri when NOTIFY_REDIS_URI is not specified.
+
+#### Payload Schema
+
+An example JSON payload sent via webhook and pushed to the Redis list:
+
+```
+{
+  "recordingId": "abc123",
+  "meetingLink": "https://your.meeting/provider/link",
+  "status": "completed",
+  "blobUrl": "https://storage.example.com/bucket/path/recording.webm",
+  "timestamp": "2025-09-08T12:00:00Z",
+  "metadata": {
+    "userId": "user123",
+    "teamId": "team123",
+    "botId": "bot-uuid",
+    "contentType": "video/webm",
+    "uploaderType": "s3"
+  }
+}
+```
+
+Notes:
+- The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.).
+- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration.
+- If a webhook secret is configured, the request body is signed with HMAC-SHA256 and sent in the X-Webhook-Signature header.
+
+#### Behavior
+
+- Notifications are triggered only after the recording upload/processing has successfully completed.
+- If both channels are enabled, both will receive the payload.
+- Failures to notify are logged but do not interrupt the main recording flow.
 
 #### Check System Status
 ```bash

@@ -13,6 +13,7 @@ import { LogAggregator } from '../util/logger';
 import config from '../config';
 import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
 import { getTimeString } from '../lib/datetime';
+import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -22,7 +23,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
   /**
    * Error includes:
    * code: ERR_BAD_REQUEST
-   * 
+   *
    * Error response includes:
    * status: 404
    * statusText: 'Not Found'
@@ -57,6 +58,7 @@ class DiskUploader implements IUploader {
   private _namePrefix: string;
   private _tempFileId: string;
   private _logger: Logger;
+  private _meetingLink?: string;
 
   private readonly UPLOAD_CHUNK_SIZE = 50 * 1024 * 1024; // 50 MiB
 
@@ -65,11 +67,13 @@ class DiskUploader implements IUploader {
   private readonly RETRY_UPLOAD_DELAY_BASE_MS = 500;
   private readonly MAX_GLOBAL_FAILURES = 5;
 
-  private folderId = 'private'; // Assume meetings belong to an individual 
+  private folderId = 'private'; // Assume meetings belong to an individual
   private contentType: ContentType = extensionToContentType[config.uploaderFileExtension] ?? 'video/webm'; // Default video format
   private fileExtension: string = config.uploaderFileExtension;
   private fileId: string;
   private uploadId: string;
+  private lastUploadedBlobUrl?: string;
+  private lastRecordingId?: string;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -85,7 +89,8 @@ class DiskUploader implements IUploader {
     botId: string,
     namePrefix: string,
     tempFileId: string,
-    logger: Logger
+    logger: Logger,
+    meetingLink?: string
   ) {
     this._token = token;
     this._teamId = teamId;
@@ -95,6 +100,7 @@ class DiskUploader implements IUploader {
     this._namePrefix = namePrefix;
     this._tempFileId = tempFileId;
     this._logger = logger;
+    this._meetingLink = meetingLink;
 
     this.queue = [];
     this.writing = false;
@@ -110,7 +116,8 @@ class DiskUploader implements IUploader {
     botId: string,
     namePrefix: string,
     tempFileId: string,
-    logger: Logger
+    logger: Logger,
+    meetingLink?: string
   ) {
     const folderPath = DiskUploader.getFolderPath(userId);
 
@@ -124,7 +131,8 @@ class DiskUploader implements IUploader {
       botId,
       namePrefix,
       tempFileId,
-      logger
+      logger,
+      meetingLink
     );
     return instance;
   }
@@ -171,7 +179,7 @@ class DiskUploader implements IUploader {
 
   private async finish() {
     this._logger.info('Client finishing upload ...', this._userId, this._teamId);
-    
+
     // Finalise upload
     const file: FileType = await finalizeUpload({
       teamId: this._teamId,
@@ -185,6 +193,12 @@ class DiskUploader implements IUploader {
       botId: this._botId,
     }, this._logger);
     this._logger.info('Finish recording upload...', file.name, this._userId, this._teamId);
+    try {
+      // Capture URL/recordingId if available
+      const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
+      this.lastUploadedBlobUrl = fileUrl;
+      if (file.recordingId) this.lastRecordingId = file.recordingId;
+    } catch {}
   }
 
   private writeChunkToDisk(chunk: Buffer): Promise<void> {
@@ -421,7 +435,7 @@ class DiskUploader implements IUploader {
 
       // Check if the queue is empty
       if (this.queue.length > 0) {
-        // Final attempt to finish the disk write 
+        // Final attempt to finish the disk write
         await this.writeWithRetries();
       }
 
@@ -492,6 +506,8 @@ class DiskUploader implements IUploader {
         }
 
         this._logger.info('S3 compatible storage upload success.');
+        // Compute blob URL for notification
+        this.lastUploadedBlobUrl = this.buildS3CompatibleUrl(uploadConfig, key);
         return true;
       } catch (err) {
         if (attempt >= maxAttempts) {
@@ -508,6 +524,26 @@ class DiskUploader implements IUploader {
     return false;
   }
 
+  private buildS3CompatibleUrl(uploadConfig: { endpoint?: string; region: string; bucket: string; forcePathStyle: boolean; }, key: string): string | undefined {
+    try {
+      const safeKey = encodeURI(key);
+      if (uploadConfig.endpoint) {
+        const ep = uploadConfig.endpoint.replace(/\/$/, '');
+        if (uploadConfig.forcePathStyle) {
+          return `${ep}/${uploadConfig.bucket}/${safeKey}`;
+        }
+        // Virtual-hosted-style with custom endpoint
+        const url = new URL(ep);
+        // Prepend bucket as subdomain if possible
+        return `${url.protocol}//${uploadConfig.bucket}.${url.host}/${safeKey}`;
+      }
+      // Default AWS endpoint pattern
+      return `https://${uploadConfig.bucket}.s3.${uploadConfig.region}.amazonaws.com/${safeKey}`;
+    } catch {
+      return undefined;
+    }
+  }
+
   public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {
     try {
       if (typeof options?.forceUpload === 'boolean') {
@@ -519,7 +555,7 @@ class DiskUploader implements IUploader {
       }
 
       const goodToGo = await this.finalizeDiskWriting();
-      
+
       if (this.forceUpload) {
         this._logger.info('Force upload is enabled. Ignoring disk writing check results...', { goodToGo });
       } else if (!goodToGo) {
@@ -538,6 +574,29 @@ class DiskUploader implements IUploader {
 
       // Delete temp file after the upload is finished
       await this.deleteTempFileAsync();
+
+      // Send optional notifications on success
+      if (uploadResult) {
+        try {
+          const payload: RecordingCompletedPayload = {
+            recordingId: this.lastRecordingId ?? this._tempFileId,
+            meetingLink: this._meetingLink,
+            status: 'completed',
+            blobUrl: this.lastUploadedBlobUrl,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              userId: this._userId,
+              teamId: this._teamId,
+              botId: this._botId,
+              contentType: this.contentType,
+              uploaderType: config.uploaderType,
+            },
+          };
+          await notifyRecordingCompleted(payload, this._logger);
+        } catch (notifyErr) {
+          this._logger.warn('Recording completed notification failed', notifyErr as any);
+        }
+      }
 
       return uploadResult;
     } catch (err) {
