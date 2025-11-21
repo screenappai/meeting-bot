@@ -12,7 +12,6 @@ import path from 'path';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
 import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
-import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
 
@@ -73,6 +72,8 @@ class DiskUploader implements IUploader {
   private fileExtension: string = config.uploaderFileExtension;
   private fileId: string;
   private uploadId: string;
+  private lastUploadedBlobUrl?: string;
+  private lastRecordingId?: string;
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
   private lastStorageDetails?: Record<string, any>;
@@ -195,6 +196,12 @@ class DiskUploader implements IUploader {
       botId: this._botId,
     }, this._logger);
     this._logger.info('Finish recording upload...', file.name, this._userId, this._teamId);
+    try {
+      // Capture URL/recordingId if available
+      const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
+      this.lastUploadedBlobUrl = fileUrl;
+      if (file.recordingId) this.lastRecordingId = file.recordingId;
+    } catch {}
     try {
       // Capture URL/recordingId if available
       const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
@@ -714,7 +721,6 @@ class DiskUploader implements IUploader {
               botId: this._botId,
               contentType: this.contentType,
               uploaderType: config.uploaderType,
-              storage: this.lastStorageDetails,
             },
           };
           await notifyRecordingCompleted(payload, this._logger);
