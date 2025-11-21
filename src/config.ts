@@ -35,7 +35,7 @@ const constructRedisUri = () => {
   const port = process.env.REDIS_PORT || 6379;
   const username = process.env.REDIS_USERNAME;
   const password = process.env.REDIS_PASSWORD;
-  
+
   if (username && password) {
     return `redis://${username}:${password}@${host}:${port}`;
   } else if (password) {
@@ -68,6 +68,17 @@ export default {
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
   redisUri: constructRedisUri(),
+  // Notification: Webhook (disabled by default)
+  notifyWebhookEnabled: process.env.NOTIFY_WEBHOOK_ENABLED === 'true',
+  notifyWebhookUrl: process.env.NOTIFY_WEBHOOK_URL,
+  // Optional secret to sign payloads (HMAC-SHA256). If set, signature will be sent in X-Webhook-Signature header
+  notifyWebhookSecret: process.env.NOTIFY_WEBHOOK_SECRET,
+  // Notification: Redis (disabled by default). Uses same REDIS connection but selectable DB and list
+  notifyRedisEnabled: process.env.NOTIFY_REDIS_ENABLED === 'true',
+  // If not provided, uses redisUri with specified database selection
+  notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
+  notifyRedisDb: process.env.NOTIFY_REDIS_DB ? Number(process.env.NOTIFY_REDIS_DB) : 1, // must not default to 0
+  notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {

@@ -36,16 +36,16 @@ export class RedisConsumerService {
         console.warn('Message broker not connected, waiting for connection...');
         // Wait for connection or handle as needed
       }
-      
+
       this._isRunning = true;
       this.setShutdownRequested(false);
-      
+
       console.info('Redis consumer service started');
       this.startMessageLoop().catch((error) => {
         console.error('Failed to start message loop:', error);
         throw error;
       });
-      
+
     } catch (error) {
       console.error('Failed to start Redis consumer service:', error);
       throw error;
@@ -94,7 +94,7 @@ export class RedisConsumerService {
         }
 
         console.error('Error in message loop:', error);
-        
+
         // Attempt to reconnect if connection is lost
         if (!messageBroker.isConnected()) {
           await this.handleReconnection();
@@ -116,8 +116,8 @@ export class RedisConsumerService {
     const logger = loggerFactory(correlationId, meetingParams.provider);
 
     try {
-      logger.info('Processing Redis message:', { 
-        provider: meetingParams.provider, 
+      logger.info('Processing Redis message:', {
+        provider: meetingParams.provider,
         teamId: meetingParams.teamId,
         userId: meetingParams.userId,
         url: meetingParams.url,
@@ -133,7 +133,7 @@ export class RedisConsumerService {
         const tempId = `${meetingParams.userId}${entityId}0`; // Using 0 as retry count
         const tempFileId = encodeFileNameSafebase64(tempId);
         const namePrefix = getRecordingNamePrefix(meetingParams.provider);
-        
+
         const uploader: IUploader = await DiskUploader.initialize(
           meetingParams.bearerToken,
           meetingParams.teamId,
@@ -143,6 +143,7 @@ export class RedisConsumerService {
           namePrefix,
           tempFileId,
           logger,
+          meetingParams.url,
         );
 
         // Create and join the meeting
@@ -157,7 +158,7 @@ export class RedisConsumerService {
           botId: meetingParams.botId,
           uploader
         };
-        
+
         switch (meetingParams.provider) {
           case 'google':
             const googleBot = new GoogleMeetBot(logger, correlationId);
@@ -177,7 +178,7 @@ export class RedisConsumerService {
           default:
             throw new Error(`Unsupported provider: ${meetingParams.provider}`);
         }
-        
+
       }, logger);
 
       if (jobAcceptedResult.accepted) {
@@ -199,7 +200,7 @@ export class RedisConsumerService {
     }
 
     console.info('Attempting to reconnect to Redis...');
-    
+
     this.reconnectInterval = setTimeout(async () => {
       try {
         if (!messageBroker.isConnected()) {
