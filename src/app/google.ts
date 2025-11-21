@@ -8,7 +8,7 @@ import { getRecordingNamePrefix } from '../util/recordingName';
 import { encodeFileNameSafebase64 } from '../util/strings';
 import { MeetingJoinParams } from './common';
 import { globalJobStore } from '../lib/globalJobStore';
- 
+
 const router = express.Router();
 
 const joinGoogleMeet = async (req: Request, res: Response) => {
@@ -50,7 +50,7 @@ const joinGoogleMeet = async (req: Request, res: Response) => {
       const tempId = `${userId}${entityId}0`; // Using 0 as retry count
       const tempFileId = encodeFileNameSafebase64(tempId);
       const namePrefix = getRecordingNamePrefix('google');
-      
+
       const uploader: IUploader = await DiskUploader.initialize(
         bearerToken,
         teamId,
@@ -60,12 +60,13 @@ const joinGoogleMeet = async (req: Request, res: Response) => {
         namePrefix,
         tempFileId,
         logger,
+        url,
       );
 
       // Create and join the meeting
       const bot = new GoogleMeetBot(logger, correlationId);
       await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-      
+
       logger.info('Joined Google Meet event successfully.', userId, teamId);
     }, logger);
 
@@ -79,14 +80,14 @@ const joinGoogleMeet = async (req: Request, res: Response) => {
 
     // Job was accepted, return immediate response
     logger.info('Google Meet job accepted and started processing', { userId, teamId });
-    
+
     return res.status(202).json({
       success: true,
       message: 'Google Meet join request accepted and processing started',
-      data: { 
-        userId, 
-        teamId, 
-        eventId, 
+      data: {
+        userId,
+        teamId,
+        eventId,
         botId,
         status: 'processing'
       }
@@ -94,20 +95,20 @@ const joinGoogleMeet = async (req: Request, res: Response) => {
 
   } catch (error) {
     logger.error('Error setting up Google Meet job:', { userId, teamId, botId, eventId, error });
-    
+
     if (error instanceof AxiosError) {
-      logger.error('axios error', { 
-        userId, 
-        teamId, 
-        botId, 
-        data: error?.response?.data, 
-        config: error?.response?.config 
+      logger.error('axios error', {
+        userId,
+        teamId,
+        botId,
+        data: error?.response?.data,
+        config: error?.response?.config
       });
     }
 
     // Return appropriate error response
     const statusCode = error instanceof AxiosError ? (error.response?.status || 500) : 500;
-    
+
     return res.status(statusCode).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',

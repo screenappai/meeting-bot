@@ -55,8 +55,8 @@ export default {
   // Unset MAX_RECORDING_DURATION_MINUTES to use default upper limit on duration
   maxRecordingDuration: process.env.MAX_RECORDING_DURATION_MINUTES ?
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
-    180, // There's an upper limit on meeting duration 3 hours
-  chromeExecutablePath: '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
+    180, // There's an upper limit on meeting duration 3 hours 
+  chromeExecutablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
   inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
   activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
@@ -68,6 +68,17 @@ export default {
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
   redisUri: constructRedisUri(),
+  // Notification: Webhook (disabled by default)
+  notifyWebhookEnabled: process.env.NOTIFY_WEBHOOK_ENABLED === 'true',
+  notifyWebhookUrl: process.env.NOTIFY_WEBHOOK_URL,
+  // Optional secret to sign payloads (HMAC-SHA256). If set, signature will be sent in X-Webhook-Signature header
+  notifyWebhookSecret: process.env.NOTIFY_WEBHOOK_SECRET,
+  // Notification: Redis (disabled by default). Uses same REDIS connection but selectable DB and list
+  notifyRedisEnabled: process.env.NOTIFY_REDIS_ENABLED === 'true',
+  // If not provided, uses redisUri with specified database selection
+  notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
+  notifyRedisDb: process.env.NOTIFY_REDIS_DB ? Number(process.env.NOTIFY_REDIS_DB) : 1, // must not default to 0
+  notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {

@@ -27,8 +27,15 @@ export const patchBotStatus = async ({
       status,
     });
     return response.data.success;
-  } catch(e) {
-    logger.error('Can\'t update the bot status', e.message, e?.response?.data);
+  } catch(e: any) {
+    logger.error('Can\'t update the bot status', {
+      error: e?.message || String(e),
+      status: e?.response?.status,
+      statusText: e?.response?.statusText,
+      responseData: e?.response?.data,
+      requestData: { eventId, botId, provider, status },
+      stack: e?.stack
+    });
     return false;
   }
 };
@@ -66,8 +73,15 @@ export const addBotLog = async ({
       subCategory,
     });
     return response.data.success;
-  } catch(e) {
-    logger.error('Can\'t add the bot log', e.message, e?.response?.data);
+  } catch(e: any) {
+    logger.error('Can\'t add the bot log', {
+      error: e?.message || String(e),
+      status: e?.response?.status,
+      statusText: e?.response?.statusText,
+      responseData: e?.response?.data,
+      requestData: { eventId, botId, provider, level, message, category, subCategory },
+      stack: e?.stack
+    });
     return false;
   }
 };
