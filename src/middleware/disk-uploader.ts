@@ -14,6 +14,7 @@ import config from '../config';
 import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
+import { getStorageProvider } from '../uploader/providers/factory';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -74,6 +75,7 @@ class DiskUploader implements IUploader {
   private uploadId: string;
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
+  private lastStorageDetails?: Record<string, any>;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -198,6 +200,21 @@ class DiskUploader implements IUploader {
       const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
       this.lastUploadedBlobUrl = fileUrl;
       if (file.recordingId) this.lastRecordingId = file.recordingId;
+    } catch {}
+    try {
+      // Capture URL/recordingId if available
+      const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
+      this.lastUploadedBlobUrl = fileUrl;
+      if (file.recordingId) this.lastRecordingId = file.recordingId;
+      // Capture storage details for screenapp/vfs flow
+      try {
+        this.lastStorageDetails = {
+          provider: 'screenapp',
+          fileId: (file as any)?._id,
+          url: fileUrl,
+          defaultProfile: file.defaultProfile,
+        };
+      } catch {}
     } catch {}
   }
 
@@ -473,6 +490,108 @@ class DiskUploader implements IUploader {
     return success;
   }
 
+  private async uploadRecordingToObjectStorage(): Promise<boolean> {
+    const provider = getStorageProvider();
+    this._logger.info(`Uploading recording to object storage using provider: ${provider.name}...`);
+
+    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+    const chunkSize = this.UPLOAD_CHUNK_SIZE;
+
+    // Compose key to preserve existing S3 layout for parity
+    const fileName = fileNameTemplate(this._namePrefix, getTimeString(this._timezone, this._logger));
+    const key = `meeting-bot/${this._userId}/${fileName}${this.fileExtension}`;
+
+    // Validate provider configuration before attempting upload
+    provider.validateConfig();
+
+    const maxAttempts = 2;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        this._logger.info(`Object storage upload attempt ${attempt} of ${maxAttempts} via ${provider.name}.`);
+        const startedAt = Date.now();
+        const uploadSuccess = await provider.uploadFile({
+          filePath,
+          key,
+          contentType: this.contentType,
+          logger: this._logger,
+          partSize: chunkSize,
+          concurrency: 4,
+        });
+
+        if (!uploadSuccess) {
+          throw new Error(`Failed to upload recording to ${provider.name}`);
+        }
+        const durationMs = Date.now() - startedAt;
+        this._logger.info(`Object storage upload success via ${provider.name}. Duration: ${durationMs} ms, Size: unknown (streamed). Key: ${key}`);
+
+        // Build blobUrl + storage details for notifications
+        try {
+          if (provider.name === 's3') {
+            const s3cfg = config.s3CompatibleStorage;
+            const uploadCfg = {
+              endpoint: s3cfg.endpoint,
+              region: s3cfg.region!,
+              bucket: s3cfg.bucket!,
+              forcePathStyle: !!s3cfg.forcePathStyle,
+            };
+            this.lastUploadedBlobUrl = this.buildS3CompatibleUrl(uploadCfg, key);
+            this.lastStorageDetails = {
+              provider: 's3',
+              bucket: s3cfg.bucket,
+              key,
+              region: s3cfg.region,
+              endpoint: s3cfg.endpoint,
+              forcePathStyle: !!s3cfg.forcePathStyle,
+              url: this.lastUploadedBlobUrl,
+            };
+          } else if (provider.name === 'azure') {
+            // Prefer signed URL if method is available
+            let url: string | undefined;
+            if (typeof (provider as any).getSignedUrl === 'function') {
+              try {
+                url = await (provider as any).getSignedUrl(key, { expiresInSeconds: config.azureBlobStorage.signedUrlTtlSeconds });
+              } catch (e) {
+                this._logger.warn('Failed to generate signed URL for Azure blob, falling back to public URL (may be inaccessible without SAS)', e as any);
+              }
+            }
+            // Construct canonical URL if no signed URL available
+            if (!url) {
+              const account = config.azureBlobStorage.accountName || (config.azureBlobStorage.connectionString ? undefined : undefined);
+              const container = config.azureBlobStorage.container;
+              if (account && container) {
+                url = `https://${account}.blob.core.windows.net/${container}/${encodeURI(key)}`;
+              }
+            }
+            this.lastUploadedBlobUrl = url;
+            this.lastStorageDetails = {
+              provider: 'azure',
+              accountName: config.azureBlobStorage.accountName,
+              container: config.azureBlobStorage.container,
+              key,
+              url: this.lastUploadedBlobUrl,
+              signedUrlTtlSeconds: config.azureBlobStorage.signedUrlTtlSeconds,
+              blobPrefix: config.azureBlobStorage.blobPrefix,
+            };
+          }
+        } catch (metaErr) {
+          this._logger.warn('Unable to compute storage metadata/url for notification', metaErr as any);
+        }
+        return true;
+      } catch (err) {
+        if (attempt >= maxAttempts) {
+          this._logger.error(`Permanently failed to upload recording to object storage (${provider.name}) after ${maxAttempts} attempts`, err);
+          throw err;
+        } else {
+          this._logger.error(`Failed to upload recording to object storage (${provider.name}) attempt ${attempt} of ${maxAttempts}`, err);
+          const delay = this.RETRY_UPLOAD_DELAY_BASE_MS * Math.pow(2, attempt);
+          await this.delayPromise(delay);
+        }
+      }
+    }
+
+    return false;
+  }
+
   private async uploadRecordingToS3CompatibleStorage(): Promise<boolean> {
     this._logger.info('Uploading recording to S3 compatible storage...');
     const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
@@ -508,6 +627,16 @@ class DiskUploader implements IUploader {
         this._logger.info('S3 compatible storage upload success.');
         // Compute blob URL for notification
         this.lastUploadedBlobUrl = this.buildS3CompatibleUrl(uploadConfig, key);
+        // Capture storage details for S3-compatible upload
+        this.lastStorageDetails = {
+          provider: 's3',
+          bucket: uploadConfig.bucket,
+          key,
+          region: uploadConfig.region,
+          endpoint: uploadConfig.endpoint,
+          forcePathStyle: uploadConfig.forcePathStyle,
+          url: this.lastUploadedBlobUrl,
+        };
         return true;
       } catch (err) {
         if (attempt >= maxAttempts) {
@@ -567,7 +696,8 @@ class DiskUploader implements IUploader {
       if (config.uploaderType === 'screenapp') {
         uploadResult = await this.uploadRecordingToScreenApp();
       } else if (config.uploaderType === 's3') {
-        uploadResult = await this.uploadRecordingToS3CompatibleStorage();
+        // Route to selected object storage provider (S3 or Azure) based on configuration
+        uploadResult = await this.uploadRecordingToObjectStorage();
       } else {
         throw new Error(`Unsupported UPLOADER_TYPE configuration: ${config.uploaderType}`);
       }
