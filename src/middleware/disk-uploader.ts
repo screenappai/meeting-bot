@@ -14,7 +14,6 @@ import config from '../config';
 import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
-import { getStorageProvider } from '../uploader/providers/factory';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -556,7 +555,7 @@ class DiskUploader implements IUploader {
             }
             // Construct canonical URL if no signed URL available
             if (!url) {
-              const account = config.azureBlobStorage.accountName || (config.azureBlobStorage.connectionString ? undefined : undefined);
+              const account = config.azureBlobStorage.accountName;
               const container = config.azureBlobStorage.container;
               if (account && container) {
                 url = `https://${account}.blob.core.windows.net/${container}/${encodeURI(key)}`;
@@ -592,61 +591,24 @@ class DiskUploader implements IUploader {
     return false;
   }
 
-  private async uploadRecordingToS3CompatibleStorage(): Promise<boolean> {
-    this._logger.info('Uploading recording to S3 compatible storage...');
-    const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
-    const chunkSize = this.UPLOAD_CHUNK_SIZE;
-
-    // Compose key to preserve existing S3 layout for parity
-    const fileName = fileNameTemplate(this._namePrefix, getTimeString(this._timezone, this._logger));
-    const key = `meeting-bot/${this._userId}/${fileName}${this.fileExtension}`;
-
-    // Validate provider configuration before attempting upload
-    provider.validateConfig();
-
-    const maxAttempts = 2;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        this._logger.info(`Object storage upload attempt ${attempt} of ${maxAttempts} via ${provider.name}.`);
-        const startedAt = Date.now();
-        const uploadSuccess = await provider.uploadFile({
-          filePath,
-          key,
-          contentType: this.contentType,
-          logger: this._logger,
-          partSize: chunkSize,
-          concurrency: 4,
-        });
-
-        if (!uploadSuccess) {
-          throw new Error(`Failed to upload recording to ${provider.name}`);
+  private buildS3CompatibleUrl(uploadConfig: { endpoint?: string; region: string; bucket: string; forcePathStyle: boolean; }, key: string): string | undefined {
+    try {
+      const safeKey = encodeURI(key);
+      if (uploadConfig.endpoint) {
+        const ep = uploadConfig.endpoint.replace(/\/$/, '');
+        if (uploadConfig.forcePathStyle) {
+          return `${ep}/${uploadConfig.bucket}/${safeKey}`;
         }
-        const durationMs = Date.now() - startedAt;
-        this._logger.info(`Object storage upload success via ${provider.name}. Duration: ${durationMs} ms, Size: unknown (streamed). Key: ${key}`);
-        // Capture storage details for S3-compatible upload
-        this.lastStorageDetails = {
-          provider: 's3',
-          bucket: uploadConfig.bucket,
-          key,
-          region: uploadConfig.region,
-          endpoint: uploadConfig.endpoint,
-          forcePathStyle: uploadConfig.forcePathStyle,
-          url: this.lastUploadedBlobUrl,
-        };
-        return true;
-      } catch (err) {
-        if (attempt >= maxAttempts) {
-          this._logger.error(`Permanently failed to upload recording to object storage (${provider.name}) after ${maxAttempts} attempts`, err);
-          throw err;
-        } else {
-          this._logger.error(`Failed to upload recording to object storage (${provider.name}) attempt ${attempt} of ${maxAttempts}`, err);
-          const delay = this.RETRY_UPLOAD_DELAY_BASE_MS * Math.pow(2, attempt);
-          await this.delayPromise(delay);
-        }
+        // Virtual-hosted-style with custom endpoint
+        const url = new URL(ep);
+        // Prepend bucket as subdomain if possible
+        return `${url.protocol}//${uploadConfig.bucket}.${url.host}/${safeKey}`;
       }
+      // Default AWS endpoint pattern
+      return `https://${uploadConfig.bucket}.s3.${uploadConfig.region}.amazonaws.com/${safeKey}`;
+    } catch {
+      return undefined;
     }
-
-    return false;
   }
 
   public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {
