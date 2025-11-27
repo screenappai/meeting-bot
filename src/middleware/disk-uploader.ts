@@ -11,7 +11,7 @@ import fs, { createWriteStream } from 'fs';
 import path from 'path';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
-import { uploadMultipartS3 } from '../uploader/s3-compatible-storage';
+import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
 import { getStorageProvider } from '../uploader/providers/factory';
@@ -597,36 +597,32 @@ class DiskUploader implements IUploader {
     const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
     const chunkSize = this.UPLOAD_CHUNK_SIZE;
 
-    if (!config.s3CompatibleStorage.region || !config.s3CompatibleStorage.accessKeyId || !config.s3CompatibleStorage.secretAccessKey || !config.s3CompatibleStorage.bucket) {
-      throw new Error('S3 compatible storage configuration is not set. Will not upload to s3 compatible storage...');
-    }
-
+    // Compose key to preserve existing S3 layout for parity
     const fileName = fileNameTemplate(this._namePrefix, getTimeString(this._timezone, this._logger));
     const key = `meeting-bot/${this._userId}/${fileName}${this.fileExtension}`;
 
-    const uploadConfig = {
-      endpoint: config.s3CompatibleStorage.endpoint,
-      region: config.s3CompatibleStorage.region,
-      accessKeyId: config.s3CompatibleStorage.accessKeyId,
-      secretAccessKey: config.s3CompatibleStorage.secretAccessKey,
-      bucket: config.s3CompatibleStorage.bucket,
-      forcePathStyle: config.s3CompatibleStorage.forcePathStyle,
-    };
+    // Validate provider configuration before attempting upload
+    provider.validateConfig();
 
     const maxAttempts = 2;
-
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        this._logger.info(`S3 compatible storage upload attempt ${attempt} of ${maxAttempts}.`);
-        const uploadSuccess = await uploadMultipartS3(uploadConfig, filePath, key, this.contentType, this._logger, chunkSize);
+        this._logger.info(`Object storage upload attempt ${attempt} of ${maxAttempts} via ${provider.name}.`);
+        const startedAt = Date.now();
+        const uploadSuccess = await provider.uploadFile({
+          filePath,
+          key,
+          contentType: this.contentType,
+          logger: this._logger,
+          partSize: chunkSize,
+          concurrency: 4,
+        });
 
         if (!uploadSuccess) {
-          throw new Error('Failed to upload recording to S3 compatible storage');
+          throw new Error(`Failed to upload recording to ${provider.name}`);
         }
-
-        this._logger.info('S3 compatible storage upload success.');
-        // Compute blob URL for notification
-        this.lastUploadedBlobUrl = this.buildS3CompatibleUrl(uploadConfig, key);
+        const durationMs = Date.now() - startedAt;
+        this._logger.info(`Object storage upload success via ${provider.name}. Duration: ${durationMs} ms, Size: unknown (streamed). Key: ${key}`);
         // Capture storage details for S3-compatible upload
         this.lastStorageDetails = {
           provider: 's3',
@@ -640,10 +636,10 @@ class DiskUploader implements IUploader {
         return true;
       } catch (err) {
         if (attempt >= maxAttempts) {
-          this._logger.error(`Permanently failed to upload recording to S3 compatible storage after ${maxAttempts} attempts`, err);
+          this._logger.error(`Permanently failed to upload recording to object storage (${provider.name}) after ${maxAttempts} attempts`, err);
           throw err;
         } else {
-          this._logger.error(`Failed to upload recording to S3 compatible storage attempt ${attempt} of ${maxAttempts}`, err);
+          this._logger.error(`Failed to upload recording to object storage (${provider.name}) attempt ${attempt} of ${maxAttempts}`, err);
           const delay = this.RETRY_UPLOAD_DELAY_BASE_MS * Math.pow(2, attempt);
           await this.delayPromise(delay);
         }
@@ -651,26 +647,6 @@ class DiskUploader implements IUploader {
     }
 
     return false;
-  }
-
-  private buildS3CompatibleUrl(uploadConfig: { endpoint?: string; region: string; bucket: string; forcePathStyle: boolean; }, key: string): string | undefined {
-    try {
-      const safeKey = encodeURI(key);
-      if (uploadConfig.endpoint) {
-        const ep = uploadConfig.endpoint.replace(/\/$/, '');
-        if (uploadConfig.forcePathStyle) {
-          return `${ep}/${uploadConfig.bucket}/${safeKey}`;
-        }
-        // Virtual-hosted-style with custom endpoint
-        const url = new URL(ep);
-        // Prepend bucket as subdomain if possible
-        return `${url.protocol}//${uploadConfig.bucket}.${url.host}/${safeKey}`;
-      }
-      // Default AWS endpoint pattern
-      return `https://${uploadConfig.bucket}.s3.${uploadConfig.region}.amazonaws.com/${safeKey}`;
-    } catch {
-      return undefined;
-    }
   }
 
   public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {
