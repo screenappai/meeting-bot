@@ -66,8 +66,6 @@ const joinGoogleMeet = async (req: Request, res: Response) => {
       // Create and join the meeting
       const bot = new GoogleMeetBot(logger, correlationId);
       await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-
-      logger.info('Joined Google Meet event successfully.', userId, teamId);
     }, logger);
 
     if (!jobResult.accepted) {
