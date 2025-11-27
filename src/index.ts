@@ -1,3 +1,5 @@
+// Ensure global Web Crypto API is available (needed by Azure SDK in Node 18)
+import './shims/crypto-polyfill';
 import http from 'http';
 import app, { redisConsumerService, setGracefulShutdown } from './app';
 import { globalJobStore } from './lib/globalJobStore';
@@ -21,20 +23,20 @@ const initiateGracefulShutdown = async () => {
     console.log('Shutdown already in progress, ignoring signal');
     return;
   }
-  
+
   shutdownInProgress = true;
   console.log('Initiating graceful shutdown...');
-  
+
   try {
     // Set the graceful shutdown flag
     setGracefulShutdown(1);
-    
+
     // Request shutdown on the job store (prevents new jobs from being accepted)
     globalJobStore.requestShutdown();
-    
+
     // Wait for ongoing tasks to complete (no timeout - wait indefinitely)
     await globalJobStore.waitForCompletion();
-    
+
     // Now proceed with application shutdown
     gracefulShutdownApp();
   } catch (error) {
@@ -71,7 +73,7 @@ export const gracefulShutdownApp = () => {
   // Complete existing requests, close database connections, etc.
   server.close(async () => {
     console.log('HTTP server closed. Exiting application');
-    
+
     // Only shutdown Redis services if Redis is enabled
     if (config.isRedisEnabled) {
       await redisConsumerService.shutdown();
@@ -79,7 +81,7 @@ export const gracefulShutdownApp = () => {
     } else {
       console.log('Redis services not running - skipping Redis shutdown');
     }
-    
+
     console.log('Exiting.....');
     process.exit(0);
   });

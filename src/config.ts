@@ -89,5 +89,19 @@ export default {
     bucket: process.env.S3_BUCKET_NAME,
     forcePathStyle: process.env.S3_USE_MINIO_COMPATIBILITY === 'true',
   },
+  // Object storage provider selection: 's3' (default) or 'azure'
+  storageProvider: (process.env.STORAGE_PROVIDER === 'azure' ? 'azure' : 's3') as 's3' | 'azure',
+  azureBlobStorage: {
+    // Either provide full connection string OR account + key/SAS OR managed identity
+    connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING,
+    accountName: process.env.AZURE_STORAGE_ACCOUNT,
+    accountKey: process.env.AZURE_STORAGE_ACCOUNT_KEY, // optional when using connection string
+    sasToken: process.env.AZURE_STORAGE_SAS_TOKEN, // starts with ?sv=...
+    useManagedIdentity: process.env.AZURE_USE_MANAGED_IDENTITY === 'true',
+    container: process.env.AZURE_STORAGE_CONTAINER,
+    blobPrefix: process.env.AZURE_BLOB_PREFIX || '',
+    signedUrlTtlSeconds: process.env.AZURE_SIGNED_URL_TTL_SECONDS ? Number(process.env.AZURE_SIGNED_URL_TTL_SECONDS) : 3600,
+    uploadConcurrency: process.env.AZURE_UPLOAD_CONCURRENCY ? Number(process.env.AZURE_UPLOAD_CONCURRENCY) : 4,
+  },
   uploaderType: process.env.UPLOADER_TYPE ? (process.env.UPLOADER_TYPE as UploaderType) : 's3' as UploaderType,
 };
