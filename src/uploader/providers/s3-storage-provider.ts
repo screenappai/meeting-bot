@@ -1,6 +1,8 @@
 import { StorageProvider, UploadOptions } from './storage-provider';
-import { uploadMultipartS3 } from '../s3-compatible-storage';
 import config from '../../config';
+import { S3Client, S3ClientConfig } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
+import { createReadStream } from 'fs';
 
 export class S3StorageProvider implements StorageProvider {
   readonly name = 's3' as const;
@@ -18,22 +20,52 @@ export class S3StorageProvider implements StorageProvider {
   }
 
   async uploadFile(options: UploadOptions): Promise<boolean> {
-    const s3 = config.s3CompatibleStorage;
-    return uploadMultipartS3(
-      {
-        endpoint: s3.endpoint,
-        region: s3.region!,
-        accessKeyId: s3.accessKeyId!,
-        secretAccessKey: s3.secretAccessKey!,
-        bucket: s3.bucket!,
-        forcePathStyle: !!s3.forcePathStyle,
+    const s3Config = config.s3CompatibleStorage;
+
+    // TypeScript knows these are defined because validateConfig() was called first
+    if (!s3Config.region || !s3Config.accessKeyId || !s3Config.secretAccessKey || !s3Config.bucket) {
+      throw new Error('S3 configuration validation failed - this should never happen after validateConfig()');
+    }
+
+    const clientConfig: S3ClientConfig = {
+      region: s3Config.region,
+      credentials: {
+        accessKeyId: s3Config.accessKeyId,
+        secretAccessKey: s3Config.secretAccessKey,
       },
-      options.filePath,
-      options.key,
-      options.contentType,
-      options.logger,
-      options.partSize,
-      options.concurrency
-    );
+      forcePathStyle: !!s3Config.forcePathStyle,
+    };
+
+    if (s3Config.endpoint) {
+      clientConfig.endpoint = s3Config.endpoint;
+    }
+
+    const s3Client = new S3Client(clientConfig);
+
+    try {
+      options.logger.info(`Starting upload of ${options.key}`);
+      const upload = new Upload({
+        client: s3Client,
+        params: {
+          Bucket: s3Config.bucket,
+          Key: options.key,
+          Body: createReadStream(options.filePath),
+          ContentType: options.contentType,
+        },
+        queueSize: options.concurrency || 4,
+        partSize: options.partSize || 50 * 1024 * 1024,
+      });
+
+      upload.on('httpUploadProgress', (progress) => {
+        options.logger.info(`Uploaded ${options.key} ${progress.loaded} of ${progress.total || 0} bytes`);
+      });
+
+      await upload.done();
+      options.logger.info(`Upload of ${options.key} complete.`);
+      return true;
+    } catch (err) {
+      options.logger.error(`Upload for ${options.key} failed.`, err);
+      return false;
+    }
   }
 }
