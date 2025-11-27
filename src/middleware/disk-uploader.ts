@@ -74,6 +74,7 @@ class DiskUploader implements IUploader {
   private uploadId: string;
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
+  private lastStorageDetails?: Record<string, any>;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -198,6 +199,21 @@ class DiskUploader implements IUploader {
       const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
       this.lastUploadedBlobUrl = fileUrl;
       if (file.recordingId) this.lastRecordingId = file.recordingId;
+    } catch {}
+    try {
+      // Capture URL/recordingId if available
+      const fileUrl = file.url || (file.defaultProfile && file.alternativeFormats?.[file.defaultProfile]?.url) || undefined;
+      this.lastUploadedBlobUrl = fileUrl;
+      if (file.recordingId) this.lastRecordingId = file.recordingId;
+      // Capture storage details for screenapp/vfs flow
+      try {
+        this.lastStorageDetails = {
+          provider: 'screenapp',
+          fileId: (file as any)?._id,
+          url: fileUrl,
+          defaultProfile: file.defaultProfile,
+        };
+      } catch {}
     } catch {}
   }
 
@@ -506,6 +522,59 @@ class DiskUploader implements IUploader {
         }
         const durationMs = Date.now() - startedAt;
         this._logger.info(`Object storage upload success via ${provider.name}. Duration: ${durationMs} ms, Size: unknown (streamed). Key: ${key}`);
+
+        // Build blobUrl + storage details for notifications
+        try {
+          if (provider.name === 's3') {
+            const s3cfg = config.s3CompatibleStorage;
+            const uploadCfg = {
+              endpoint: s3cfg.endpoint,
+              region: s3cfg.region!,
+              bucket: s3cfg.bucket!,
+              forcePathStyle: !!s3cfg.forcePathStyle,
+            };
+            this.lastUploadedBlobUrl = this.buildS3CompatibleUrl(uploadCfg, key);
+            this.lastStorageDetails = {
+              provider: 's3',
+              bucket: s3cfg.bucket,
+              key,
+              region: s3cfg.region,
+              endpoint: s3cfg.endpoint,
+              forcePathStyle: !!s3cfg.forcePathStyle,
+              url: this.lastUploadedBlobUrl,
+            };
+          } else if (provider.name === 'azure') {
+            // Prefer signed URL if method is available
+            let url: string | undefined;
+            if (typeof (provider as any).getSignedUrl === 'function') {
+              try {
+                url = await (provider as any).getSignedUrl(key, { expiresInSeconds: config.azureBlobStorage.signedUrlTtlSeconds });
+              } catch (e) {
+                this._logger.warn('Failed to generate signed URL for Azure blob, falling back to public URL (may be inaccessible without SAS)', e as any);
+              }
+            }
+            // Construct canonical URL if no signed URL available
+            if (!url) {
+              const account = config.azureBlobStorage.accountName;
+              const container = config.azureBlobStorage.container;
+              if (account && container) {
+                url = `https://${account}.blob.core.windows.net/${container}/${encodeURI(key)}`;
+              }
+            }
+            this.lastUploadedBlobUrl = url;
+            this.lastStorageDetails = {
+              provider: 'azure',
+              accountName: config.azureBlobStorage.accountName,
+              container: config.azureBlobStorage.container,
+              key,
+              url: this.lastUploadedBlobUrl,
+              signedUrlTtlSeconds: config.azureBlobStorage.signedUrlTtlSeconds,
+              blobPrefix: config.azureBlobStorage.blobPrefix,
+            };
+          }
+        } catch (metaErr) {
+          this._logger.warn('Unable to compute storage metadata/url for notification', metaErr as any);
+        }
         return true;
       } catch (err) {
         if (attempt >= maxAttempts) {
@@ -520,6 +589,26 @@ class DiskUploader implements IUploader {
     }
 
     return false;
+  }
+
+  private buildS3CompatibleUrl(uploadConfig: { endpoint?: string; region: string; bucket: string; forcePathStyle: boolean; }, key: string): string | undefined {
+    try {
+      const safeKey = encodeURI(key);
+      if (uploadConfig.endpoint) {
+        const ep = uploadConfig.endpoint.replace(/\/$/, '');
+        if (uploadConfig.forcePathStyle) {
+          return `${ep}/${uploadConfig.bucket}/${safeKey}`;
+        }
+        // Virtual-hosted-style with custom endpoint
+        const url = new URL(ep);
+        // Prepend bucket as subdomain if possible
+        return `${url.protocol}//${uploadConfig.bucket}.${url.host}/${safeKey}`;
+      }
+      // Default AWS endpoint pattern
+      return `https://${uploadConfig.bucket}.s3.${uploadConfig.region}.amazonaws.com/${safeKey}`;
+    } catch {
+      return undefined;
+    }
   }
 
   public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {

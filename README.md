@@ -150,22 +150,32 @@ An example JSON payload sent via webhook and pushed to the Redis list:
   "recordingId": "abc123",
   "meetingLink": "https://your.meeting/provider/link",
   "status": "completed",
-  "blobUrl": "https://storage.example.com/bucket/path/recording.webm",
   "timestamp": "2025-09-08T12:00:00Z",
   "metadata": {
     "userId": "user123",
     "teamId": "team123",
     "botId": "bot-uuid",
     "contentType": "video/webm",
-    "uploaderType": "s3"
-  }
+    "uploaderType": "s3",
+    "storage": {
+      "provider": "s3",
+      "bucket": "my-bucket",
+      "key": "meeting-bot/user123/2025-09-08-12-00-00.webm",
+      "region": "eu-central-1",
+      "endpoint": "https://s3.eu-central-1.amazonaws.com",
+      "forcePathStyle": false,
+      "url": "https://my-bucket.s3.eu-central-1.amazonaws.com/meeting-bot/user123/2025-09-08-12-00-00.webm"
+    }
+  },
+  "blobUrl": "https://my-bucket.s3.eu-central-1.amazonaws.com/meeting-bot/user123/2025-09-08-12-00-00.webm"
 }
 ```
 
 Notes:
-- The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.).
+- The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.). It may be omitted if not available.
 - If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration.
 - If a webhook secret is configured, the request body is signed with HMAC-SHA256 and sent in the X-Webhook-Signature header.
+- The metadata.storage section includes provider-specific path details. For S3-compatible uploads: bucket and key are provided. For the Screenapp uploader, you may see `{ provider: "screenapp", fileId, url, defaultProfile }`.
 
 #### Behavior
 
