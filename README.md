@@ -24,7 +24,7 @@ An open-source automation bot for joining and recording video meetings across mu
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+
 - Docker and Docker Compose (for containerized deployment)
 - Git
 

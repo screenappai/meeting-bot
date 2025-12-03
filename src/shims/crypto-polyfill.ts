@@ -1,8 +1,9 @@
 /*
- * Ensures global Web Crypto API is available at runtime (especially on Node 18),
+ * Ensures global Web Crypto API is available at runtime,
  * which some Azure SDK internals expect (globalThis.crypto and crypto.randomUUID).
  *
  * This shim is a no-op on Node 20+ where global Web Crypto is available by default.
+ * We're using Node 20, so this polyfill mainly serves as a safety fallback.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

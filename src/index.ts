@@ -1,4 +1,4 @@
-// Ensure global Web Crypto API is available (needed by Azure SDK in Node 18)
+// Ensure global Web Crypto API is available (needed by Azure SDK, polyfill for older Node versions)
 import './shims/crypto-polyfill';
 import http from 'http';
 import app, { redisConsumerService, setGracefulShutdown } from './app';

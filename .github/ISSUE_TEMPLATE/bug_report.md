@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain your problem.
 
 ## Environment
 - **OS**: [e.g. Windows 10, macOS, Linux]
-- **Node.js Version**: [e.g. 18.0.0]
+- **Node.js Version**: [e.g. 20.0.0]
 - **Meeting Bot Version**: [e.g. 1.0.0]
 - **Docker Version**: [e.g. 20.10.0] (if using Docker)
 - **Browser**: [e.g. Chrome 120.0.0] (if relevant)

@@ -22,7 +22,7 @@ By participating in this project, you agree to abide by our Code of Conduct. We 
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+
 - npm or yarn
 - Git
 - Docker (optional, for containerized development)
@@ -258,7 +258,7 @@ What actually happened.
 
 **Environment**
 - OS: [e.g. Windows 10, macOS, Linux]
-- Node.js Version: [e.g. 18.0.0]
+- Node.js Version: [e.g. 20.0.0]
 - Meeting Bot Version: [e.g. 1.0.0]
 
 **Additional Context**
