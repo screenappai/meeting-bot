@@ -1,6 +1,7 @@
 import { Logger } from 'winston';
-import { KnownError } from '../error';
+import { KnownError, WaitingAtLobbyRetryError } from '../error';
 import { getErrorType } from '../util/logger';
+import config from '../config';
 
 export interface MeetingJoinParams {
   url: string;
@@ -45,6 +46,12 @@ export const joinMeetWithRetry = async (
       timezone,
     });
   } catch (error) {
+    // Never retry WaitingAtLobbyRetryError - if user doesn't admit bot, retrying won't help
+    if (error instanceof WaitingAtLobbyRetryError) {
+      logger.error('WaitingAtLobbyRetryError - not retrying:', error.message);
+      throw error;
+    }
+
     if (error instanceof KnownError && !error.retryable) {
       logger.error('KnownError is not retryable:', error.name, error.message);
       throw error;
@@ -57,9 +64,9 @@ export const joinMeetWithRetry = async (
 
     retryCount += 1;
     await sleep(retryCount * 30000);
-    if (retryCount < 3) {
+    if (retryCount <= config.retryCount) {
       if (retryCount) {
-        logger.warn(`Retry count: ${retryCount}`);
+        logger.warn(`Retry attempt: ${retryCount}/${config.retryCount}`);
       }
       await joinMeetWithRetry(processor, bearerToken, url, name, teamId, timezone, userId, retryCount, eventId, botId, logger);
     } else {
