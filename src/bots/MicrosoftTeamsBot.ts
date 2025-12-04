@@ -18,6 +18,8 @@ import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
+const execAsync = promisify(exec);
+
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
   private _correlationId: string;
@@ -504,6 +506,79 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           this._logger.info('Playwright chrome logger: Failed to log browser messages...', err?.message);
         }
       });
+
+      // Start audio silence detection (runs in parallel with participant detection)
+      // inactivityLimit is in milliseconds (default 2 minutes = 120000ms)
+      const inactivityLimitMs = config.inactivityLimit && config.inactivityLimit > 1000
+        ? config.inactivityLimit
+        : 120000; // Default to 2 minutes
+
+      const monitorAudioSilence = async () => {
+        try {
+          this._logger.info('Starting audio silence detection for Microsoft Teams', {
+            inactivityLimitMs,
+            inactivityLimitMinutes: inactivityLimitMs / 60000
+          });
+          let consecutiveSilentChecks = 0;
+          const checkIntervalSeconds = 5;
+          const checksNeeded = Math.ceil(inactivityLimitMs / 1000 / checkIntervalSeconds); // e.g., 120000ms / 1000 / 5 = 24 checks
+
+          const checkInterval = setInterval(async () => {
+            try {
+              // Sample audio from virtual_output.monitor and check if it's silent
+              // Use parec to capture 1 second of audio and check the peak level
+              const { stdout } = await execAsync(
+                'timeout 1 parec --device=virtual_output.monitor --format=s16le --rate=16000 --channels=1 2>/dev/null | ' +
+                'od -An -td2 -v | awk \'BEGIN{max=0} {for(i=1;i<=NF;i++) {val=($i<0)?-$i:$i; if(val>max) max=val}} END{print max}\''
+              );
+
+              // Get peak audio level (0-32767 for 16-bit audio)
+              const peakLevel = parseInt(stdout.trim()) || 0;
+              const silenceThreshold = 200; // Adjust this threshold as needed
+
+              this._logger.debug('Audio level check', { peakLevel, threshold: silenceThreshold });
+
+              // Check if audio is silent (low peak level)
+              if (peakLevel < silenceThreshold) {
+                consecutiveSilentChecks++;
+                this._logger.info(`Silence detected: ${consecutiveSilentChecks}/${checksNeeded} checks`, { peakLevel });
+
+                if (consecutiveSilentChecks >= checksNeeded) {
+                  this._logger.warn('Audio silence threshold reached, ending Microsoft Teams meeting', {
+                    userId,
+                    teamId,
+                    silenceDurationMs: inactivityLimitMs,
+                    silenceDurationMinutes: inactivityLimitMs / 60000,
+                    finalPeakLevel: peakLevel,
+                    checksNeeded,
+                    checksDetected: consecutiveSilentChecks
+                  });
+                  clearInterval(checkInterval);
+                  meetingEnded = true;
+                }
+              } else {
+                // Reset counter if we detect audio
+                if (consecutiveSilentChecks > 0) {
+                  this._logger.info('Audio detected, resetting silence counter', { peakLevel });
+                }
+                consecutiveSilentChecks = 0;
+              }
+            } catch (err) {
+              this._logger.error('Error checking audio level:', err);
+              // Don't fail the entire detection on a single error
+            }
+          }, 5000); // Check every 5 seconds
+
+        } catch (error) {
+          this._logger.error('Failed to initialize audio silence detection:', error);
+          this._logger.warn('Will rely on participant detection only');
+        }
+      };
+
+      // Start silence monitoring after delay
+      setTimeout(() => {
+        monitorAudioSilence();
+      }, config.activateInactivityDetectionAfter * 60 * 1000);
 
       // Inject inactivity detection script
       await this.page.evaluate(
