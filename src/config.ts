@@ -60,7 +60,9 @@ export default {
   inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
   activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
-  joinWaitTime: 10,
+  joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES ? Number(process.env.JOIN_WAIT_TIME_MINUTES) : 10,
+  // Number of retries for transient errors (not applied to WaitingAtLobbyRetryError)
+  retryCount: process.env.RETRY_COUNT ? Number(process.env.RETRY_COUNT) : 2,
   miscStorageBucket: process.env.GCP_MISC_BUCKET,
   miscStorageFolder: process.env.GCP_MISC_BUCKET_FOLDER ? process.env.GCP_MISC_BUCKET_FOLDER : 'meeting-bot',
   region: process.env.GCP_DEFAULT_REGION,

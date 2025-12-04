@@ -306,8 +306,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       this._logger.error('Closing the browser on error...', error);
       await this.page.context().browser()?.close();
-      
-      throw new WaitingAtLobbyRetryError('Microsoft Teams Meeting bot could not enter the meeting...', bodyText ?? '', !userDenied, 2);
+
+      // Don't retry lobby errors - if user doesn't admit bot, retrying won't help
+      throw new WaitingAtLobbyRetryError('Microsoft Teams Meeting bot could not enter the meeting...', bodyText ?? '', false, 0);
     }
 
     pushState('joined');
@@ -508,10 +509,8 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       });
 
       // Start audio silence detection (runs in parallel with participant detection)
-      // inactivityLimit is in milliseconds (default 2 minutes = 120000ms)
-      const inactivityLimitMs = config.inactivityLimit && config.inactivityLimit > 1000
-        ? config.inactivityLimit
-        : 120000; // Default to 2 minutes
+      // Convert inactivityLimit from minutes to milliseconds
+      const inactivityLimitMs = config.inactivityLimit * 60 * 1000;
 
       const monitorAudioSilence = async () => {
         try {

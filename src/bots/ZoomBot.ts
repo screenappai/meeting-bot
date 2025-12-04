@@ -293,7 +293,7 @@ export class ZoomBot extends BotBase {
     // Wait in waiting room
     try {
       const wanderingTime = config.joinWaitTime * 60 * 1000; // Give some time to be let in
-      
+
       let waitTimeout: NodeJS.Timeout;
       let waitInterval: NodeJS.Timeout;
       const waitAtLobbyPromise = new Promise<boolean>((resolveMe) => {
@@ -355,7 +355,8 @@ export class ZoomBot extends BotBase {
 
         this._logger.error('Cant finish wait at the lobby check', { userDenied, waitingAtLobbySuccess: joined, bodyText });
 
-        throw new WaitingAtLobbyRetryError('Zoom bot could not enter the meeting...', bodyText ?? '', !userDenied, 2);
+        // Don't retry lobby errors - if user doesn't admit bot, retrying won't help
+        throw new WaitingAtLobbyRetryError('Zoom bot could not enter the meeting...', bodyText ?? '', false, 0);
       }
 
       this._logger.info('Bot is entering the meeting after wait room...');
