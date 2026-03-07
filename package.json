@@ -50,6 +50,7 @@
     "winston": "^3.17.0"
   },
   "overrides": {
+    "@tootallnate/once": ">=3.0.1",
     "basic-ftp": ">=5.2.0",
     "fast-xml-parser": ">=5.3.8"
   }
