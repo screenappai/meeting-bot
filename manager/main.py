@@ -21,7 +21,8 @@ import os
 import sys
 import logging
 import json
-from typing import Dict, Optional
+import time
+from typing import Dict, Optional, Tuple
 import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
@@ -109,6 +110,26 @@ def _cleanup_meeting_scratch_dir(path: str) -> None:
         logger.info("Cleaned up scratch workspace: %s", abs_path)
     except Exception as e:
         logger.warning("Scratch cleanup failed (ignored): %s", e)
+
+
+def _env_flag(var_name: str, *, default: bool) -> bool:
+    raw = os.environ.get(var_name)
+    if raw is None or raw.strip() == "":
+        return default
+
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+
+    logger.warning(
+        "Invalid boolean env %s=%r; using default=%s",
+        var_name,
+        raw,
+        default,
+    )
+    return default
 
 
 # Reduce noise from some verbose libraries
@@ -209,7 +230,39 @@ class MeetingManager:
             "MEETING_BOT_API_URL", "http://localhost:3000"
         )
 
-        # Validate required environment variables
+        # Transcription mode:
+        # - offline (default): whisper.cpp + offline diarization
+        # - azure: Azure Speech fast transcription (AU endpoints only)
+        # - gemini: use Gemini for transcription (requires cloud access)
+        # - none: skip transcription entirely
+        raw_transcription_mode = (
+            os.environ.get("TRANSCRIPTION_MODE", "offline").strip().lower()
+        )
+        if raw_transcription_mode == "online":
+            logger.warning(
+                "TRANSCRIPTION_MODE=online is deprecated; mapping to gemini"
+            )
+        self.transcription_mode = {
+            "online": "gemini",
+        }.get(raw_transcription_mode, raw_transcription_mode)
+        self.transcription_client = None
+        self.azure_speech_config = None
+        self.azure_speech_fallback_to_offline = _env_flag(
+            "AZURE_SPEECH_FALLBACK_TO_OFFLINE",
+            default=True,
+        )
+
+        # Offline pipeline options (used by offline mode and Azure fallback).
+        self.offline_language = os.environ.get(
+            "OFFLINE_TRANSCRIPTION_LANGUAGE", "en"
+        ).strip()
+        self.offline_max_speakers = int(os.environ.get("OFFLINE_MAX_SPEAKERS", "6"))
+        self.generate_mp4_artifact = _env_flag(
+            "GENERATE_MP4_ARTIFACT",
+            default=True,
+        )
+
+        # Validate required and mode-specific environment variables.
         self._validate_config()
 
         # Clients and heavy deps are initialized lazily in process_meeting()
@@ -219,22 +272,12 @@ class MeetingManager:
         self.storage_client = None
         self.firestore_client = None
 
-        # Transcription mode:
-        # - offline (default): whisper.cpp + offline diarization
-        # - gemini: use Gemini for transcription (requires cloud access)
-        # - none: skip transcription entirely
-        self.transcription_mode = (
-            os.environ.get("TRANSCRIPTION_MODE", "offline").strip().lower()
-        )
-        self.transcription_client = None
-
-        # Offline pipeline options (only used when TRANSCRIPTION_MODE=offline)
-        self.offline_language = os.environ.get(
-            "OFFLINE_TRANSCRIPTION_LANGUAGE", "en"
-        ).strip()
-        self.offline_max_speakers = int(os.environ.get("OFFLINE_MAX_SPEAKERS", "6"))
-
         logger.info("Transcription backend selected: %s", self.transcription_mode)
+        logger.info(
+            "Azure->offline fallback enabled: %s",
+            self.azure_speech_fallback_to_offline,
+        )
+        logger.info("MP4 artifact generation enabled: %s", self.generate_mp4_artifact)
 
     def _init_clients(self) -> None:
         """Initialize optional clients that pull in heavier dependencies."""
@@ -258,6 +301,17 @@ class MeetingManager:
                     "aw-gemini-api-central",
                 )
             )
+        elif self.transcription_mode == "azure" and self.transcription_client is None:
+            from azure_speech_transcription import (
+                AzureSpeechTranscriptionAdapter,
+                load_azure_speech_config_from_env,
+            )
+
+            if self.azure_speech_config is None:
+                self.azure_speech_config = load_azure_speech_config_from_env()
+            self.transcription_client = AzureSpeechTranscriptionAdapter(
+                self.azure_speech_config
+            )
 
     def _validate_config(self):
         """Validate required environment variables"""
@@ -274,6 +328,110 @@ class MeetingManager:
                 f"Missing required environment variables: {', '.join(missing)}"
             )
 
+        valid_modes = {"offline", "gemini", "azure", "none"}
+        if self.transcription_mode not in valid_modes:
+            raise ValueError(
+                "Invalid TRANSCRIPTION_MODE="
+                f"{self.transcription_mode!r}. Expected one of: "
+                f"{', '.join(sorted(valid_modes))}"
+            )
+
+        if self.transcription_mode == "azure":
+            from azure_speech_transcription import load_azure_speech_config_from_env
+
+            self.azure_speech_config = load_azure_speech_config_from_env()
+            if self.azure_speech_config.diarization_enabled:
+                logger.info(
+                    "Azure Speech config validated for AU region %s with diarization "
+                    "(max_speakers=%d)",
+                    self.azure_speech_config.region,
+                    self.azure_speech_config.diarization_max_speakers,
+                )
+            else:
+                logger.warning(
+                    "Azure Speech diarization is disabled; speaker labels will not "
+                    "be included in Azure transcript output."
+                )
+
+    def _persist_offline_markdown_to_firestore(self, markdown_path: str) -> None:
+        """Best-effort persistence of offline markdown transcript to Firestore."""
+
+        if not markdown_path:
+            return
+
+        logger.debug("POST-MEETING: Persisting transcript to Firestore")
+        try:
+            firestore_meeting_id = self.fs_meeting_id or self.meeting_id
+            logger.debug("Firestore meeting ID: %s", firestore_meeting_id)
+            from firestore_persistence import persist_transcript_to_firestore
+
+            persist_transcript_to_firestore(
+                firestore_client=self.firestore_client,
+                meeting_id=firestore_meeting_id,
+                markdown_path=markdown_path,
+                logger=logger,
+            )
+            logger.debug(
+                "POST-MEETING: Transcript persisted to Firestore successfully"
+            )
+        except Exception as firestore_err:
+            logger.exception(
+                "Error storing offline transcript in Firestore: %s",
+                firestore_err,
+            )
+            logger.debug(
+                "POST-MEETING: Failed to persist transcript to Firestore (non-fatal)"
+            )
+
+    def _run_offline_transcription(
+        self, *, local_input: str
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """Execute whisper.cpp + optional diarization with non-fatal error handling."""
+
+        logger.debug("POST-MEETING: Using offline transcription (whisper.cpp)")
+        logger.debug("Transcription input file: %s", local_input)
+        logger.debug("Transcription language: %s", self.offline_language)
+        logger.debug("Max speakers: %d", self.offline_max_speakers)
+
+        try:
+            out_dir = Path(tempfile.gettempdir())
+
+            def _run_offline(diarize: bool):
+                from offline_pipeline import transcribe_and_diarize_local_media
+
+                return transcribe_and_diarize_local_media(
+                    input_path=Path(local_input),
+                    out_dir=out_dir,
+                    meeting_id=self.meeting_id,
+                    language=self.offline_language,
+                    diarize=diarize,
+                    max_speakers=self.offline_max_speakers,
+                )
+
+            try:
+                txt_path, json_path = _run_offline(diarize=True)
+            except Exception as diar_err:
+                logger.warning("Diarization failed; retrying without it: %s", diar_err)
+                txt_path, json_path = _run_offline(diarize=False)
+
+            transcript_md_path = os.path.splitext(str(txt_path))[0] + ".md"
+            transcript_txt_path = str(txt_path)
+            transcript_json_path = str(json_path)
+
+            logger.info(
+                "✅ Offline transcription complete (%s, %s)",
+                transcript_txt_path,
+                transcript_json_path,
+            )
+            logger.debug("POST-MEETING: Transcription files generated successfully")
+
+            self._persist_offline_markdown_to_firestore(transcript_md_path)
+            return transcript_txt_path, transcript_json_path, transcript_md_path
+        except Exception as err:
+            logger.exception("Offline transcription failed (non-fatal): %s", err)
+            logger.debug("POST-MEETING: Transcription failed (continuing without it)")
+            return None, None, None
+
     def process_meeting(self) -> bool:
         """
         Process the meeting recording job
@@ -281,6 +439,18 @@ class MeetingManager:
         Returns:
             True if processing succeeded, False otherwise
         """
+        pipeline_started_at = time.monotonic()
+        stage_durations: Dict[str, float] = {}
+
+        def _record_stage_duration(stage_name: str, stage_started_at: float) -> None:
+            elapsed = time.monotonic() - stage_started_at
+            stage_durations[stage_name] = elapsed
+            logger.info(
+                "PIPELINE_STAGE_DURATION: stage=%s, seconds=%.3f",
+                stage_name,
+                elapsed,
+            )
+
         try:
             # Only import and initialize heavy dependencies once we know the
             # configuration is valid.
@@ -302,6 +472,7 @@ class MeetingManager:
             logger.debug("PRE-MEETING DECISION: API ready, proceeding to join meeting")
 
             # Step 1: Join the meeting
+            meeting_stage_started_at = time.monotonic()
             logger.info("Step 1: Joining meeting...")
             logger.debug("PRE-MEETING: Sending join request to meeting-bot API")
             logger.debug("Join parameters:")
@@ -361,6 +532,7 @@ class MeetingManager:
             logger.info(f"Meeting completed. Recording at: {recording_path}")
             logger.debug("POST-MEETING: Recording file created successfully")
             logger.debug("Recording path: %s", recording_path)
+            _record_stage_duration("meeting_join_and_record", meeting_stage_started_at)
 
             # Enhanced logging for recording complete
             session_id = self.fs_meeting_id or self.meeting_id
@@ -401,14 +573,14 @@ class MeetingManager:
             # one-shot transcription staying within model input limits.
             audio_path = None
             mp4_path = None
+            converter = None
+            audio_extract_started_at = time.monotonic()
             try:
                 logger.info("Step 2.5: Extracting audio-only for transcription...")
                 from media_converter import MediaConverter
 
                 converter = MediaConverter()
-                extracted_mp4, extracted_m4a = converter.convert(recording_path)
-                if extracted_mp4 and os.path.exists(extracted_mp4):
-                    mp4_path = extracted_mp4
+                extracted_m4a = converter.extract_audio(recording_path)
                 if extracted_m4a and os.path.exists(extracted_m4a):
                     audio_size = os.path.getsize(extracted_m4a)
                     logger.info(
@@ -434,6 +606,8 @@ class MeetingManager:
                     "Audio extraction failed; continuing without it: %s",
                     audio_err,
                 )
+            finally:
+                _record_stage_duration("audio_extract", audio_extract_started_at)
 
             # Step 2.9: Check for ad-hoc meeting and create/update if needed
             # IMPORTANT: This must happen BEFORE uploads so gcs_path can be updated
@@ -463,10 +637,23 @@ class MeetingManager:
                 logger.debug("Calculating recording duration...")
                 duration_seconds = get_recording_duration_seconds(recording_path)
 
-                # Fallback to MP4 if WEBM duration failed (common with streaming WEBM)
-                if not duration_seconds and mp4_path and os.path.exists(mp4_path):
+                # Fallback to extracted audio when WEBM duration isn't available.
+                if not duration_seconds and audio_path and os.path.exists(audio_path):
+                    logger.info("Falling back to extracted audio for duration check...")
+                    duration_seconds = get_recording_duration_seconds(audio_path)
+
+                # Last-resort fallback for duration-only scenarios where WEBM
+                # metadata is incomplete and extracted audio is unavailable.
+                if (
+                    not duration_seconds
+                    and self.generate_mp4_artifact
+                    and converter is not None
+                ):
                     logger.info("Falling back to MP4 for duration check...")
-                    duration_seconds = get_recording_duration_seconds(mp4_path)
+                    fallback_mp4 = converter.convert_to_mp4(recording_path)
+                    if fallback_mp4 and os.path.exists(fallback_mp4):
+                        mp4_path = fallback_mp4
+                        duration_seconds = get_recording_duration_seconds(fallback_mp4)
 
                 logger.debug("Recording duration: %s seconds", duration_seconds)
 
@@ -617,6 +804,12 @@ class MeetingManager:
 
             logger.debug("POST-MEETING: Starting transcription process")
             logger.debug("Transcription mode: %s", self.transcription_mode)
+            transcription_started_at = time.monotonic()
+            local_transcription_input = (
+                audio_path
+                if audio_path and os.path.exists(audio_path)
+                else recording_path
+            )
 
             if self.transcription_mode == "none":
                 logger.info("Step 3: Transcription skipped (TRANSCRIPTION_MODE=none)")
@@ -625,94 +818,124 @@ class MeetingManager:
                 logger.info(
                     "Step 3: Transcribing offline with whisper.cpp + " "diarization..."
                 )
-                logger.debug("POST-MEETING: Using offline transcription (whisper.cpp)")
-                try:
-                    # Prefer extracted audio when available.
-                    local_input = audio_path or recording_path
-                    logger.debug("Transcription input file: %s", local_input)
-                    logger.debug("Transcription language: %s", self.offline_language)
-                    logger.debug("Max speakers: %d", self.offline_max_speakers)
-
-                    out_dir = Path(tempfile.gettempdir())
-
-                    def _run_offline(diarize: bool):
-                        from offline_pipeline import transcribe_and_diarize_local_media
-
-                        return transcribe_and_diarize_local_media(
-                            input_path=Path(local_input),
-                            out_dir=out_dir,
-                            meeting_id=self.meeting_id,
-                            language=self.offline_language,
-                            diarize=diarize,
-                            max_speakers=self.offline_max_speakers,
-                        )
-
-                    try:
-                        txt_path, json_path = _run_offline(diarize=True)
-                    except Exception as diar_err:
-                        logger.warning(
-                            "Diarization failed; retrying: %s",
-                            diar_err,
-                        )
-                        txt_path, json_path = _run_offline(diarize=False)
-
-                    # offline_pipeline also writes a markdown file next to the
-                    # txt/json outputs using the same base name.
-                    transcript_md_path = os.path.splitext(str(txt_path))[0] + ".md"
-
-                    # Upload expects fixed filenames.
-                    transcript_txt_path = str(txt_path)
-                    transcript_json_path = str(json_path)
-                    logger.info(
-                        "✅ Offline transcription complete (%s, %s)",
-                        transcript_txt_path,
-                        transcript_json_path,
-                    )
-                    logger.debug(
-                        "POST-MEETING: Transcription files generated successfully"
-                    )
-
-                    # Best-effort: persist offline transcript into Firestore.
-                    # We write into the same `transcription` field used by the
-                    # Gemini path.
-                    logger.debug("POST-MEETING: Persisting transcript to Firestore")
-                    try:
-                        firestore_meeting_id = self.fs_meeting_id or self.meeting_id
-                        logger.debug("Firestore meeting ID: %s", firestore_meeting_id)
-                        from firestore_persistence import (
-                            persist_transcript_to_firestore,
-                        )
-
-                        persist_transcript_to_firestore(
-                            firestore_client=self.firestore_client,
-                            meeting_id=firestore_meeting_id,
-                            markdown_path=transcript_md_path,
-                            logger=logger,
-                        )
-                        logger.debug(
-                            "POST-MEETING: Transcript persisted to Firestore successfully"
-                        )
-                    except Exception as firestore_err:
-                        logger.exception(
-                            "Error storing offline transcript in " "Firestore: %s",
-                            firestore_err,
-                        )
-                        logger.debug(
-                            "POST-MEETING: Failed to persist transcript to Firestore (non-fatal)"
-                        )
-                except Exception as e:
-                    logger.exception(
-                        "Offline transcription failed (non-fatal): %s",
-                        e,
-                    )
-                    logger.debug(
-                        "POST-MEETING: Transcription failed (continuing without it)"
-                    )
+                (
+                    transcript_txt_path,
+                    transcript_json_path,
+                    transcript_md_path,
+                ) = self._run_offline_transcription(local_input=local_transcription_input)
+            elif self.transcription_mode == "azure":
+                logger.info(
+                    "Step 3: Transcribing with Azure Speech (AU fast transcription)..."
+                )
+                logger.debug("POST-MEETING: Using Azure Speech transcription")
             else:
                 logger.info(
                     "Step 3: Transcribing with Gemini (audio-only preferred)..."
                 )
                 logger.debug("POST-MEETING: Using Gemini transcription")
+
+            if self.transcription_mode == "azure":
+                try:
+                    if not self.transcription_client:
+                        raise RuntimeError(
+                            "TRANSCRIPTION_MODE=azure but Azure Speech client "
+                            "was not initialized"
+                        )
+
+                    azure_locale = (
+                        self.azure_speech_config.locale
+                        if self.azure_speech_config is not None
+                        else "en-AU"
+                    )
+                    transcript_data = self.transcription_client.transcribe_audio(
+                        audio_uri=local_transcription_input,
+                        language_code=azure_locale,
+                        enable_speaker_diarization=True,
+                        enable_timestamps=True,
+                        enable_action_items=False,
+                    )
+                    if not transcript_data:
+                        raise RuntimeError(
+                            "Azure Speech transcription returned no transcript data"
+                        )
+
+                    transcript_txt_path = os.path.join(
+                        tempfile.gettempdir(), f"{self.meeting_id}_transcript.txt"
+                    )
+                    self.transcription_client.save_transcript(
+                        transcript_data,
+                        transcript_txt_path,
+                        format="txt",
+                    )
+
+                    transcript_json_path = os.path.join(
+                        tempfile.gettempdir(), f"{self.meeting_id}_transcript.json"
+                    )
+                    self.transcription_client.save_transcript(
+                        transcript_data,
+                        transcript_json_path,
+                        format="json",
+                    )
+
+                    logger.info(
+                        "✅ Azure Speech transcription complete! Words: %s",
+                        transcript_data.get("word_count"),
+                    )
+
+                    transcription_text = (transcript_data.get("transcript") or "").strip()
+                    if transcription_text:
+                        try:
+                            firestore_meeting_id = self.fs_meeting_id or self.meeting_id
+                            if firestore_meeting_id:
+                                firestore_stored = (
+                                    self.firestore_client.set_transcription(
+                                        firestore_meeting_id, transcription_text
+                                    )
+                                )
+                                if firestore_stored:
+                                    logger.info(
+                                        "✅ Stored Azure transcript for %s",
+                                        firestore_meeting_id,
+                                    )
+                                else:
+                                    logger.warning("Failed to store Azure transcript")
+                            else:
+                                logger.warning(
+                                    "No meeting ID available for Firestore storage "
+                                    "(neither FS_MEETING_ID nor MEETING_ID set)"
+                                )
+                        except Exception as firestore_err:
+                            logger.exception(
+                                "Error storing Azure transcript in Firestore: %s",
+                                firestore_err,
+                            )
+                    else:
+                        logger.warning(
+                            "Azure transcription completed with empty text payload"
+                        )
+                except Exception as azure_err:
+                    logger.exception(
+                        "Azure transcription failed (non-fatal): %s",
+                        azure_err,
+                    )
+                    if self.azure_speech_fallback_to_offline:
+                        logger.warning(
+                            "Falling back to offline whisper transcription "
+                            "after Azure failure"
+                        )
+                        (
+                            transcript_txt_path,
+                            transcript_json_path,
+                            transcript_md_path,
+                        ) = self._run_offline_transcription(
+                            local_input=local_transcription_input
+                        )
+                    else:
+                        logger.warning(
+                            "Azure fallback disabled "
+                            "(AZURE_SPEECH_FALLBACK_TO_OFFLINE=false); "
+                            "continuing without transcript"
+                        )
 
             if self.transcription_mode == "gemini":
                 # Gemini requires files in GCS to generate signed URLs
@@ -895,8 +1118,40 @@ class MeetingManager:
                         "Continuing with upload despite transcription failure"
                     )
 
+            if self.transcription_mode != "none":
+                _record_stage_duration("transcription", transcription_started_at)
+
+            if self.generate_mp4_artifact:
+                mp4_convert_started_at = time.monotonic()
+                try:
+                    logger.info("Step 3.5: Generating MP4 playback artifact...")
+                    if converter is None:
+                        from media_converter import MediaConverter
+
+                        converter = MediaConverter()
+                    converted_mp4 = converter.convert_to_mp4(recording_path)
+                    if converted_mp4 and os.path.exists(converted_mp4):
+                        mp4_path = converted_mp4
+                    else:
+                        logger.warning(
+                            "MP4 conversion failed; continuing without MP4 artifact"
+                        )
+                except Exception as mp4_err:
+                    logger.warning(
+                        "MP4 conversion failed (non-fatal): %s",
+                        mp4_err,
+                    )
+                finally:
+                    _record_stage_duration("mp4_convert", mp4_convert_started_at)
+            else:
+                logger.info(
+                    "Step 3.5: MP4 generation skipped "
+                    "(GENERATE_MP4_ARTIFACT=false)"
+                )
+
             # Step 4: Upload all files to ALL attendees (fanout from container)
             # Find all meetings with the same URL on the same day = attendees
+            fanout_started_at = time.monotonic()
             logger.info("Step 4: Discovering attendees and uploading files to all...")
             logger.debug("=" * 80)
             logger.debug(
@@ -1369,6 +1624,8 @@ class MeetingManager:
                     result["success"],
                 )
 
+            _record_stage_duration("fanout_upload", fanout_started_at)
+
             # Check if at least one attendee was successful (for the primary meeting)
             primary_success = any(r["success"] for r in fanout_results)
             if not primary_success:
@@ -1475,6 +1732,16 @@ class MeetingManager:
             except Exception:
                 pass
             return False
+        finally:
+            total_elapsed = time.monotonic() - pipeline_started_at
+            logger.info(
+                "PIPELINE_TIMING_SUMMARY: meeting_id=%s, mode=%s, "
+                "total_seconds=%.3f, stage_seconds=%s",
+                self.meeting_id,
+                self.transcription_mode,
+                total_elapsed,
+                json.dumps(stage_durations, sort_keys=True),
+            )
 
     def _mark_session_complete(self, *, ok: bool, artifacts: Optional[dict]) -> None:
         """Best-effort: update per-org session state when running in session mode.
@@ -1611,6 +1878,14 @@ class MeetingManager:
         logger.debug("  GCS_PATH: %s", self.gcs_path)
         logger.debug("  MEETING_BOT_API_URL: %s", self.meeting_bot_api)
         logger.debug("  TRANSCRIPTION_MODE: %s", self.transcription_mode)
+        logger.debug(
+            "  AZURE_SPEECH_FALLBACK_TO_OFFLINE: %s",
+            self.azure_speech_fallback_to_offline,
+        )
+        logger.debug(
+            "  WHISPER_CPP_USE_GPU: %s",
+            os.environ.get("WHISPER_CPP_USE_GPU", "false"),
+        )
         logger.debug("  FIRESTORE_DATABASE: %s", self.firestore_database)
 
         # Log session mode detection

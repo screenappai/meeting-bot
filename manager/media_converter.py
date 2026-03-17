@@ -174,22 +174,43 @@ class MediaConverter:
             logger.error(f"Input file not found: {input_path}")
             return None, None
 
-        # Generate output paths
-        base_path = os.path.splitext(input_path)[0]
-        mp4_path = f"{base_path}.mp4"
-        m4a_path = f"{base_path}.m4a"
-
-        # Convert to MP4
-        mp4_success = self._convert_to_mp4(input_path, mp4_path)
-        if not mp4_success:
+        m4a_path = self.extract_audio(input_path)
+        if not m4a_path:
             return None, None
 
-        # Extract M4A audio
-        m4a_success = self._extract_m4a(input_path, m4a_path)
-        if not m4a_success:
+        mp4_path = self.convert_to_mp4(input_path)
+        if not mp4_path:
             return None, None
 
         return mp4_path, m4a_path
+
+    def extract_audio(self, input_path: str) -> Optional[str]:
+        """Extract an enhanced M4A file for transcription-friendly processing."""
+        if not os.path.exists(input_path):
+            logger.error(f"Input file not found: {input_path}")
+            return None
+
+        base_path = os.path.splitext(input_path)[0]
+        m4a_path = f"{base_path}.m4a"
+
+        if self._extract_m4a(input_path, m4a_path):
+            return m4a_path
+
+        return None
+
+    def convert_to_mp4(self, input_path: str) -> Optional[str]:
+        """Convert input recording into MP4 playback artifact."""
+        if not os.path.exists(input_path):
+            logger.error(f"Input file not found: {input_path}")
+            return None
+
+        base_path = os.path.splitext(input_path)[0]
+        mp4_path = f"{base_path}.mp4"
+
+        if self._convert_to_mp4(input_path, mp4_path):
+            return mp4_path
+
+        return None
 
     def _convert_to_mp4(self, input_path: str, output_path: str) -> bool:
         """

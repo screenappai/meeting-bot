@@ -30,7 +30,7 @@ import hashlib
 import uuid
 from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 import re
 
 from google.cloud import firestore, pubsub_v1
@@ -193,6 +193,70 @@ class MeetingController:
         # Kubernetes configuration
         self.k8s_namespace = os.getenv("KUBERNETES_NAMESPACE", "default")
         self.job_service_account = os.getenv("JOB_SERVICE_ACCOUNT", "meeting-bot-job")
+        self.job_gcp_adc_secret_name = os.getenv("JOB_GCP_ADC_SECRET_NAME", "").strip()
+        self.job_google_application_credentials = (
+            os.getenv(
+                "JOB_GOOGLE_APPLICATION_CREDENTIALS",
+                "/var/run/secrets/google/adc.json",
+            ).strip()
+            or "/var/run/secrets/google/adc.json"
+        )
+        self.job_google_application_credentials_dir = (
+            os.path.dirname(self.job_google_application_credentials).strip()
+            or "/var/run/secrets/google"
+        )
+        self.job_use_azure_workload_identity = (
+            os.getenv("JOB_USE_AZURE_WORKLOAD_IDENTITY", "").lower()
+            in ("true", "1", "yes")
+        ) or bool(self.job_gcp_adc_secret_name)
+
+        # Session validation / orphan remediation behavior
+        self.orphaned_session_validation_limit = int(
+            os.getenv("ORPHANED_SESSION_VALIDATION_LIMIT", "50")
+        )
+        self.orphaned_session_remediation_enabled = os.getenv(
+            "ORPHANED_SESSION_REMEDIATION_ENABLED", "true"
+        ).lower() in ("true", "1", "yes")
+        default_orphaned_age_minutes = max(1, (self.claim_ttl_seconds + 59) // 60)
+        self.orphaned_session_remediation_min_age_minutes = int(
+            os.getenv(
+                "ORPHANED_SESSION_REMEDIATION_MIN_AGE_MINUTES",
+                str(default_orphaned_age_minutes),
+            )
+        )
+        self.orphaned_session_remediation_action = (
+            os.getenv("ORPHANED_SESSION_REMEDIATION_ACTION", "requeue").strip().lower()
+        )
+        self.orphaned_session_remediation_max_per_cycle = int(
+            os.getenv(
+                "ORPHANED_SESSION_REMEDIATION_MAX_PER_CYCLE",
+                str(self.max_claim_per_poll),
+            )
+        )
+
+        # Job container resources (defaults preserve existing production values)
+        self.meeting_bot_resource_requests: Dict[str, str] = {
+            "cpu": os.getenv("MEETING_BOT_CPU_REQUEST", "3000m"),
+            "memory": os.getenv("MEETING_BOT_MEMORY_REQUEST", "2Gi"),
+            "ephemeral-storage": os.getenv(
+                "MEETING_BOT_EPHEMERAL_STORAGE_REQUEST", "8Gi"
+            ),
+        }
+        self.meeting_bot_resource_limits: Dict[str, str] = {
+            "cpu": os.getenv("MEETING_BOT_CPU_LIMIT", "4000m"),
+            "memory": os.getenv("MEETING_BOT_MEMORY_LIMIT", "3Gi"),
+            "ephemeral-storage": os.getenv("MEETING_BOT_EPHEMERAL_STORAGE_LIMIT", "8Gi"),
+        }
+        self.manager_resource_requests: Dict[str, str] = {
+            "cpu": os.getenv("MANAGER_CPU_REQUEST", "2500m"),
+            "memory": os.getenv("MANAGER_MEMORY_REQUEST", "4Gi"),
+            "ephemeral-storage": os.getenv("MANAGER_EPHEMERAL_STORAGE_REQUEST", "2Gi"),
+        }
+        self.manager_resource_limits: Dict[str, str] = {
+            "cpu": os.getenv("MANAGER_CPU_LIMIT", "3750m"),
+            "memory": os.getenv("MANAGER_MEMORY_LIMIT", "8Gi"),
+            "ephemeral-storage": os.getenv("MANAGER_EPHEMERAL_STORAGE_LIMIT", "2Gi"),
+        }
 
         # Dry-run mode - logs K8s operations but doesn't execute them
         self.dry_run = os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes")
@@ -274,6 +338,33 @@ class MeetingController:
         logger.info(f"  Namespace: {self.k8s_namespace}")
         logger.info(f"  Manager Image: {self.manager_image}")
         logger.info(f"  Meeting Bot Image: {self.meeting_bot_image}")
+        logger.info(
+            "  Job ADC Secret: %s",
+            self.job_gcp_adc_secret_name or "disabled",
+        )
+        logger.info(
+            "  Job Workload Identity Label: %s",
+            self.job_use_azure_workload_identity,
+        )
+        logger.info(
+            "  Meeting Bot Resources: requests=%s limits=%s",
+            self.meeting_bot_resource_requests,
+            self.meeting_bot_resource_limits,
+        )
+        logger.info(
+            "  Manager Resources: requests=%s limits=%s",
+            self.manager_resource_requests,
+            self.manager_resource_limits,
+        )
+        logger.info(
+            "  Orphan Session Remediation: enabled=%s action=%s min_age_minutes=%d "
+            "validation_limit=%d max_per_cycle=%d",
+            self.orphaned_session_remediation_enabled,
+            self.orphaned_session_remediation_action,
+            self.orphaned_session_remediation_min_age_minutes,
+            self.orphaned_session_validation_limit,
+            self.orphaned_session_remediation_max_per_cycle,
+        )
         logger.info(f"  Dry Run: {self.dry_run}")
         logger.info(
             "  Meeting discovery: mode=%s path=%s",
@@ -327,6 +418,26 @@ class MeetingController:
         if missing:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing)}"
+            )
+
+        if self.orphaned_session_validation_limit <= 0:
+            raise ValueError("ORPHANED_SESSION_VALIDATION_LIMIT must be greater than 0")
+
+        if self.orphaned_session_remediation_min_age_minutes < 0:
+            raise ValueError(
+                "ORPHANED_SESSION_REMEDIATION_MIN_AGE_MINUTES must be >= 0"
+            )
+
+        if self.orphaned_session_remediation_max_per_cycle < 0:
+            raise ValueError(
+                "ORPHANED_SESSION_REMEDIATION_MAX_PER_CYCLE must be >= 0"
+            )
+
+        allowed_orphan_actions = {"requeue", "failed"}
+        if self.orphaned_session_remediation_action not in allowed_orphan_actions:
+            raise ValueError(
+                "ORPHANED_SESSION_REMEDIATION_ACTION must be one of: "
+                f"{', '.join(sorted(allowed_orphan_actions))}"
             )
 
     def create_manager_job(self, message_data: Dict[str, Any], message_id: str) -> bool:
@@ -502,6 +613,9 @@ class MeetingController:
                 client.V1EnvVar(name="USER_ID", value=str(user_doc_id)),
                 client.V1EnvVar(name="GCS_PATH", value=gcs_path),
                 client.V1EnvVar(name="GCS_BUCKET", value=self.gcs_bucket),
+                client.V1EnvVar(name="GCP_PROJECT_ID", value=self.project_id),
+                client.V1EnvVar(name="GOOGLE_CLOUD_PROJECT", value=self.project_id),
+                client.V1EnvVar(name="GCLOUD_PROJECT", value=self.project_id),
                 client.V1EnvVar(name="MEETING_BOT_IMAGE", value=self.meeting_bot_image),
                 client.V1EnvVar(name="NODE_ENV", value=self.node_env),
                 client.V1EnvVar(
@@ -578,65 +692,134 @@ class MeetingController:
             all_env_names = [env_var.name for env_var in env_vars]
             logger.debug("ALL_ENV_VARS: %s", ", ".join(sorted(all_env_names)))
 
+            job_pod_labels = {
+                "app": "meeting-bot",
+                "org_id_hash": org_hash,
+                "meeting_url_hash": url_hash,
+            }
+            if self.job_use_azure_workload_identity:
+                job_pod_labels["azure.workload.identity/use"] = "true"
+
+            meeting_bot_env = [
+                client.V1EnvVar(name="PORT", value="3000"),
+                client.V1EnvVar(name="NODE_ENV", value=self.node_env),
+                # Prefer using the RWX scratch PVC for temp files.
+                client.V1EnvVar(name="TMPDIR", value="/scratch/tmp"),
+                client.V1EnvVar(name="TMP", value="/scratch/tmp"),
+                client.V1EnvVar(name="TEMP", value="/scratch/tmp"),
+                # Prefer writing recording artifacts to the scratch PVC.
+                client.V1EnvVar(name="TEMPVIDEO_DIR", value="/scratch/tempvideo"),
+                client.V1EnvVar(
+                    name="MAX_RECORDING_DURATION_MINUTES",
+                    value=str(self.max_recording_duration),
+                ),
+                client.V1EnvVar(
+                    name="MEETING_INACTIVITY_MINUTES",
+                    value=str(self.meeting_inactivity),
+                ),
+                client.V1EnvVar(
+                    name="INACTIVITY_DETECTION_START_DELAY_MINUTES",
+                    value=str(self.inactivity_detection_delay),
+                ),
+                # Disable S3 upload - manager will handle the recording file
+                client.V1EnvVar(name="S3_ENDPOINT", value=""),
+                # Required by meeting-bot src/config.ts
+                client.V1EnvVar(name="GCP_MISC_BUCKET", value=self.gcs_bucket),
+                client.V1EnvVar(
+                    name="GCP_DEFAULT_REGION",
+                    value=os.getenv("GCP_DEFAULT_REGION", "us-central1"),
+                ),
+                # Sentry error monitoring
+                client.V1EnvVar(name="SENTRY_DSN", value=self.sentry_dsn),
+                client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
+            ]
+            manager_env = env_vars + [
+                # Manager needs to communicate with meeting-bot on localhost
+                client.V1EnvVar(name="MEETING_BOT_API_URL", value="http://localhost:3000"),
+                # Prefer using the RWX scratch PVC for temp files.
+                client.V1EnvVar(name="TMPDIR", value="/scratch/tmp"),
+                client.V1EnvVar(name="TMP", value="/scratch/tmp"),
+                client.V1EnvVar(name="TEMP", value="/scratch/tmp"),
+                # Sentry error monitoring
+                client.V1EnvVar(name="SENTRY_DSN", value=self.sentry_dsn),
+                client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
+            ]
+
+            meeting_bot_volume_mounts = [
+                client.V1VolumeMount(name="scratch", mount_path="/usr/src/app/dist/_tempvideo"),
+                client.V1VolumeMount(name="scratch", mount_path="/scratch"),
+                # Mount shared memory for Chrome (prevents crashes)
+                client.V1VolumeMount(name="dshm", mount_path="/dev/shm"),
+                # Mount tmp for XDG and PulseAudio runtime directories
+                client.V1VolumeMount(name="tmp", mount_path="/tmp"),
+            ]
+            manager_volume_mounts = [
+                client.V1VolumeMount(name="recordings", mount_path="/recordings"),
+                client.V1VolumeMount(name="scratch", mount_path="/scratch"),
+            ]
+            job_volumes = [
+                client.V1Volume(name="recordings", empty_dir=client.V1EmptyDirVolumeSource()),
+                # Scratch will be mounted via a per-job RWO PVC created below.
+                # Shared memory for Chrome
+                client.V1Volume(
+                    name="dshm",
+                    empty_dir=client.V1EmptyDirVolumeSource(medium="Memory", size_limit="2Gi"),
+                ),
+                # Temporary storage for runtime dirs (XDG, PulseAudio)
+                client.V1Volume(name="tmp", empty_dir=client.V1EmptyDirVolumeSource()),
+            ]
+
+            if self.job_gcp_adc_secret_name:
+                meeting_bot_env.append(
+                    client.V1EnvVar(
+                        name="GOOGLE_APPLICATION_CREDENTIALS",
+                        value=self.job_google_application_credentials,
+                    )
+                )
+                manager_env.append(
+                    client.V1EnvVar(
+                        name="GOOGLE_APPLICATION_CREDENTIALS",
+                        value=self.job_google_application_credentials,
+                    )
+                )
+                meeting_bot_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name="gcp-adc",
+                        mount_path=self.job_google_application_credentials_dir,
+                        read_only=True,
+                    )
+                )
+                manager_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name="gcp-adc",
+                        mount_path=self.job_google_application_credentials_dir,
+                        read_only=True,
+                    )
+                )
+                job_volumes.append(
+                    client.V1Volume(
+                        name="gcp-adc",
+                        secret=client.V1SecretVolumeSource(
+                            secret_name=self.job_gcp_adc_secret_name
+                        ),
+                    )
+                )
+                logger.info(
+                    "JOB_ADC_ENABLED: secret=%s credentials_path=%s",
+                    self.job_gcp_adc_secret_name,
+                    self.job_google_application_credentials,
+                )
+
             # Container 1: meeting-bot (TypeScript app that joins meetings)
             meeting_bot_container = client.V1Container(
                 name="meeting-bot",
                 image=self.meeting_bot_image,
                 image_pull_policy="IfNotPresent",
-                env=[
-                    client.V1EnvVar(name="PORT", value="3000"),
-                    client.V1EnvVar(name="NODE_ENV", value=self.node_env),
-                    # Prefer using the RWX scratch PVC for temp files.
-                    client.V1EnvVar(name="TMPDIR", value="/scratch/tmp"),
-                    client.V1EnvVar(name="TMP", value="/scratch/tmp"),
-                    client.V1EnvVar(name="TEMP", value="/scratch/tmp"),
-                    # Prefer writing recording artifacts to the scratch PVC.
-                    client.V1EnvVar(name="TEMPVIDEO_DIR", value="/scratch/tempvideo"),
-                    client.V1EnvVar(
-                        name="MAX_RECORDING_DURATION_MINUTES",
-                        value=str(self.max_recording_duration),
-                    ),
-                    client.V1EnvVar(
-                        name="MEETING_INACTIVITY_MINUTES",
-                        value=str(self.meeting_inactivity),
-                    ),
-                    client.V1EnvVar(
-                        name="INACTIVITY_DETECTION_START_DELAY_MINUTES",
-                        value=str(self.inactivity_detection_delay),
-                    ),
-                    # Disable S3 upload - manager will handle the recording file
-                    client.V1EnvVar(name="S3_ENDPOINT", value=""),
-                    # Required by meeting-bot src/config.ts
-                    client.V1EnvVar(name="GCP_MISC_BUCKET", value=self.gcs_bucket),
-                    client.V1EnvVar(
-                        name="GCP_DEFAULT_REGION",
-                        value=os.getenv("GCP_DEFAULT_REGION", "us-central1"),
-                    ),
-                    # Sentry error monitoring
-                    client.V1EnvVar(name="SENTRY_DSN", value=self.sentry_dsn),
-                    client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
-                ],
-                volume_mounts=[
-                    client.V1VolumeMount(
-                        name="scratch", mount_path="/usr/src/app/dist/_tempvideo"
-                    ),
-                    client.V1VolumeMount(name="scratch", mount_path="/scratch"),
-                    # Mount shared memory for Chrome (prevents crashes)
-                    client.V1VolumeMount(name="dshm", mount_path="/dev/shm"),
-                    # Mount tmp for XDG and PulseAudio runtime directories
-                    client.V1VolumeMount(name="tmp", mount_path="/tmp"),
-                ],
+                env=meeting_bot_env,
+                volume_mounts=meeting_bot_volume_mounts,
                 resources=client.V1ResourceRequirements(
-                    requests={
-                        "cpu": "3000m",  # 2 CPU cores for smooth audio/video processing
-                        "memory": "2Gi",  # 2 GB memory
-                        "ephemeral-storage": "8Gi",
-                    },
-                    limits={
-                        "cpu": "4000m",  # 4 CPU cores (doubled for better performance)
-                        "memory": "3Gi",  # 4 GB memory (increased for high-quality recording)
-                        "ephemeral-storage": "8Gi",
-                    },
+                    requests=dict(self.meeting_bot_resource_requests),
+                    limits=dict(self.meeting_bot_resource_limits),
                 ),
             )
 
@@ -644,47 +827,19 @@ class MeetingController:
             manager_container = client.V1Container(
                 name="manager",
                 image=self.manager_image,
-                env=env_vars
-                + [
-                    # Manager needs to communicate with meeting-bot on localhost
-                    client.V1EnvVar(
-                        name="MEETING_BOT_API_URL", value="http://localhost:3000"
-                    ),
-                    # Prefer using the RWX scratch PVC for temp files.
-                    client.V1EnvVar(name="TMPDIR", value="/scratch/tmp"),
-                    client.V1EnvVar(name="TMP", value="/scratch/tmp"),
-                    client.V1EnvVar(name="TEMP", value="/scratch/tmp"),
-                    # Sentry error monitoring
-                    client.V1EnvVar(name="SENTRY_DSN", value=self.sentry_dsn),
-                    client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
-                ],
-                volume_mounts=[
-                    client.V1VolumeMount(name="recordings", mount_path="/recordings"),
-                    client.V1VolumeMount(name="scratch", mount_path="/scratch"),
-                ],
+                env=manager_env,
+                volume_mounts=manager_volume_mounts,
                 image_pull_policy="IfNotPresent",
                 resources=client.V1ResourceRequirements(
-                    requests={
-                        "cpu": "2500m",  # 2.5 CPU cores
-                        "memory": "4Gi",  # Increased to avoid OOM during whisper/diarization
-                        "ephemeral-storage": "2Gi",
-                    },
-                    limits={
-                        "cpu": "3750m",  # 50% higher (3.75 CPU cores)
-                        "memory": "8Gi",  # Increased to avoid OOM during whisper/diarization
-                        "ephemeral-storage": "2Gi",
-                    },
+                    requests=dict(self.manager_resource_requests),
+                    limits=dict(self.manager_resource_limits),
                 ),
             )
 
             # Define the pod template with BOTH containers
             template = client.V1PodTemplateSpec(
                 metadata=client.V1ObjectMeta(
-                    labels={
-                        "app": "meeting-bot",
-                        "org_id_hash": org_hash,
-                        "meeting_url_hash": url_hash,
-                    },
+                    labels=job_pod_labels,
                     annotations={
                         "cluster-autoscaler.kubernetes.io/safe-to-evict": "false"
                     },
@@ -716,23 +871,7 @@ class MeetingController:
                         run_as_group=1001,
                         fs_group=1001,  # Ensures volume mounts have correct permissions
                     ),
-                    volumes=[
-                        client.V1Volume(
-                            name="recordings", empty_dir=client.V1EmptyDirVolumeSource()
-                        ),
-                        # Scratch will be mounted via a per-job RWO PVC created below.
-                        # Shared memory for Chrome
-                        client.V1Volume(
-                            name="dshm",
-                            empty_dir=client.V1EmptyDirVolumeSource(
-                                medium="Memory", size_limit="2Gi"
-                            ),
-                        ),
-                        # Temporary storage for runtime dirs (XDG, PulseAudio)
-                        client.V1Volume(
-                            name="tmp", empty_dir=client.V1EmptyDirVolumeSource()
-                        ),
-                    ],
+                    volumes=job_volumes,
                 ),
             )
 
@@ -1209,12 +1348,7 @@ class MeetingController:
             return False, None
 
         for job in jobs.items:
-            conditions = job.status.conditions or []
-            is_terminal = any(
-                c.type in ("Complete", "Failed") and c.status == "True"
-                for c in conditions
-            )
-            if not is_terminal:
+            if not self._is_job_terminal(job):
                 logger.info(
                     "BOT_ALREADY_ASSIGNED: org_id=%s, org_hash=%s, url_hash=%s, job=%s",
                     org_id,
@@ -1684,6 +1818,128 @@ class MeetingController:
         )
         return results
 
+    @staticmethod
+    def _is_job_terminal(job: Any) -> bool:
+        """Return True when a Kubernetes Job is complete or failed."""
+        conditions = getattr(getattr(job, "status", None), "conditions", None) or []
+        return any(
+            getattr(condition, "type", "") in ("Complete", "Failed")
+            and getattr(condition, "status", "") == "True"
+            for condition in conditions
+        )
+
+    @staticmethod
+    def _session_age_minutes(session_data: Dict[str, Any]) -> Optional[float]:
+        """Calculate session age in minutes from claimed/updated/created timestamps."""
+        now_timestamp = datetime.now(timezone.utc).timestamp()
+        for field in ("claimed_at", "updated_at", "created_at"):
+            candidate = session_data.get(field)
+            if candidate is None or not hasattr(candidate, "timestamp"):
+                continue
+            try:
+                return max(0.0, (now_timestamp - candidate.timestamp()) / 60)
+            except Exception:
+                continue
+        return None
+
+    def _remediate_orphaned_session(
+        self,
+        session_ref: firestore.DocumentReference,
+        *,
+        session_id: str,
+        org_id: str,
+        previous_status: str,
+        age_minutes: Optional[float],
+    ) -> bool:
+        """Apply configured remediation for an orphaned processing session."""
+        now = datetime.now(timezone.utc)
+        action = self.orphaned_session_remediation_action
+        controller_id = (
+            os.getenv("CONTROLLER_ID") or os.getenv("HOSTNAME") or "controller"
+        )
+
+        transaction = self.db.transaction()
+
+        @firestore.transactional
+        def _txn(txn: firestore.Transaction) -> bool:
+            snap = session_ref.get(transaction=txn)
+            if not snap.exists:
+                logger.info(
+                    "SESSION_ORPHANED_REMEDIATION_SKIPPED: session_id=%s, org_id=%s, "
+                    "reason=session_not_found",
+                    session_id[:16],
+                    org_id,
+                )
+                return False
+
+            current_data = snap.to_dict() or {}
+            current_status = current_data.get("status", "unknown")
+            if current_status not in ("claimed", "processing"):
+                logger.info(
+                    "SESSION_ORPHANED_REMEDIATION_SKIPPED: session_id=%s, org_id=%s, "
+                    "reason=status_changed, current_status=%s",
+                    session_id[:16],
+                    org_id,
+                    current_status,
+                )
+                return False
+
+            remediation_count = int(
+                current_data.get("orphaned_session_remediation_count", 0)
+            ) + 1
+            update_payload: Dict[str, Any] = {
+                "updated_at": now,
+                "orphaned_session_detected_at": now,
+                "orphaned_session_remediation_by": controller_id,
+                "orphaned_session_remediation_action": action,
+                "orphaned_session_remediation_reason": "missing_k8s_job",
+                "orphaned_session_remediation_count": remediation_count,
+                "orphaned_session_previous_status": current_status,
+            }
+            if age_minutes is not None:
+                update_payload["orphaned_session_age_minutes"] = round(age_minutes, 1)
+
+            if action == "requeue":
+                update_payload.update(
+                    {
+                        "status": "queued",
+                        "claimed_at": None,
+                        "claim_expires_at": None,
+                        "claimed_by": None,
+                    }
+                )
+            else:
+                update_payload.update({"status": "failed", "processed_at": now})
+
+            txn.update(session_ref, update_payload)
+            return True
+
+        try:
+            remediated = bool(_txn(transaction))
+            if remediated:
+                logger.warning(
+                    "SESSION_ORPHANED_REMEDIATED: session_id=%s, org_id=%s, "
+                    "previous_status=%s, new_status=%s, action=%s, age_minutes=%s",
+                    session_id[:16],
+                    org_id,
+                    previous_status,
+                    "queued" if action == "requeue" else "failed",
+                    action,
+                    f"{age_minutes:.1f}" if age_minutes is not None else "unknown",
+                )
+            return remediated
+        except Exception as e:
+            logger.error(
+                "SESSION_ORPHANED_REMEDIATION_FAILED: session_id=%s, org_id=%s, "
+                "action=%s, error=%s",
+                session_id[:16],
+                org_id,
+                action,
+                e,
+                exc_info=True,
+            )
+            return False
+
     def _validate_claimed_sessions_have_jobs(self) -> None:
         """
         Validate that sessions in 'claimed' or 'processing' status have corresponding K8s jobs.
@@ -1692,92 +1948,154 @@ class MeetingController:
         or the job was deleted but the session wasn't updated.
         """
         try:
-            # Query sessions that should have running jobs
+            if not self.batch_v1:
+                logger.debug(
+                    "SESSION_VALIDATION_SKIPPED: reason=batch_v1_unavailable"
+                )
+                return
+
             q = (
                 self.db.collection_group("meeting_sessions")
                 .where(
                     field_path="status", op_string="in", value=["claimed", "processing"]
                 )
-                .limit(50)
+                .limit(self.orphaned_session_validation_limit)
             )
-            claimed_sessions = list(q.stream())
+            claimed_sessions = sorted(list(q.stream()), key=lambda session: session.id)
 
             if not claimed_sessions:
                 return
 
-            # Get list of running jobs
             try:
                 jobs = self.batch_v1.list_namespaced_job(
                     namespace=self.k8s_namespace,
                     label_selector="app=meeting-bot",
                 )
-                running_job_names = {job.metadata.name for job in jobs.items}
             except Exception as e:
                 logger.warning("Failed to list K8s jobs for validation: %s", e)
                 return
 
+            active_job_names: Set[str] = set()
+            active_hash_pairs: Set[Tuple[str, str]] = set()
+            for job in jobs.items:
+                if self._is_job_terminal(job):
+                    continue
+                job_name = getattr(getattr(job, "metadata", None), "name", "")
+                if job_name:
+                    active_job_names.add(job_name)
+
+                labels = getattr(getattr(job, "metadata", None), "labels", {}) or {}
+                org_hash = labels.get("org_id_hash")
+                url_hash = labels.get("meeting_url_hash")
+                if org_hash and url_hash:
+                    active_hash_pairs.add((org_hash, url_hash))
+
             orphaned_count = 0
+            remediated_count = 0
+            remediation_budget = self.orphaned_session_remediation_max_per_cycle
+
             for session in claimed_sessions:
                 session_data = session.to_dict() or {}
                 session_id = session.id
                 org_id = session_data.get("org_id", "unknown")
                 meeting_url = session_data.get("meeting_url", "")
                 status = session_data.get("status", "unknown")
-                claimed_at = session_data.get("claimed_at")
+                age_minutes = self._session_age_minutes(session_data)
 
-                # Check if there's a job for this session using label-based lookup
                 has_job = False
                 if org_id != "unknown" and meeting_url:
-                    # Use the same deduplication logic as the main bot assignment check
-                    is_assigned, _ = self._is_bot_already_assigned(org_id, meeting_url)
-                    has_job = is_assigned
-                else:
-                    # Fallback: check by session_id for legacy sessions
-                    has_job = any(
-                        session_id[:8] in job_name for job_name in running_job_names
-                    )
+                    org_hash = self._org_id_hash(org_id)
+                    url_hash = self._meeting_url_hash(meeting_url)
+                    has_job = (org_hash, url_hash) in active_hash_pairs
+
+                    # Legacy fallback while old jobs migrate to hashed org labels.
+                    if not has_job and org_hash != "no-org":
+                        has_job = ("no-org", url_hash) in active_hash_pairs
 
                 if not has_job:
-                    orphaned_count += 1
-                    age_minutes = 0
-                    if claimed_at:
-                        try:
-                            if hasattr(claimed_at, "timestamp"):
-                                age_minutes = (
-                                    datetime.now(timezone.utc).timestamp()
-                                    - claimed_at.timestamp()
-                                ) / 60
-                        except Exception:
-                            pass
+                    # Legacy fallback: older jobs can only be correlated by name.
+                    has_job = any(
+                        session_id[:8] in job_name for job_name in active_job_names
+                    )
 
-                    # LLM-FRIENDLY: Orphaned session detected
-                    logger.warning(
-                        "SESSION_ORPHANED: session_id=%s, org_id=%s, status=%s, "
-                        "age_minutes=%.1f, has_k8s_job=false",
+                if has_job:
+                    continue
+
+                orphaned_count += 1
+
+                logger.warning(
+                    "SESSION_ORPHANED: session_id=%s, org_id=%s, status=%s, "
+                    "age_minutes=%s, has_k8s_job=false",
+                    session_id[:16],
+                    org_id,
+                    status,
+                    f"{age_minutes:.1f}" if age_minutes is not None else "unknown",
+                )
+                logger.warning(
+                    "LLM_CONTEXT: Session %s is in '%s' status but has no "
+                    "corresponding K8s job. This session may be stuck. "
+                    "Possible causes: job creation failed, job was deleted, "
+                    "or job completed but didn't update session status.",
+                    session_id[:16],
+                    status,
+                )
+
+                if not self.orphaned_session_remediation_enabled:
+                    continue
+
+                if remediation_budget <= 0:
+                    logger.info(
+                        "SESSION_ORPHANED_REMEDIATION_SKIPPED: session_id=%s, "
+                        "org_id=%s, reason=cycle_budget_exhausted",
                         session_id[:16],
                         org_id,
-                        status,
-                        age_minutes,
                     )
-                    logger.warning(
-                        "LLM_CONTEXT: Session %s is in '%s' status but has no "
-                        "corresponding K8s job. This session may be stuck. "
-                        "Possible causes: job creation failed, job was deleted, "
-                        "or job completed but didn't update session status. "
-                        "Consider resetting to 'queued' or 'failed'.",
+                    continue
+
+                if age_minutes is None:
+                    logger.info(
+                        "SESSION_ORPHANED_REMEDIATION_SKIPPED: session_id=%s, "
+                        "org_id=%s, reason=age_unknown",
                         session_id[:16],
-                        status,
+                        org_id,
                     )
+                    continue
+
+                if age_minutes < self.orphaned_session_remediation_min_age_minutes:
+                    logger.info(
+                        "SESSION_ORPHANED_REMEDIATION_SKIPPED: session_id=%s, "
+                        "org_id=%s, reason=below_age_threshold, age_minutes=%.1f, "
+                        "required_age_minutes=%d",
+                        session_id[:16],
+                        org_id,
+                        age_minutes,
+                        self.orphaned_session_remediation_min_age_minutes,
+                    )
+                    continue
+
+                if self._remediate_orphaned_session(
+                    session.reference,
+                    session_id=session_id,
+                    org_id=org_id,
+                    previous_status=status,
+                    age_minutes=age_minutes,
+                ):
+                    remediated_count += 1
+                    remediation_budget -= 1
 
             if orphaned_count > 0:
                 logger.warning(
-                    "SESSION_VALIDATION_SUMMARY: total_claimed=%d, orphaned=%d",
+                    "SESSION_VALIDATION_SUMMARY: total_claimed=%d, orphaned=%d, "
+                    "remediated=%d, remediation_enabled=%s, remediation_action=%s",
                     len(claimed_sessions),
                     orphaned_count,
+                    remediated_count,
+                    self.orphaned_session_remediation_enabled,
+                    self.orphaned_session_remediation_action,
                 )
 
         except Exception as e:
-            logger.debug("Session validation check failed: %s", e)
+            logger.error("Session validation check failed: %s", e, exc_info=True)
 
     # --- Attendee-based fanout helpers ---
 

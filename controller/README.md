@@ -64,9 +64,17 @@ Orchestrates the entire workflow and coordinates between components.
 | `FIRESTORE_DATABASE` | No | Firestore database id | `(default)` |
 | `KUBERNETES_NAMESPACE` | No | Kubernetes namespace to spawn jobs in | `default` |
 | `JOB_SERVICE_ACCOUNT` | No | Service account for the spawned jobs | `meeting-bot-job` |
+| `JOB_GCP_ADC_SECRET_NAME` | No | Secret name to mount into spawned job pods for ADC external-account JSON | unset |
+| `JOB_GOOGLE_APPLICATION_CREDENTIALS` | No | Path set in spawned job pods for ADC credentials file | `/var/run/secrets/google/adc.json` |
+| `JOB_USE_AZURE_WORKLOAD_IDENTITY` | No | Adds `azure.workload.identity/use=true` label to spawned job pods | `false` |
 | `POLL_INTERVAL` | No | Seconds to wait between Firestore polls when no work | `10` |
 | `MAX_CLAIM_PER_POLL` | No | Max queued items to claim per poll loop | `10` |
 | `CLAIM_TTL_SECONDS` | No | Claim expiry; allows reprocessing if controller dies mid-claim | `600` |
+| `ORPHANED_SESSION_VALIDATION_LIMIT` | No | Max claimed/processing meeting sessions checked per poll for missing K8s jobs | `50` |
+| `ORPHANED_SESSION_REMEDIATION_ENABLED` | No | Whether to auto-remediate orphaned sessions detected with no active K8s job | `true` |
+| `ORPHANED_SESSION_REMEDIATION_ACTION` | No | Remediation action for orphaned sessions: `requeue` or `failed` | `requeue` |
+| `ORPHANED_SESSION_REMEDIATION_MIN_AGE_MINUTES` | No | Minimum orphaned age before remediation is applied | `ceil(CLAIM_TTL_SECONDS/60)` |
+| `ORPHANED_SESSION_REMEDIATION_MAX_PER_CYCLE` | No | Max orphaned sessions remediated in a single poll cycle | `MAX_CLAIM_PER_POLL` |
 | `MEETINGS_COLLECTION_PATH` | No | Where to discover meetings | `meetings` |
 | `MEETINGS_QUERY_MODE` | No | `collection` or `collection_group` | `collection` |
 | `MEETING_STATUS_FIELD` | No | Meeting status field name | `status` |
@@ -83,6 +91,18 @@ Orchestrates the entire workflow and coordinates between components.
 | `INACTIVITY_DETECTION_START_DELAY_MINUTES` | No | Delay before inactivity detection starts | `5` |
 | `GCP_DEFAULT_REGION` | No | GCP Region for meeting-bot config | `us-central1` |
 | `SCRATCH_STORAGE_SIZE` | No | Size of scratch PVC for temp files | `50Gi` |
+| `MEETING_BOT_CPU_REQUEST` | No | CPU request for meeting-bot container | `3000m` |
+| `MEETING_BOT_MEMORY_REQUEST` | No | Memory request for meeting-bot container | `2Gi` |
+| `MEETING_BOT_EPHEMERAL_STORAGE_REQUEST` | No | Ephemeral storage request for meeting-bot container | `8Gi` |
+| `MEETING_BOT_CPU_LIMIT` | No | CPU limit for meeting-bot container | `4000m` |
+| `MEETING_BOT_MEMORY_LIMIT` | No | Memory limit for meeting-bot container | `3Gi` |
+| `MEETING_BOT_EPHEMERAL_STORAGE_LIMIT` | No | Ephemeral storage limit for meeting-bot container | `8Gi` |
+| `MANAGER_CPU_REQUEST` | No | CPU request for manager container | `2500m` |
+| `MANAGER_MEMORY_REQUEST` | No | Memory request for manager container | `4Gi` |
+| `MANAGER_EPHEMERAL_STORAGE_REQUEST` | No | Ephemeral storage request for manager container | `2Gi` |
+| `MANAGER_CPU_LIMIT` | No | CPU limit for manager container | `3750m` |
+| `MANAGER_MEMORY_LIMIT` | No | Memory limit for manager container | `8Gi` |
+| `MANAGER_EPHEMERAL_STORAGE_LIMIT` | No | Ephemeral storage limit for manager container | `2Gi` |
 | `CONTROLLER_ID` | No | ID for this controller instance (for claiming) | `$HOSTNAME` or `controller` |
 
 ## Firestore data model

@@ -45,6 +45,25 @@ const constructRedisUri = () => {
   }
 };
 
+const parsePositiveIntegerEnv = (
+  envName: string,
+  fallback: number,
+  minValue = 1
+): number => {
+  const raw = process.env[envName];
+  if (!raw || raw.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < minValue) {
+    console.warn(`Invalid ${envName}=${raw}; using default ${fallback}`);
+    return fallback;
+  }
+
+  return Math.floor(parsed);
+};
+
 export default {
   port: process.env.PORT || 3000,
   db: {
@@ -68,6 +87,19 @@ export default {
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
   redisUri: constructRedisUri(),
+  recordingVideoBitrateBps: parsePositiveIntegerEnv(
+    'RECORDING_VIDEO_BITRATE_BPS',
+    4000000
+  ),
+  recordingAudioBitrateBps: parsePositiveIntegerEnv(
+    'RECORDING_AUDIO_BITRATE_BPS',
+    192000
+  ),
+  recordingChunkDurationMs: parsePositiveIntegerEnv(
+    'RECORDING_CHUNK_DURATION_MS',
+    10000,
+    1000
+  ),
   uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {

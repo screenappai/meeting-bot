@@ -230,6 +230,27 @@ The repo contains a placeholder directory at:
 Populate it during CI (for example by downloading an internal artifact), then
 build/push your manager image.
 
+### Optional whisper.cpp GPU image path
+
+`Dockerfile.manager` keeps CPU defaults for compatibility, and supports an
+optional CUDA build:
+
+```bash
+docker build -f Dockerfile.manager \
+  --build-arg WHISPER_CPP_ENABLE_CUDA=1 \
+  -t meeting-manager:gpu .
+```
+
+At runtime, enable GPU usage for whisper.cpp with:
+
+```bash
+WHISPER_CPP_USE_GPU=true
+WHISPER_CPP_GPU_LAYERS=35
+```
+
+If GPU execution fails or isn't available, manager automatically falls back to
+the CPU whisper path and logs the reason.
+
 > Note: do not commit model weights to git unless licensing and your repo
 > policies allow it.
 

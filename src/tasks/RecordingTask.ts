@@ -31,8 +31,34 @@ export class RecordingTask extends Task<null, void> {
 
   protected async execute(): Promise<void> {
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
-        { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
+      async ({
+        teamId,
+        duration,
+        inactivityLimit,
+        userId,
+        slightlySecretId,
+        activateInactivityDetectionAfter,
+        activateInactivityDetectionAfterMinutes,
+        primaryMimeType,
+        secondaryMimeType,
+        recordingVideoBitrateBps,
+        recordingAudioBitrateBps,
+        recordingChunkDurationMs
+      }:
+        {
+          teamId: string,
+          duration: number,
+          inactivityLimit: number,
+          userId: string,
+          slightlySecretId: string,
+          activateInactivityDetectionAfter: string,
+          activateInactivityDetectionAfterMinutes: number,
+          primaryMimeType: string,
+          secondaryMimeType: string,
+          recordingVideoBitrateBps: number,
+          recordingAudioBitrateBps: number,
+          recordingChunkDurationMs: number
+        }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivityDetectionTimeout: NodeJS.Timeout;
 
@@ -88,16 +114,16 @@ export class RecordingTask extends Task<null, void> {
             console.log(`Media Recorder will use ${primaryMimeType} codecs with ultra quality...`);
             options = {
               mimeType: primaryMimeType,
-              videoBitsPerSecond: 15000000,  // 15 Mbps for ultra high quality video
-              audioBitsPerSecond: 768000     // 768 kbps for ultra high quality audio
+              videoBitsPerSecond: recordingVideoBitrateBps,
+              audioBitsPerSecond: recordingAudioBitrateBps
             };
           }
           else {
             console.warn(`Media Recorder did not find primary mime type codecs ${primaryMimeType}, Using fallback codecs ${secondaryMimeType}`);
             options = {
               mimeType: secondaryMimeType,
-              videoBitsPerSecond: 15000000,  // 15 Mbps for ultra high quality video
-              audioBitsPerSecond: 768000     // 768 kbps for ultra high quality audio
+              videoBitsPerSecond: recordingVideoBitrateBps,
+              audioBitsPerSecond: recordingAudioBitrateBps
             };
           }
 
@@ -119,8 +145,8 @@ export class RecordingTask extends Task<null, void> {
             }
           };
 
-          // Start recording with 2-second intervals
-          const chunkDuration = 2000;
+          // Start recording with configurable chunk intervals
+          const chunkDuration = recordingChunkDurationMs;
           mediaRecorder.start(chunkDuration);
 
           const stopTheRecording = async () => {
@@ -288,7 +314,10 @@ export class RecordingTask extends Task<null, void> {
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
         activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
         primaryMimeType: webmMimeType,
-        secondaryMimeType: vp9MimeType
+        secondaryMimeType: vp9MimeType,
+        recordingVideoBitrateBps: config.recordingVideoBitrateBps,
+        recordingAudioBitrateBps: config.recordingAudioBitrateBps,
+        recordingChunkDurationMs: config.recordingChunkDurationMs
       }
     );
   }
