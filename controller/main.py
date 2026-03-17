@@ -57,7 +57,11 @@ else:
     _handler.setFormatter(
         JsonFormatter(
             fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
-            rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
+            rename_fields={
+                "asctime": "timestamp",
+                "levelname": "level",
+                "name": "logger",
+            },
             static_fields={"component": "controller"},
         )
     )
@@ -68,6 +72,7 @@ logger = logging.getLogger(__name__)
 
 # Initialise Sentry early (before any other work)
 from sentry_integration import initialise_sentry, capture_error_safe, flush_sentry
+
 initialise_sentry(component="controller")
 
 # Reduce noise from some verbose libraries (unless DEBUG is explicitly set)
@@ -245,7 +250,9 @@ class MeetingController:
         self.meeting_bot_resource_limits: Dict[str, str] = {
             "cpu": os.getenv("MEETING_BOT_CPU_LIMIT", "4000m"),
             "memory": os.getenv("MEETING_BOT_MEMORY_LIMIT", "3Gi"),
-            "ephemeral-storage": os.getenv("MEETING_BOT_EPHEMERAL_STORAGE_LIMIT", "8Gi"),
+            "ephemeral-storage": os.getenv(
+                "MEETING_BOT_EPHEMERAL_STORAGE_LIMIT", "8Gi"
+            ),
         }
         self.manager_resource_requests: Dict[str, str] = {
             "cpu": os.getenv("MANAGER_CPU_REQUEST", "2500m"),
@@ -429,9 +436,7 @@ class MeetingController:
             )
 
         if self.orphaned_session_remediation_max_per_cycle < 0:
-            raise ValueError(
-                "ORPHANED_SESSION_REMEDIATION_MAX_PER_CYCLE must be >= 0"
-            )
+            raise ValueError("ORPHANED_SESSION_REMEDIATION_MAX_PER_CYCLE must be >= 0")
 
         allowed_orphan_actions = {"requeue", "failed"}
         if self.orphaned_session_remediation_action not in allowed_orphan_actions:
@@ -735,7 +740,9 @@ class MeetingController:
             ]
             manager_env = env_vars + [
                 # Manager needs to communicate with meeting-bot on localhost
-                client.V1EnvVar(name="MEETING_BOT_API_URL", value="http://localhost:3000"),
+                client.V1EnvVar(
+                    name="MEETING_BOT_API_URL", value="http://localhost:3000"
+                ),
                 # Prefer using the RWX scratch PVC for temp files.
                 client.V1EnvVar(name="TMPDIR", value="/scratch/tmp"),
                 client.V1EnvVar(name="TMP", value="/scratch/tmp"),
@@ -745,8 +752,58 @@ class MeetingController:
                 client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
             ]
 
+            manager_runtime_env_vars = [
+                "TRANSCRIPTION_MODE",
+                "GENERATE_MP4_ARTIFACT",
+                "AZURE_SPEECH_REGION",
+                "AZURE_SPEECH_ENDPOINT",
+                "AZURE_SPEECH_LOCALE",
+                "AZURE_SPEECH_ENABLE_DIARIZATION",
+                "AZURE_SPEECH_DIARIZATION_MAX_SPEAKERS",
+                "AZURE_SPEECH_FALLBACK_TO_OFFLINE",
+                "AZURE_SPEECH_KEY",
+                "WHISPER_CPP_USE_GPU",
+                "WHISPER_CPP_GPU_LAYERS",
+            ]
+            manager_env_names = {env_var.name for env_var in manager_env}
+            forwarded_manager_runtime_env_vars: List[str] = []
+            for env_name in manager_runtime_env_vars:
+                env_value = os.getenv(env_name)
+                if env_value is not None and env_name not in manager_env_names:
+                    manager_env.append(client.V1EnvVar(name=env_name, value=env_value))
+                    manager_env_names.add(env_name)
+                    forwarded_manager_runtime_env_vars.append(env_name)
+            if forwarded_manager_runtime_env_vars:
+                logger.debug(
+                    "FORWARDED_MANAGER_RUNTIME_ENV_VARS: %s",
+                    ", ".join(forwarded_manager_runtime_env_vars),
+                )
+
+            meeting_bot_runtime_env_vars = [
+                "RECORDING_VIDEO_BITRATE_BPS",
+                "RECORDING_AUDIO_BITRATE_BPS",
+                "RECORDING_CHUNK_DURATION_MS",
+            ]
+            meeting_bot_env_names = {env_var.name for env_var in meeting_bot_env}
+            forwarded_meeting_bot_runtime_env_vars: List[str] = []
+            for env_name in meeting_bot_runtime_env_vars:
+                env_value = os.getenv(env_name)
+                if env_value is not None and env_name not in meeting_bot_env_names:
+                    meeting_bot_env.append(
+                        client.V1EnvVar(name=env_name, value=env_value)
+                    )
+                    meeting_bot_env_names.add(env_name)
+                    forwarded_meeting_bot_runtime_env_vars.append(env_name)
+            if forwarded_meeting_bot_runtime_env_vars:
+                logger.debug(
+                    "FORWARDED_MEETING_BOT_RUNTIME_ENV_VARS: %s",
+                    ", ".join(forwarded_meeting_bot_runtime_env_vars),
+                )
+
             meeting_bot_volume_mounts = [
-                client.V1VolumeMount(name="scratch", mount_path="/usr/src/app/dist/_tempvideo"),
+                client.V1VolumeMount(
+                    name="scratch", mount_path="/usr/src/app/dist/_tempvideo"
+                ),
                 client.V1VolumeMount(name="scratch", mount_path="/scratch"),
                 # Mount shared memory for Chrome (prevents crashes)
                 client.V1VolumeMount(name="dshm", mount_path="/dev/shm"),
@@ -758,12 +815,16 @@ class MeetingController:
                 client.V1VolumeMount(name="scratch", mount_path="/scratch"),
             ]
             job_volumes = [
-                client.V1Volume(name="recordings", empty_dir=client.V1EmptyDirVolumeSource()),
+                client.V1Volume(
+                    name="recordings", empty_dir=client.V1EmptyDirVolumeSource()
+                ),
                 # Scratch will be mounted via a per-job RWO PVC created below.
                 # Shared memory for Chrome
                 client.V1Volume(
                     name="dshm",
-                    empty_dir=client.V1EmptyDirVolumeSource(medium="Memory", size_limit="2Gi"),
+                    empty_dir=client.V1EmptyDirVolumeSource(
+                        medium="Memory", size_limit="2Gi"
+                    ),
                 ),
                 # Temporary storage for runtime dirs (XDG, PulseAudio)
                 client.V1Volume(name="tmp", empty_dir=client.V1EmptyDirVolumeSource()),
@@ -1884,9 +1945,9 @@ class MeetingController:
                 )
                 return False
 
-            remediation_count = int(
-                current_data.get("orphaned_session_remediation_count", 0)
-            ) + 1
+            remediation_count = (
+                int(current_data.get("orphaned_session_remediation_count", 0)) + 1
+            )
             update_payload: Dict[str, Any] = {
                 "updated_at": now,
                 "orphaned_session_detected_at": now,
@@ -1949,9 +2010,7 @@ class MeetingController:
         """
         try:
             if not self.batch_v1:
-                logger.debug(
-                    "SESSION_VALIDATION_SKIPPED: reason=batch_v1_unavailable"
-                )
+                logger.debug("SESSION_VALIDATION_SKIPPED: reason=batch_v1_unavailable")
                 return
 
             q = (
@@ -4606,7 +4665,9 @@ def main():
         sys.exit(0)
     except Exception as e:
         logger.error(f"💥 Fatal error: {e}", exc_info=True)
-        capture_error_safe(e, component="controller", feature="main", action="fatal_error")
+        capture_error_safe(
+            e, component="controller", feature="main", action="fatal_error"
+        )
         flush_sentry()
         sys.exit(1)
 
