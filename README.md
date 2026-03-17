@@ -328,9 +328,13 @@ S3_USE_MINIO_COMPATIBILITY=true
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `180` |
 | `MEETING_INACTIVITY_MINUTES` | Continuous inactivity duration after which the bot will end meeting recording | `1` |
 | `INACTIVITY_DETECTION_START_DELAY_MINUTES` | Initial grace period at the start of recording before inactivity detection begins | `1` |
+| `RECORDING_VIDEO_BITRATE_BPS` | MediaRecorder video bitrate in bits/sec | `4000000` |
+| `RECORDING_AUDIO_BITRATE_BPS` | MediaRecorder audio bitrate in bits/sec | `192000` |
+| `RECORDING_CHUNK_DURATION_MS` | MediaRecorder chunk interval in milliseconds | `10000` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
+| `GENERATE_MP4_ARTIFACT` | Generate optional MP4 artifact in manager pipeline | `true` |
 | `REDIS_HOST` | Redis server hostname | `redis` |
 | `REDIS_PORT` | Redis server port | `6379` |
 | `REDIS_USERNAME` | Redis username (optional) | - |
@@ -343,6 +347,23 @@ S3_USE_MINIO_COMPATIBILITY=true
 | `S3_BUCKET_NAME` | Target bucket name for uploads | - |
 | `S3_REGION` | AWS region (for AWS S3) | - |
 | `S3_USE_MINIO_COMPATIBILITY` | Enable MinIO compatibility mode | `false` |
+
+### Manager Transcription Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TRANSCRIPTION_MODE` | Transcription backend (`offline`, `azure`, `gemini`, `none`) | `offline` |
+| `OFFLINE_TRANSCRIPTION_LANGUAGE` | whisper.cpp language code | `en` |
+| `OFFLINE_MAX_SPEAKERS` | Max offline diarization speaker clusters | `6` |
+| `WHISPER_CPP_USE_GPU` | Enable GPU path for whisper.cpp when available | `false` |
+| `WHISPER_CPP_GPU_LAYERS` | whisper.cpp GPU layer count when GPU is enabled | `35` |
+| `AZURE_SPEECH_REGION` | Azure Speech region (AU-only: `australiaeast`/`australiasoutheast`) | - |
+| `AZURE_SPEECH_ENDPOINT` | Azure Speech regional endpoint (`https://<region>.api.cognitive.microsoft.com`) | - |
+| `AZURE_SPEECH_KEY` | Azure Speech subscription key | - |
+| `AZURE_SPEECH_LOCALE` | Locale for Azure fast transcription | `en-AU` |
+| `AZURE_SPEECH_ENABLE_DIARIZATION` | Enable Azure diarization output | `true` |
+| `AZURE_SPEECH_DIARIZATION_MAX_SPEAKERS` | Max speakers for Azure diarization | `6` |
+| `AZURE_SPEECH_FALLBACK_TO_OFFLINE` | Fallback to offline whisper when Azure fails | `true` |
 
 ### Docker Configuration
 

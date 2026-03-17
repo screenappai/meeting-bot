@@ -46,11 +46,23 @@ services:
       - GCS_PATH=${GCS_PATH}
       - GCS_BUCKET=${GCS_BUCKET}
       - MEETING_BOT_API_URL=http://meeting-bot:3000
-      # Offline transcription/diarization (optional)
-      - TRANSCRIPTION_MODE=${TRANSCRIPTION_MODE:-online}
-      - WHISPER_CLI_PATH=${WHISPER_CLI_PATH:-/app/tools/whisper.cpp/build/bin/whisper-cli}
-      - WHISPER_MODEL_PATH=${WHISPER_MODEL_PATH:-/app/tools/whisper.cpp/models/ggml-base.en.bin}
-      - SPEECHBRAIN_SPKREC_DIR=${SPEECHBRAIN_SPKREC_DIR:-/app/tools/speechbrain/spkrec-ecapa-voxceleb}
+      # Transcription engine: offline | azure | gemini | none
+      - TRANSCRIPTION_MODE=${TRANSCRIPTION_MODE:-offline}
+      - OFFLINE_TRANSCRIPTION_LANGUAGE=${OFFLINE_TRANSCRIPTION_LANGUAGE:-en}
+      - OFFLINE_MAX_SPEAKERS=${OFFLINE_MAX_SPEAKERS:-6}
+      - WHISPER_CPP_BIN=${WHISPER_CPP_BIN:-/app/tools/whisper.cpp/build/bin/whisper-cli}
+      - WHISPER_CPP_MODEL=${WHISPER_CPP_MODEL:-/app/tools/whisper.cpp/models/ggml-base.en.bin}
+      - SPEECHBRAIN_MODEL_DIR=${SPEECHBRAIN_MODEL_DIR:-/app/tools/speechbrain/spkrec-ecapa-voxceleb}
+      - WHISPER_CPP_USE_GPU=${WHISPER_CPP_USE_GPU:-false}
+      - WHISPER_CPP_GPU_LAYERS=${WHISPER_CPP_GPU_LAYERS:-35}
+      # Azure Speech fast transcription (AU-only endpoint validation)
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-}
+      - AZURE_SPEECH_ENDPOINT=${AZURE_SPEECH_ENDPOINT:-}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY:-}
+      - AZURE_SPEECH_LOCALE=${AZURE_SPEECH_LOCALE:-en-AU}
+      - AZURE_SPEECH_ENABLE_DIARIZATION=${AZURE_SPEECH_ENABLE_DIARIZATION:-true}
+      - AZURE_SPEECH_DIARIZATION_MAX_SPEAKERS=${AZURE_SPEECH_DIARIZATION_MAX_SPEAKERS:-6}
+      - AZURE_SPEECH_FALLBACK_TO_OFFLINE=${AZURE_SPEECH_FALLBACK_TO_OFFLINE:-true}
       # GCS auth (ADC) for offline mode when downloading gs:// URIs
       - GOOGLE_APPLICATION_CREDENTIALS=/creds/adc.json
       - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}

@@ -301,6 +301,100 @@ def _which(binary: str) -> Optional[str]:
     return shutil.which(binary)
 
 
+def _parse_bool_env(var_name: str, default: bool) -> bool:
+    raw = os.getenv(var_name)
+    if raw is None or raw.strip() == "":
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    logger.warning(
+        "Invalid %s=%r; expected boolean value. Falling back to default=%s",
+        var_name,
+        raw,
+        default,
+    )
+    return default
+
+
+def _is_gpu_runtime_available() -> bool:
+    """Best-effort check for CUDA runtime availability."""
+
+    cuda_visible_devices = os.getenv("CUDA_VISIBLE_DEVICES")
+    if cuda_visible_devices is not None and cuda_visible_devices.strip() in {
+        "",
+        "-1",
+        "none",
+    }:
+        return False
+
+    if Path("/dev/nvidiactl").exists():
+        return True
+
+    nvidia_smi = _which("nvidia-smi")
+    if not nvidia_smi:
+        return False
+
+    try:
+        subprocess.run(
+            [nvidia_smi, "-L"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def resolve_whisper_gpu_settings(
+    *,
+    use_gpu: Optional[bool] = None,
+    gpu_layers: Optional[int] = None,
+) -> Tuple[bool, Optional[int]]:
+    """Resolve GPU settings for whisper.cpp with safe CPU fallback defaults."""
+
+    gpu_requested = (
+        use_gpu
+        if use_gpu is not None
+        else _parse_bool_env("WHISPER_CPP_USE_GPU", default=False)
+    )
+    if not gpu_requested:
+        return False, None
+
+    if not _is_gpu_runtime_available():
+        logger.warning(
+            "WHISPER_CPP_USE_GPU=true but no GPU runtime detected; using CPU mode."
+        )
+        return False, None
+
+    resolved_layers = gpu_layers
+    if resolved_layers is None:
+        raw_layers = os.getenv("WHISPER_CPP_GPU_LAYERS")
+        if raw_layers and raw_layers.strip():
+            try:
+                resolved_layers = int(raw_layers)
+            except ValueError:
+                logger.warning(
+                    "Invalid WHISPER_CPP_GPU_LAYERS=%r; defaulting to 35",
+                    raw_layers,
+                )
+                resolved_layers = 35
+        else:
+            resolved_layers = 35
+
+    if resolved_layers is not None and resolved_layers <= 0:
+        logger.warning(
+            "Non-positive GPU layer count (%s); using whisper.cpp default GPU layers.",
+            resolved_layers,
+        )
+        resolved_layers = None
+
+    return True, resolved_layers
+
+
 def ffmpeg_to_wav16k_mono(src: Path, dst: Path) -> None:
     if not _which("ffmpeg"):
         raise RuntimeError("ffmpeg is required but not found on PATH")
@@ -376,12 +470,14 @@ def run_whisper_cpp(
     wav_path: Path,
     out_dir: Path,
     language: str,
+    use_gpu: bool = False,
+    gpu_layers: Optional[int] = None,
 ) -> Tuple[Path, List[Segment]]:
     out_dir.mkdir(parents=True, exist_ok=True)
     base = wav_path.stem
     out_prefix = out_dir / base
 
-    cmd = [
+    base_cmd = [
         str(whisper_bin),
         "-m",
         str(model_path),
@@ -389,13 +485,30 @@ def run_whisper_cpp(
         str(wav_path),
         "-l",
         language,
-        "-ng",  # Disable GPU - use CPU only (avoids SIGILL on containers without GPU)
-        "-fa",  # Disable flash attention (requires GPU)
         "-osrt",
         "-of",
         str(out_prefix),
     ]
-    _run(cmd)
+
+    gpu_cmd = list(base_cmd)
+    if use_gpu:
+        if gpu_layers is not None:
+            gpu_cmd.extend(["-ngl", str(gpu_layers)])
+    else:
+        gpu_cmd.append("-ng")
+
+    try:
+        _run(gpu_cmd)
+    except Exception as gpu_err:
+        if not use_gpu:
+            raise
+        logger.warning(
+            "whisper.cpp GPU run failed; retrying on CPU. Error: %s",
+            gpu_err,
+        )
+        cpu_cmd = list(base_cmd)
+        cpu_cmd.append("-ng")
+        _run(cpu_cmd)
 
     srt_path = out_dir / f"{base}.srt"
     if not srt_path.exists():
@@ -698,6 +811,8 @@ def transcribe_and_diarize_local_media(
     whisper_bin: Optional[str] = None,
     whisper_model: Optional[str] = None,
     speechbrain_model_dir: Optional[str] = None,
+    use_gpu: Optional[bool] = None,
+    whisper_gpu_layers: Optional[int] = None,
 ) -> Tuple[Path, Path]:
     """Run whisper.cpp + (optional) diarization on a local file."""
 
@@ -709,6 +824,16 @@ def transcribe_and_diarize_local_media(
     whisper_bin_path, whisper_model_path = resolve_whisper_paths(
         whisper_bin=whisper_bin, model_path=whisper_model
     )
+    whisper_use_gpu, whisper_resolved_gpu_layers = resolve_whisper_gpu_settings(
+        use_gpu=use_gpu,
+        gpu_layers=whisper_gpu_layers,
+    )
+    logger.info(
+        "whisper.cpp execution mode: %s",
+        "gpu" if whisper_use_gpu else "cpu",
+    )
+    if whisper_use_gpu and whisper_resolved_gpu_layers is not None:
+        logger.info("whisper.cpp GPU layers: %d", whisper_resolved_gpu_layers)
 
     sb_model_dir_str: str = (
         speechbrain_model_dir
@@ -729,6 +854,8 @@ def transcribe_and_diarize_local_media(
             wav_path=wav_path,
             out_dir=whisper_out_dir,
             language=language,
+            use_gpu=whisper_use_gpu,
+            gpu_layers=whisper_resolved_gpu_layers,
         )
 
         diarization_info: Dict[str, Any] = {
@@ -773,6 +900,15 @@ def transcribe_and_diarize_local_media(
             "engine": "whisper.cpp",
             "model": str(whisper_model_path),
             "language": language,
+            "runtime": {
+                "gpu_requested": bool(
+                    use_gpu
+                    if use_gpu is not None
+                    else _parse_bool_env("WHISPER_CPP_USE_GPU", default=False)
+                ),
+                "gpu_used": whisper_use_gpu,
+                "gpu_layers": whisper_resolved_gpu_layers,
+            },
             "diarization": diarization_info,
             "segments": [
                 {
