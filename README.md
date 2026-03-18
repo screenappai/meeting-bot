@@ -364,6 +364,13 @@ S3_USE_MINIO_COMPATIBILITY=true
 | `AZURE_SPEECH_ENABLE_DIARIZATION` | Enable Azure diarization output | `true` |
 | `AZURE_SPEECH_DIARIZATION_MAX_SPEAKERS` | Max speakers for Azure diarization | `6` |
 | `AZURE_SPEECH_FALLBACK_TO_OFFLINE` | Fallback to offline whisper when Azure fails | `true` |
+| `SPEAKER_IDENTITY_MIN_CONFIDENCE` | Minimum confidence required to assign attendee names to diarized speakers | `0.85` |
+| `SPEAKER_VISUAL_AUGMENTATION_ENABLED` | Enable screenshot/frame-based speaker evidence (ephemeral processing) | `false` |
+| `SPEAKER_VISUAL_MAX_FRAMES` | Max extracted frames per meeting for visual speaker evidence | `12` |
+| `SPEAKER_VISUAL_MIN_SEGMENT_SECONDS` | Minimum segment length to sample a frame for OCR evidence | `2.0` |
+| `SPEAKER_VISUAL_OCR_TIMEOUT_SECONDS` | Per-frame OCR timeout for visual augmentation | `20` |
+| `AZURE_VISION_ENDPOINT` | Azure Vision endpoint (AU regional host required) for speaker OCR | - |
+| `AZURE_VISION_KEY` | Azure Vision API key for visual speaker evidence | - |
 
 ### Docker Configuration
 

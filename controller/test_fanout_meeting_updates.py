@@ -233,13 +233,19 @@ def test_fanout_writes_transcription_to_meeting_doc_id():
                 name="recordings/u1/meetingDocA/transcript.txt",
                 exists=True,
                 text="hello world",
-            )
+            ),
+            "recordings/u1/meetingDocA/transcript.json": _FakeBlob(
+                name="recordings/u1/meetingDocA/transcript.json",
+                exists=True,
+                text='{"transcription_metadata":{"speaker_count":2,"speakers":[{"label":"Speaker 1"}]}}',
+            ),
         }
     )
 
     c._list_gcs_prefix = lambda prefix: [
         "recordings/u1/meetingDocA/recording.webm",
         "recordings/u1/meetingDocA/transcript.txt",
+        "recordings/u1/meetingDocA/transcript.json",
     ]
     c._gcs_blob_exists = lambda name: True
     c._copy_gcs_blob = lambda **kwargs: None
@@ -287,3 +293,9 @@ def test_fanout_writes_transcription_to_meeting_doc_id():
 
     for path, payload in meeting_writes:
         assert payload.get("transcription") == "hello world"
+        assert payload.get("transcription_metadata", {}).get("speaker_count") == 2
+
+
+if __name__ == "__main__":
+    test_fanout_writes_transcription_to_meeting_doc_id()
+    print("PASS: test_fanout_writes_transcription_to_meeting_doc_id")

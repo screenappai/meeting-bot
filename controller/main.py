@@ -2887,6 +2887,7 @@ class MeetingController:
             # Try to read transcription text from source location (if it exists)
             logger.debug("Attempting to read transcription from source...")
             transcription_text = None
+            transcription_metadata = None
             transcript_txt_path = f"{source_prefix}/transcript.txt"
             try:
                 transcript_blob = self.gcs_bucket_client.blob(transcript_txt_path)
@@ -2904,6 +2905,30 @@ class MeetingController:
             except Exception as e:
                 logger.warning(
                     "Could not read transcription from %s: %s", transcript_txt_path, e
+                )
+
+            transcript_json_path = f"{source_prefix}/transcript.json"
+            try:
+                transcript_json_blob = self.gcs_bucket_client.blob(transcript_json_path)
+                if transcript_json_blob.exists():
+                    transcript_payload = json.loads(
+                        transcript_json_blob.download_as_text()
+                    )
+                    if isinstance(transcript_payload, dict):
+                        metadata_candidate = transcript_payload.get(
+                            "transcription_metadata"
+                        )
+                        if isinstance(metadata_candidate, dict):
+                            transcription_metadata = metadata_candidate
+                            logger.debug(
+                                "Read transcription metadata from %s",
+                                transcript_json_path,
+                            )
+            except (OSError, ValueError, TypeError) as e:
+                logger.warning(
+                    "Could not read transcription metadata from %s: %s",
+                    transcript_json_path,
+                    e,
                 )
 
             # Get session artifacts to copy to meeting documents
@@ -2933,6 +2958,11 @@ class MeetingController:
                     logger.warning(
                         "Failed to read source meeting %s: %s", first_meeting_path, e
                     )
+
+            if not transcription_metadata:
+                metadata_candidate = source_meeting_data.get("transcription_metadata")
+                if isinstance(metadata_candidate, dict):
+                    transcription_metadata = metadata_candidate
 
             # Get fresh attendees list from the source meeting
             attendee_emails = self._get_fresh_meeting_attendees(
@@ -3003,6 +3033,10 @@ class MeetingController:
                     # Add transcription if available
                     if transcription_text:
                         first_meeting_update["transcription"] = transcription_text
+                    if transcription_metadata:
+                        first_meeting_update["transcription_metadata"] = (
+                            transcription_metadata
+                        )
 
                     # Add artifacts (first subscriber uses original paths)
                     if session_artifacts:
@@ -3156,6 +3190,10 @@ class MeetingController:
                         if transcription_text:
                             meeting_update["transcription"] = transcription_text
                             logger.debug("  Added transcription to meeting update")
+                        if transcription_metadata:
+                            meeting_update["transcription_metadata"] = (
+                                transcription_metadata
+                            )
 
                         # Build artifacts dict with updated paths for this subscriber
                         if session_artifacts:
@@ -3353,6 +3391,7 @@ class MeetingController:
         source_meeting_id = source_meeting_doc.id
         source_artifacts = data.get("artifacts", {})
         source_transcription = data.get("transcription")
+        source_transcription_metadata = data.get("transcription_metadata")
 
         if not source_user_id:
             logger.warning(
@@ -3620,6 +3659,9 @@ class MeetingController:
 
                 if source_transcription:
                     update_data["transcription"] = source_transcription
+
+                if isinstance(source_transcription_metadata, dict):
+                    update_data["transcription_metadata"] = source_transcription_metadata
 
                 if dst_artifacts:
                     update_data["artifacts"] = dst_artifacts

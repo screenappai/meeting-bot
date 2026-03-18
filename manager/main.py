@@ -22,7 +22,7 @@ import sys
 import logging
 import json
 import time
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
@@ -130,6 +130,51 @@ def _env_flag(var_name: str, *, default: bool) -> bool:
         default,
     )
     return default
+
+
+def _env_float(
+    var_name: str,
+    *,
+    default: float,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+) -> float:
+    raw = os.environ.get(var_name)
+    if raw is None or raw.strip() == "":
+        return default
+
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid float env %s=%r; using default=%s",
+            var_name,
+            raw,
+            default,
+        )
+        return default
+
+    if min_value is not None and value < min_value:
+        logger.warning(
+            "Float env %s=%s below minimum %s; using default=%s",
+            var_name,
+            value,
+            min_value,
+            default,
+        )
+        return default
+
+    if max_value is not None and value > max_value:
+        logger.warning(
+            "Float env %s=%s above maximum %s; using default=%s",
+            var_name,
+            value,
+            max_value,
+            default,
+        )
+        return default
+
+    return value
 
 
 # Reduce noise from some verbose libraries
@@ -261,6 +306,13 @@ class MeetingManager:
             "GENERATE_MP4_ARTIFACT",
             default=True,
         )
+        self.speaker_identity_min_confidence = _env_float(
+            "SPEAKER_IDENTITY_MIN_CONFIDENCE",
+            default=0.85,
+            min_value=0.5,
+            max_value=1.0,
+        )
+        self.visual_augmentation_config = None
 
         # Validate required and mode-specific environment variables.
         self._validate_config()
@@ -272,12 +324,26 @@ class MeetingManager:
         self.storage_client = None
         self.firestore_client = None
 
+        from speaker_identity import load_visual_augmentation_config_from_env
+
+        self.visual_augmentation_config = load_visual_augmentation_config_from_env(
+            logger=logger
+        )
+
         logger.info("Transcription backend selected: %s", self.transcription_mode)
         logger.info(
             "Azure->offline fallback enabled: %s",
             self.azure_speech_fallback_to_offline,
         )
         logger.info("MP4 artifact generation enabled: %s", self.generate_mp4_artifact)
+        logger.info(
+            "Speaker identity confidence threshold: %.2f",
+            self.speaker_identity_min_confidence,
+        )
+        logger.info(
+            "Visual speaker augmentation enabled: %s",
+            getattr(self.visual_augmentation_config, "enabled", False),
+        )
 
     def _init_clients(self) -> None:
         """Initialize optional clients that pull in heavier dependencies."""
@@ -431,6 +497,213 @@ class MeetingManager:
             logger.exception("Offline transcription failed (non-fatal): %s", err)
             logger.debug("POST-MEETING: Transcription failed (continuing without it)")
             return None, None, None
+
+    def _extract_attendees_from_meeting_data(
+        self, meeting_data: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        attendees_raw = (meeting_data or {}).get("attendees") or []
+        if not isinstance(attendees_raw, list):
+            return []
+
+        attendees: List[Dict[str, Any]] = []
+        for attendee in attendees_raw:
+            email = ""
+            name = ""
+            if isinstance(attendee, str):
+                if "@" in attendee:
+                    email = attendee.strip().lower()
+            elif isinstance(attendee, dict):
+                email = (
+                    str(
+                        attendee.get("email")
+                        or attendee.get("address")
+                        or attendee.get("mail")
+                        or attendee.get("userPrincipalName")
+                        or ""
+                    )
+                    .strip()
+                    .lower()
+                )
+                name = str(
+                    attendee.get("name")
+                    or attendee.get("displayName")
+                    or attendee.get("fullName")
+                    or ""
+                ).strip()
+
+            if not email and not name:
+                continue
+            attendees.append({"email": email, "name": name})
+
+        return attendees
+
+    def _load_user_profiles(self, user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        if not user_ids or not self.team_id:
+            return {}
+        if self.firestore_client is None:
+            return {}
+
+        profiles: Dict[str, Dict[str, Any]] = {}
+        users_ref = self.firestore_client.client.collection(
+            f"organizations/{self.team_id}/users"
+        )
+
+        for user_id in sorted(set(user_ids)):
+            if not user_id:
+                continue
+            try:
+                user_snap = users_ref.document(str(user_id)).get()
+            except Exception as err:
+                logger.warning("Failed to read user profile %s: %s", user_id, err)
+                continue
+            if not user_snap.exists:
+                continue
+            user_data = user_snap.to_dict() or {}
+            profiles[str(user_id)] = user_data
+
+        return profiles
+
+    def _build_attendee_candidates(
+        self,
+        *,
+        source_meeting_data: Optional[Dict[str, Any]],
+        attendee_meetings: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+        seen_keys: set[str] = set()
+
+        def _add_candidate(
+            *,
+            user_id: str = "",
+            email: str = "",
+            name: str = "",
+        ) -> None:
+            normalized_email = email.strip().lower()
+            normalized_name = name.strip()
+            normalized_user_id = user_id.strip()
+            if not normalized_user_id and not normalized_email and not normalized_name:
+                return
+
+            key = (
+                normalized_user_id
+                or normalized_email
+                or normalized_name.lower().replace(" ", "_")
+            )
+            if key in seen_keys:
+                return
+            seen_keys.add(key)
+            candidates.append(
+                {
+                    "user_id": normalized_user_id or None,
+                    "email": normalized_email or None,
+                    "name": normalized_name or None,
+                }
+            )
+
+        for attendee in self._extract_attendees_from_meeting_data(source_meeting_data):
+            _add_candidate(
+                email=str(attendee.get("email") or ""),
+                name=str(attendee.get("name") or ""),
+            )
+
+        attendee_user_ids = [
+            str(item.get("user_id") or "").strip() for item in attendee_meetings
+        ]
+        user_profiles = self._load_user_profiles(attendee_user_ids)
+
+        for attendee in attendee_meetings:
+            user_id = str(attendee.get("user_id") or "").strip()
+            user_profile = user_profiles.get(user_id, {})
+            name = str(
+                attendee.get("name")
+                or user_profile.get("name")
+                or user_profile.get("displayName")
+                or ""
+            ).strip()
+            email = str(
+                attendee.get("email")
+                or user_profile.get("email")
+                or user_profile.get("mail")
+                or ""
+            ).strip()
+            _add_candidate(user_id=user_id, email=email, name=name)
+
+        return candidates
+
+    def _build_transcription_metadata(
+        self,
+        *,
+        transcript_json_path: Optional[str],
+        recording_path: str,
+        source_meeting_data: Optional[Dict[str, Any]],
+        attendee_meetings: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        if not transcript_json_path or not os.path.exists(transcript_json_path):
+            return None
+
+        from speaker_identity import (
+            build_speaker_metadata,
+            collect_visual_name_evidence,
+            load_transcript_payload,
+        )
+
+        try:
+            transcript_payload = load_transcript_payload(transcript_json_path)
+        except (OSError, ValueError, json.JSONDecodeError) as err:
+            logger.warning(
+                "Unable to load transcript JSON for speaker metadata: %s",
+                err,
+            )
+            return None
+
+        attendee_candidates = self._build_attendee_candidates(
+            source_meeting_data=source_meeting_data,
+            attendee_meetings=attendee_meetings,
+        )
+        if not attendee_candidates:
+            logger.info("No attendee candidates found for speaker-name resolution")
+
+        visual_name_evidence: Dict[str, List[str]] = {}
+        if (
+            self.visual_augmentation_config is not None
+            and self.visual_augmentation_config.enabled
+        ):
+            try:
+                visual_name_evidence = collect_visual_name_evidence(
+                    recording_path=recording_path,
+                    segments=transcript_payload.get("segments") or [],
+                    attendee_candidates=attendee_candidates,
+                    config=self.visual_augmentation_config,
+                    logger=logger,
+                )
+            except Exception as err:
+                logger.warning("Visual speaker evidence failed (non-fatal): %s", err)
+
+        metadata = build_speaker_metadata(
+            transcript_payload=transcript_payload,
+            attendee_candidates=attendee_candidates,
+            visual_name_evidence=visual_name_evidence,
+            min_confidence=self.speaker_identity_min_confidence,
+        )
+
+        # Keep transcript JSON self-contained for downstream fanout/debugging.
+        try:
+            transcript_payload["transcription_metadata"] = metadata
+            with open(transcript_json_path, "w", encoding="utf-8") as f:
+                json.dump(transcript_payload, f, indent=2, ensure_ascii=False)
+        except OSError as err:
+            logger.warning(
+                "Failed to persist transcription metadata into transcript JSON: %s",
+                err,
+            )
+
+        logger.info(
+            "Speaker metadata generated: speakers=%d, unresolved=%d, visual_used=%s",
+            metadata.get("speaker_count", 0),
+            len(metadata.get("unresolved_speakers", [])),
+            bool(metadata.get("visual_evidence_used")),
+        )
+        return metadata
 
     def process_meeting(self) -> bool:
         """
@@ -1288,6 +1561,7 @@ class MeetingManager:
 
             # Discover all attendee meetings (same URL, same time)
             attendee_meetings = []
+            source_meeting_data: Dict[str, Any] = {}
             if self.team_id and self.meeting_url:
                 # Get the meeting start and end times from Firestore
                 meeting_start_time = None
@@ -1298,6 +1572,7 @@ class MeetingManager:
                         meeting_id=self.fs_meeting_id,
                     )
                     if meeting_data:
+                        source_meeting_data = meeting_data
                         start_val = meeting_data.get("start")
                         end_val = meeting_data.get("end")
                         if hasattr(start_val, "date"):
@@ -1353,12 +1628,25 @@ class MeetingManager:
                     {
                         "id": self.fs_meeting_id or self.meeting_id,
                         "user_id": self.user_id,
+                        "email": self.metadata.get("email")
+                        if isinstance(self.metadata, dict)
+                        else "",
+                        "name": self.metadata.get("name")
+                        if isinstance(self.metadata, dict)
+                        else "",
                         "start": None,
                         "title": "",
                         "join_url": self.meeting_url,
                         "status": "",
                     }
                 ]
+
+            transcription_metadata = self._build_transcription_metadata(
+                transcript_json_path=transcript_json_path,
+                recording_path=recording_path,
+                source_meeting_data=source_meeting_data,
+                attendee_meetings=attendee_meetings,
+            )
 
             logger.info("=" * 80)
             logger.info(
@@ -1558,12 +1846,19 @@ class MeetingManager:
                                 attendee_meeting_id,
                             )
 
+                        if transcription_metadata:
+                            attendee_payload["transcription_metadata"] = (
+                                transcription_metadata
+                            )
+
                         logger.debug(
                             "    Firestore payload: bot_status=%s, artifacts=%s, "
-                            "has_transcription=%s, has_recording_url=%s",
+                            "has_transcription=%s, has_transcription_metadata=%s, "
+                            "has_recording_url=%s",
                             attendee_payload.get("bot_status"),
                             list(attendee_payload.get("artifacts", {}).keys()),
                             "transcription" in attendee_payload,
+                            "transcription_metadata" in attendee_payload,
                             "recording_url" in attendee_payload,
                         )
 
@@ -1708,13 +2003,21 @@ class MeetingManager:
 
             # Update meeting document with bot_status and artifacts (for K8s dedup fanout)
             try:
-                self._mark_meeting_complete(ok=True, artifacts=artifacts_manifest)
+                self._mark_meeting_complete(
+                    ok=True,
+                    artifacts=artifacts_manifest,
+                    transcription_metadata=transcription_metadata,
+                )
             except Exception as meet_err:
                 logger.warning("Meeting completion update failed: %s", meet_err)
 
             # Also update session document (for backwards compatibility)
             try:
-                self._mark_session_complete(ok=True, artifacts=artifacts_manifest)
+                self._mark_session_complete(
+                    ok=True,
+                    artifacts=artifacts_manifest,
+                    transcription_metadata=transcription_metadata,
+                )
             except Exception as sess_err:
                 logger.debug("Session completion update failed (ignored): %s", sess_err)
 
@@ -1724,11 +2027,19 @@ class MeetingManager:
             logger.exception(f"Error processing meeting: {e}")
             # Mark both meeting and session as failed
             try:
-                self._mark_meeting_complete(ok=False, artifacts=None)
+                self._mark_meeting_complete(
+                    ok=False,
+                    artifacts=None,
+                    transcription_metadata=None,
+                )
             except Exception:
                 pass
             try:
-                self._mark_session_complete(ok=False, artifacts=None)
+                self._mark_session_complete(
+                    ok=False,
+                    artifacts=None,
+                    transcription_metadata=None,
+                )
             except Exception:
                 pass
             return False
@@ -1743,7 +2054,13 @@ class MeetingManager:
                 json.dumps(stage_durations, sort_keys=True),
             )
 
-    def _mark_session_complete(self, *, ok: bool, artifacts: Optional[dict]) -> None:
+    def _mark_session_complete(
+        self,
+        *,
+        ok: bool,
+        artifacts: Optional[dict],
+        transcription_metadata: Optional[Dict[str, Any]],
+    ) -> None:
         """Best-effort: update per-org session state when running in session mode.
 
         Session mode is detected by the presence of MEETING_SESSION_ID env var.
@@ -1783,6 +2100,8 @@ class MeetingManager:
 
         if artifacts is not None:
             payload["artifacts"] = {k: v for k, v in artifacts.items() if v}
+        if transcription_metadata:
+            payload["transcription_metadata"] = transcription_metadata
 
         # Enhanced logging for session status change
         logger.info(
@@ -1797,7 +2116,13 @@ class MeetingManager:
 
         ref.set(payload, merge=True)
 
-    def _mark_meeting_complete(self, *, ok: bool, artifacts: Optional[dict]) -> None:
+    def _mark_meeting_complete(
+        self,
+        *,
+        ok: bool,
+        artifacts: Optional[dict],
+        transcription_metadata: Optional[Dict[str, Any]],
+    ) -> None:
         """Update the meeting document with bot_status and artifacts for fanout.
 
         This is required for the K8s-based deduplication approach where the
@@ -1846,6 +2171,9 @@ class MeetingManager:
             webm_path = clean_artifacts.get("recording_webm")
             if webm_path:
                 payload["recording_url"] = f"gs://{self.gcs_bucket}/{webm_path}"
+
+        if transcription_metadata:
+            payload["transcription_metadata"] = transcription_metadata
 
         logger.info(
             "MEETING_STATUS_CHANGE: meeting_id=%s, org_id=%s, "
