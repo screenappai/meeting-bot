@@ -11,7 +11,7 @@ Run with: pytest controller/test_recurring_meeting_requeue.py -v
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 from unittest.mock import MagicMock, patch
 
@@ -481,6 +481,28 @@ def test_json_recurring_meeting_same_session():
     print(f"\n✅ All {len(SAMPLE_MEETINGS)} meetings map to same session ID")
 
 
+def test_past_meeting_guard_detects_old_occurrence():
+    """Past occurrence timestamps should be treated as stale for scheduling."""
+    MeetingController = _import_controller()
+    controller = MeetingController.__new__(MeetingController)
+    controller.past_meeting_grace_minutes = 30
+
+    old_occurrence = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    future_occurrence = (datetime.now(timezone.utc) + timedelta(minutes=8)).isoformat()
+
+    old_is_past, old_reason = controller._is_meeting_payload_past(  # noqa: SLF001
+        {"occurrence_start_utc": old_occurrence}
+    )
+    future_is_past, _ = controller._is_meeting_payload_past(  # noqa: SLF001
+        {"occurrence_start_utc": future_occurrence}
+    )
+
+    assert old_is_past is True
+    assert old_reason == "occurrence_before_grace_threshold"
+    assert future_is_past is False
+    print("✅ Past occurrence detected as stale; future occurrence remains schedulable")
+
+
 if __name__ == "__main__":
     import sys
 
@@ -502,6 +524,7 @@ if __name__ == "__main__":
         ("JSON data validation", test_json_meeting_data_validation),
         ("JSON session re-queue logic", test_json_session_requeue_logic),
         ("JSON recurring meeting session", test_json_recurring_meeting_same_session),
+        ("Past-meeting guard", test_past_meeting_guard_detects_old_occurrence),
     ]
 
     passed = 0

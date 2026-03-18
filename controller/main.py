@@ -282,6 +282,9 @@ class MeetingController:
         # How often the controller checks Firestore for new meetings/bot work.
         # Kept configurable; default matches prior behavior.
         self.poll_interval = int(os.getenv("POLL_INTERVAL", "10"))
+        self.past_meeting_grace_minutes = int(
+            os.getenv("PAST_MEETING_GRACE_MINUTES", "30")
+        )
 
         # Pub/Sub configuration
         self.pubsub_subscription = os.getenv("PUBSUB_SUBSCRIPTION")
@@ -378,6 +381,10 @@ class MeetingController:
             self.meetings_query_mode,
             self.meetings_collection_path,
         )
+        logger.info(
+            "  Past meeting guard: grace_minutes=%d",
+            self.past_meeting_grace_minutes,
+        )
 
     def _log_meeting_context(
         self,
@@ -444,6 +451,9 @@ class MeetingController:
                 "ORPHANED_SESSION_REMEDIATION_ACTION must be one of: "
                 f"{', '.join(sorted(allowed_orphan_actions))}"
             )
+
+        if self.past_meeting_grace_minutes < 0:
+            raise ValueError("PAST_MEETING_GRACE_MINUTES must be >= 0")
 
     def create_manager_job(self, message_data: Dict[str, Any], message_id: str) -> bool:
         """
@@ -1718,6 +1728,10 @@ class MeetingController:
             if not fresh_meeting_url:
                 logger.debug("Transaction: meeting URL no longer available")
                 return None
+            fresh_occurrence_start_utc = fresh_data.get("occurrence_start_utc") or ""
+            is_past_meeting, past_reason = self._is_meeting_payload_past(
+                fresh_data, now=now
+            )
 
             # Read session doc.
             sess_snap = session_ref.get(transaction=txn)
@@ -1726,6 +1740,39 @@ class MeetingController:
             # Read subscriber doc.
             sub_snap = subscriber_ref.get(transaction=txn)
             logger.debug("Transaction: subscriber exists=%s", sub_snap.exists)
+
+            if is_past_meeting:
+                stale_reason = f"stale_{past_reason or 'timing_threshold'}"
+                logger.info(
+                    "SESSION_CREATE_SKIPPED_STALE: meeting_id=%s, org_id=%s, reason=%s",
+                    meeting_doc.id,
+                    org_id,
+                    stale_reason,
+                )
+                txn.update(
+                    meeting_ref,
+                    {
+                        "session_status": "cancelled",
+                        "session_cancelled_at": now,
+                        "session_cancel_reason": stale_reason,
+                        "updated_at": now,
+                    },
+                )
+
+                if sess_snap.exists:
+                    sess_data = sess_snap.to_dict() or {}
+                    sess_status = sess_data.get("status", "")
+                    if sess_status in {"queued", "claimed", "processing"}:
+                        txn.update(
+                            session_ref,
+                            {
+                                "status": "failed",
+                                "processed_at": now,
+                                "updated_at": now,
+                                "failure_reason": stale_reason,
+                            },
+                        )
+                return None
 
             # Now perform all writes.
             # Create session doc if missing.
@@ -1737,7 +1784,7 @@ class MeetingController:
                         "status": "queued",
                         "org_id": org_id,
                         "meeting_url": str(fresh_meeting_url),
-                        "occurrence_start_utc": occurrence_start_utc,
+                        "occurrence_start_utc": fresh_occurrence_start_utc,
                         "created_at": now,
                         "updated_at": now,
                     },
@@ -1911,10 +1958,14 @@ class MeetingController:
         org_id: str,
         previous_status: str,
         age_minutes: Optional[float],
+        action_override: Optional[str] = None,
+        remediation_reason: str = "missing_k8s_job",
     ) -> bool:
         """Apply configured remediation for an orphaned processing session."""
         now = datetime.now(timezone.utc)
-        action = self.orphaned_session_remediation_action
+        action = (action_override or self.orphaned_session_remediation_action).strip().lower()
+        if action not in {"requeue", "failed"}:
+            raise ValueError(f"Invalid remediation action: {action}")
         controller_id = (
             os.getenv("CONTROLLER_ID") or os.getenv("HOSTNAME") or "controller"
         )
@@ -1953,7 +2004,7 @@ class MeetingController:
                 "orphaned_session_detected_at": now,
                 "orphaned_session_remediation_by": controller_id,
                 "orphaned_session_remediation_action": action,
-                "orphaned_session_remediation_reason": "missing_k8s_job",
+                "orphaned_session_remediation_reason": remediation_reason,
                 "orphaned_session_remediation_count": remediation_count,
                 "orphaned_session_previous_status": current_status,
             }
@@ -1980,13 +2031,14 @@ class MeetingController:
             if remediated:
                 logger.warning(
                     "SESSION_ORPHANED_REMEDIATED: session_id=%s, org_id=%s, "
-                    "previous_status=%s, new_status=%s, action=%s, age_minutes=%s",
+                    "previous_status=%s, new_status=%s, action=%s, age_minutes=%s, reason=%s",
                     session_id[:16],
                     org_id,
                     previous_status,
                     "queued" if action == "requeue" else "failed",
                     action,
                     f"{age_minutes:.1f}" if age_minutes is not None else "unknown",
+                    remediation_reason,
                 )
             return remediated
         except Exception as e:
@@ -2081,6 +2133,32 @@ class MeetingController:
                     continue
 
                 orphaned_count += 1
+                remediation_action = self.orphaned_session_remediation_action
+                remediation_reason = "missing_k8s_job"
+                try:
+                    is_past_session, past_reason = self._is_session_past(
+                        session_data, session_ref=session.reference
+                    )
+                    if is_past_session:
+                        remediation_action = "failed"
+                        suffix = past_reason or "timing_threshold"
+                        remediation_reason = f"stale_session_{suffix}"
+                        logger.info(
+                            "SESSION_ORPHANED_STALE: session_id=%s, org_id=%s, reason=%s",
+                            session_id[:16],
+                            org_id,
+                            remediation_reason,
+                        )
+                except Exception as past_check_error:
+                    remediation_action = "failed"
+                    remediation_reason = "session_past_check_failed"
+                    logger.error(
+                        "SESSION_PAST_CHECK_FAILED: session_id=%s, org_id=%s, error=%s",
+                        session_id[:16],
+                        org_id,
+                        past_check_error,
+                        exc_info=True,
+                    )
 
                 logger.warning(
                     "SESSION_ORPHANED: session_id=%s, org_id=%s, status=%s, "
@@ -2138,6 +2216,8 @@ class MeetingController:
                     org_id=org_id,
                     previous_status=status,
                     age_minutes=age_minutes,
+                    action_override=remediation_action,
+                    remediation_reason=remediation_reason,
                 ):
                     remediated_count += 1
                     remediation_budget -= 1
@@ -3598,6 +3678,14 @@ class MeetingController:
 
         # Get the first subscriber to determine where to write files
         session_ref = session_doc.reference
+        is_past_session, past_reason = self._is_session_past(
+            data, session_ref=session_ref
+        )
+        if is_past_session:
+            stale_reason = past_reason or "timing_threshold"
+            raise ValueError(
+                f"meeting_session {session_doc.id} is stale ({stale_reason})"
+            )
         subscribers = list(session_ref.collection("subscribers").limit(1).stream())
 
         if not subscribers:
@@ -4089,6 +4177,86 @@ class MeetingController:
         logger.warning(f"Unknown start time type: {type(start_value)}")
         return None
 
+    def _past_meeting_threshold(self, *, now: Optional[datetime] = None) -> datetime:
+        reference_now = now or datetime.now(timezone.utc)
+        grace_minutes = max(0, int(getattr(self, "past_meeting_grace_minutes", 30)))
+        return reference_now - timedelta(minutes=grace_minutes)
+
+    def _is_meeting_payload_past(
+        self, meeting_data: Dict[str, Any], *, now: Optional[datetime] = None
+    ) -> Tuple[bool, str]:
+        """Return True when meeting timing metadata is older than the stale threshold."""
+        threshold = self._past_meeting_threshold(now=now)
+        candidates = [
+            ("end", meeting_data.get("end")),
+            ("end_time", meeting_data.get("end_time")),
+            ("occurrence_start_utc", meeting_data.get("occurrence_start_utc")),
+            ("OCCURRENCE_START_UTC", meeting_data.get("OCCURRENCE_START_UTC")),
+            ("start", meeting_data.get("start")),
+            ("start_time", meeting_data.get("start_time")),
+            ("MEETING_START_TIME", meeting_data.get("MEETING_START_TIME")),
+        ]
+
+        for field_name, candidate in candidates:
+            if candidate in (None, ""):
+                continue
+            parsed = self._parse_start_time(candidate)
+            if parsed is None:
+                continue
+            if parsed <= threshold:
+                if field_name.startswith("end"):
+                    return True, "end_before_grace_threshold"
+                if "occurrence" in field_name.lower():
+                    return True, "occurrence_before_grace_threshold"
+                return True, "start_before_grace_threshold"
+
+        return False, ""
+
+    def _is_session_past(
+        self,
+        session_data: Dict[str, Any],
+        *,
+        session_ref: Optional[firestore.DocumentReference] = None,
+    ) -> Tuple[bool, str]:
+        """Return True when a session maps to a meeting that is already in the past."""
+        is_past, reason = self._is_meeting_payload_past(session_data)
+        if is_past:
+            return True, reason
+
+        if session_ref is None or not hasattr(session_ref, "collection"):
+            return False, ""
+
+        org_id = (session_data.get("org_id") or "").strip()
+        if not org_id:
+            return False, ""
+
+        subscribers = list(session_ref.collection("subscribers").limit(1).stream())
+        if not subscribers:
+            return False, ""
+
+        first_sub = subscribers[0]
+        sub_data = first_sub.to_dict() or {}
+        fs_meeting_id = sub_data.get("fs_meeting_id")
+        if not fs_meeting_id:
+            return False, ""
+
+        meeting_ref = (
+            self.db.collection("organizations")
+            .document(org_id)
+            .collection("meetings")
+            .document(str(fs_meeting_id))
+        )
+        meeting_doc = meeting_ref.get()
+        if not meeting_doc.exists:
+            return False, ""
+
+        meeting_data = meeting_doc.to_dict() or {}
+        is_past, reason = self._is_meeting_payload_past(meeting_data)
+        if is_past:
+            return True, f"meeting_doc_{reason}"
+
+        return False, ""
+
     def _scan_upcoming_meetings(self):
         """Scan for meetings starting soon and enqueue them.
 
@@ -4151,6 +4319,33 @@ class MeetingController:
                         f"Skipping {doc.id}: start time {start_time} "
                         f"outside window after parsing"
                     )
+                    continue
+
+                is_past_meeting, past_reason = self._is_meeting_payload_past(
+                    data, now=now
+                )
+                if is_past_meeting:
+                    stale_reason = f"stale_{past_reason or 'timing_threshold'}"
+                    logger.info(
+                        "MEETING_SCHEDULE_SKIP_STALE: meeting_id=%s, reason=%s",
+                        doc.id,
+                        stale_reason,
+                    )
+                    try:
+                        doc.reference.update(
+                            {
+                                "session_status": "cancelled",
+                                "session_cancelled_at": now,
+                                "session_cancel_reason": stale_reason,
+                                "updated_at": now,
+                            }
+                        )
+                    except Exception as stale_update_error:
+                        logger.warning(
+                            "Failed to update stale meeting %s: %s",
+                            doc.id,
+                            stale_update_error,
+                        )
                     continue
 
                 logger.debug(
@@ -4306,6 +4501,18 @@ class MeetingController:
                 message.ack()  # Ack invalid messages to remove them
                 return
 
+            payload_is_past, payload_past_reason = self._is_meeting_payload_past(data)
+            if payload_is_past:
+                stale_reason = f"stale_{payload_past_reason or 'timing_threshold'}"
+                logger.info(
+                    "PUBSUB_SKIP_STALE_PAYLOAD: meeting_id=%s, org_id=%s, reason=%s",
+                    meeting_id,
+                    org_id,
+                    stale_reason,
+                )
+                message.ack()
+                return
+
             logger.debug("Checking for known meeting document in Firestore...")
             # Unified Path: Check if this corresponds to a known meeting document
             # If so, delegate to the session dedupe logic used by the poller.
@@ -4358,6 +4565,33 @@ class MeetingController:
                 logger.debug("Valid owner IDs: %s", valid_owners)
 
                 if payload_user_id and payload_user_id in valid_owners:
+                    doc_is_past, doc_past_reason = self._is_meeting_payload_past(m_data)
+                    if doc_is_past:
+                        stale_reason = f"stale_{doc_past_reason or 'timing_threshold'}"
+                        logger.info(
+                            "PUBSUB_SKIP_STALE_MEETING: meeting_id=%s, org_id=%s, reason=%s",
+                            meeting_id,
+                            org_id,
+                            stale_reason,
+                        )
+                        try:
+                            meeting_doc.reference.update(
+                                {
+                                    "session_status": "cancelled",
+                                    "session_cancelled_at": datetime.now(timezone.utc),
+                                    "session_cancel_reason": stale_reason,
+                                    "updated_at": datetime.now(timezone.utc),
+                                }
+                            )
+                        except Exception as stale_update_error:
+                            logger.warning(
+                                "Failed to update stale meeting %s from Pub/Sub: %s",
+                                meeting_id,
+                                stale_update_error,
+                            )
+                        message.ack()
+                        return
+
                     logger.info(
                         f"Found scheduled meeting {meeting_id}, delegating to session manager"
                     )
