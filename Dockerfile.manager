@@ -5,12 +5,15 @@
 FROM python:3.11-slim
 
 # Install system dependencies and upgrade existing packages to fix OS-level CVEs (openssl)
-RUN apt-get update && apt-get upgrade -y && apt-get install -y \
-    ffmpeg \
-    curl \
-    procps \
-    && rm -rf /var/lib/apt/lists/* \
-    && ffmpeg -version > /dev/null 2>&1 || echo "Warning: ffmpeg installation may have issues"
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        curl \
+        procps \
+    && command -v ffmpeg >/dev/null \
+    && ffmpeg -version >/dev/null 2>&1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
