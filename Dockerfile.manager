@@ -116,6 +116,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
             ca-certificates \
         && rm -rf /var/lib/apt/lists/* \
         && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ] && [ "${TARGETARCH:-}" = "amd64" ]; then \
+             sed -i 's/^Components: .*/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources; \
              apt-get update && apt-get install -y --no-install-recommends nvidia-cuda-toolkit && rm -rf /var/lib/apt/lists/*; \
            elif [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ]; then \
              echo "WHISPER_CPP_ENABLE_CUDA=1 requested on TARGETARCH=${TARGETARCH:-unknown}; building CPU-only whisper.cpp for this platform."; \
@@ -133,15 +134,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
             $WHISPER_GPU_FLAGS \
             -DWHISPER_NO_AVX=ON -DWHISPER_NO_AVX2=ON -DWHISPER_NO_FMA=ON -DWHISPER_NO_F16C=ON \
         && cmake --build /tmp/whisper.cpp/build --target whisper-cli -j"$(nproc)" \
+        && test -x /tmp/whisper.cpp/build/bin/whisper-cli \
         && cp /tmp/whisper.cpp/build/bin/whisper-cli /app/tools/whisper.cpp/build/bin/ \
-        && if ls /tmp/whisper.cpp/build/src/libwhisper.so* >/dev/null 2>&1; then cp /tmp/whisper.cpp/build/src/libwhisper.so* /app/tools/whisper.cpp/build/src/; fi \
-        && if ls /tmp/whisper.cpp/build/ggml/src/libggml*.so* >/dev/null 2>&1; then cp /tmp/whisper.cpp/build/ggml/src/libggml*.so* /app/tools/whisper.cpp/build/ggml/src/; fi \
-        && rm -rf /tmp/whisper.cpp \
-        && apt-get purge -y --auto-remove build-essential cmake git || true
+        && find /tmp/whisper.cpp/build \( -type f -o -type l \) -name 'libwhisper.so*' -exec cp -a {} /app/tools/whisper.cpp/build/src/ \; \
+        && find /tmp/whisper.cpp/build \( -type f -o -type l \) -name 'libggml*.so*' -exec cp -a {} /app/tools/whisper.cpp/build/ggml/src/ \; \
+        && ls /app/tools/whisper.cpp/build/src/libwhisper.so* >/dev/null \
+        && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ] && [ "${TARGETARCH:-}" = "amd64" ]; then \
+             ls /app/tools/whisper.cpp/build/ggml/src/libggml-cuda.so* >/dev/null; \
+           fi \
+        && LD_LIBRARY_PATH=/app/tools/whisper.cpp/build/src:/app/tools/whisper.cpp/build/ggml/src /app/tools/whisper.cpp/build/bin/whisper-cli --help >/dev/null \
+        && rm -rf /tmp/whisper.cpp
+
+RUN apt-get purge -y build-essential cmake git \
+        && rm -rf /var/lib/apt/lists/*
 
 # Download model into the image.
-RUN if [ ! -f /app/tools/whisper.cpp/models/ggml-base.en.bin ]; then \
-            echo "Downloading whisper model ggml-base.en.bin"; \
+RUN command -v curl >/dev/null \
+        || (apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*) \
+        && if [ ! -f /app/tools/whisper.cpp/models/ggml-base.en.bin ]; then \
+            printf '%s\n' "Downloading whisper model ggml-base.en.bin"; \
             curl -fsSL -o /app/tools/whisper.cpp/models/ggml-base.en.bin \
                 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin; \
         fi
