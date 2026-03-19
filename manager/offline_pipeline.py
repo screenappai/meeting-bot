@@ -24,6 +24,7 @@ import datetime as _datetime
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -298,6 +299,25 @@ def _run(cmd: List[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def _run_capture_output(cmd: List[str]) -> str:
+    logger.debug("Running (capture): %s", " ".join(cmd))
+    completed = subprocess.run(
+        cmd,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    output = completed.stdout or ""
+    if completed.returncode != 0:
+        raise subprocess.CalledProcessError(
+            returncode=completed.returncode,
+            cmd=cmd,
+            output=output,
+        )
+    return output
+
+
 def _which(binary: str) -> Optional[str]:
     return shutil.which(binary)
 
@@ -330,6 +350,39 @@ def _resolve_whisper_gpu_layers_flag(whisper_bin: Path) -> Optional[str]:
         return "-ngl"
     if _whisper_cli_supports_flag(whisper_bin, "--gpu-layers"):
         return "--gpu-layers"
+    return None
+
+
+def _detect_whisper_gpu_backend_init(output: str) -> Optional[bool]:
+    """Detect whether whisper.cpp initialized a real GPU backend.
+
+    Returns:
+    - True: output indicates non-CPU GPU backend initialization.
+    - False: output indicates CPU/no-GPU initialization.
+    - None: unknown (could not confidently detect from output).
+    """
+
+    if not output:
+        return None
+
+    lowered = output.lower()
+    if "whisper_backend_init_gpu: no gpu found" in lowered:
+        return False
+
+    if re.search(
+        r"whisper_backend_init_gpu:\s*device\s+\d+:\s*cpu\s*\(type:\s*0\)",
+        output,
+        flags=re.IGNORECASE,
+    ):
+        return False
+
+    if re.search(
+        r"whisper_backend_init_gpu:\s*device\s+\d+:\s*(?!cpu\b).+\(type:\s*[1-9]\d*\)",
+        output,
+        flags=re.IGNORECASE,
+    ):
+        return True
+
     return None
 
 
@@ -516,7 +569,7 @@ def run_whisper_cpp(
     use_gpu: bool = False,
     gpu_layers: Optional[int] = None,
     require_gpu: bool = False,
-) -> Tuple[Path, List[Segment]]:
+) -> Tuple[Path, List[Segment], bool]:
     out_dir.mkdir(parents=True, exist_ok=True)
     base = wav_path.stem
     out_prefix = out_dir / base
@@ -532,6 +585,7 @@ def run_whisper_cpp(
         "-osrt",
         "-of",
         str(out_prefix),
+        "-np",
     ]
 
     gpu_cmd = list(base_cmd)
@@ -549,8 +603,29 @@ def run_whisper_cpp(
     else:
         gpu_cmd.append("-ng")
 
+    actual_gpu_used = False
     try:
-        _run(gpu_cmd)
+        if use_gpu:
+            gpu_output = _run_capture_output(gpu_cmd)
+            gpu_backend_init = _detect_whisper_gpu_backend_init(gpu_output)
+            if gpu_backend_init is True:
+                actual_gpu_used = True
+            elif gpu_backend_init is False:
+                logger.warning(
+                    "whisper.cpp was asked to use GPU but initialized CPU/no-GPU backend."
+                )
+            else:
+                logger.warning(
+                    "Could not confirm whisper.cpp GPU backend initialization from output."
+                )
+
+            if require_gpu and gpu_backend_init is not True:
+                raise RuntimeError(
+                    "WHISPER_CPP_REQUIRE_GPU=true but whisper.cpp did not initialize a "
+                    "non-CPU GPU backend."
+                )
+        else:
+            _run(gpu_cmd)
     except Exception as gpu_err:
         if not use_gpu:
             raise
@@ -566,12 +641,13 @@ def run_whisper_cpp(
         cpu_cmd = list(base_cmd)
         cpu_cmd.append("-ng")
         _run(cpu_cmd)
+        actual_gpu_used = False
 
     srt_path = out_dir / f"{base}.srt"
     if not srt_path.exists():
         raise RuntimeError(f"Expected whisper.cpp SRT not found: {srt_path}")
 
-    return srt_path, _parse_whisper_srt(srt_path)
+    return srt_path, _parse_whisper_srt(srt_path), actual_gpu_used
 
 
 def _merge_segments_for_diarization(
@@ -907,7 +983,7 @@ def transcribe_and_diarize_local_media(
         ffmpeg_to_wav16k_mono(input_path, wav_path)
 
         whisper_out_dir = tmp_root / "whisper"
-        _, segments = run_whisper_cpp(
+        _, segments, whisper_actual_gpu_used = run_whisper_cpp(
             whisper_bin=whisper_bin_path,
             model_path=whisper_model_path,
             wav_path=wav_path,
@@ -967,7 +1043,7 @@ def transcribe_and_diarize_local_media(
                     else _parse_bool_env("WHISPER_CPP_USE_GPU", default=False)
                 ),
                 "gpu_required": whisper_require_gpu,
-                "gpu_used": whisper_use_gpu,
+                "gpu_used": whisper_actual_gpu_used,
                 "gpu_layers": whisper_resolved_gpu_layers,
             },
             "diarization": diarization_info,

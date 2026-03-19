@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from offline_pipeline import resolve_whisper_gpu_settings, run_whisper_cpp
+from offline_pipeline import (
+    _detect_whisper_gpu_backend_init,
+    resolve_whisper_gpu_settings,
+    run_whisper_cpp,
+)
 
 
 class TestWhisperGpuSettings(unittest.TestCase):
@@ -58,17 +62,25 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                 "1\n00:00:00,000 --> 00:00:01,000\nhello world\n", encoding="utf-8"
             )
 
-            calls = []
+            gpu_calls = []
+            cpu_calls = []
+
+            def _fake_run_capture(cmd):
+                gpu_calls.append(list(cmd))
+                raise subprocess.CalledProcessError(
+                    returncode=1, cmd=cmd, output="simulated gpu failure"
+                )
 
             def _fake_run(cmd):
-                calls.append(list(cmd))
-                if len(calls) == 1:
-                    raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
+                cpu_calls.append(list(cmd))
 
-            with patch("offline_pipeline._run", side_effect=_fake_run), patch(
+            with patch(
+                "offline_pipeline._run_capture_output",
+                side_effect=_fake_run_capture,
+            ), patch("offline_pipeline._run", side_effect=_fake_run), patch(
                 "offline_pipeline._resolve_whisper_gpu_layers_flag", return_value="-ngl"
             ):
-                _, segments = run_whisper_cpp(
+                _, segments, gpu_used = run_whisper_cpp(
                     whisper_bin=tmp_path / "whisper-cli",
                     model_path=tmp_path / "model.bin",
                     wav_path=wav_path,
@@ -78,12 +90,14 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                     gpu_layers=12,
                 )
 
-            self.assertEqual(len(calls), 2)
-            self.assertIn("-ngl", calls[0])
-            self.assertNotIn("-ng", calls[0])
-            self.assertIn("-ng", calls[1])
+            self.assertEqual(len(gpu_calls), 1)
+            self.assertIn("-ngl", gpu_calls[0])
+            self.assertNotIn("-ng", gpu_calls[0])
+            self.assertEqual(len(cpu_calls), 1)
+            self.assertIn("-ng", cpu_calls[0])
             self.assertEqual(len(segments), 1)
             self.assertEqual(segments[0].text, "hello world")
+            self.assertFalse(gpu_used)
 
     def test_run_whisper_gpu_required_does_not_retry_cpu(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -94,13 +108,22 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
             out_dir = tmp_path / "out"
             out_dir.mkdir()
 
-            calls = []
+            gpu_calls = []
+            cpu_calls = []
+
+            def _fake_run_capture(cmd):
+                gpu_calls.append(list(cmd))
+                raise subprocess.CalledProcessError(
+                    returncode=1, cmd=cmd, output="simulated gpu failure"
+                )
 
             def _fake_run(cmd):
-                calls.append(list(cmd))
-                raise subprocess.CalledProcessError(returncode=1, cmd=cmd)
+                cpu_calls.append(list(cmd))
 
-            with patch("offline_pipeline._run", side_effect=_fake_run), patch(
+            with patch(
+                "offline_pipeline._run_capture_output",
+                side_effect=_fake_run_capture,
+            ), patch("offline_pipeline._run", side_effect=_fake_run), patch(
                 "offline_pipeline._resolve_whisper_gpu_layers_flag", return_value="-ngl"
             ):
                 with self.assertRaises(RuntimeError):
@@ -115,9 +138,10 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                         require_gpu=True,
                     )
 
-            self.assertEqual(len(calls), 1)
-            self.assertIn("-ngl", calls[0])
-            self.assertNotIn("-ng", calls[0])
+            self.assertEqual(len(gpu_calls), 1)
+            self.assertIn("-ngl", gpu_calls[0])
+            self.assertNotIn("-ng", gpu_calls[0])
+            self.assertEqual(len(cpu_calls), 0)
 
     def test_run_whisper_gpu_uses_long_flag_when_supported(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -131,16 +155,17 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                 "1\n00:00:00,000 --> 00:00:01,000\nhello world\n", encoding="utf-8"
             )
 
-            calls = []
+            gpu_calls = []
 
-            def _fake_run(cmd):
-                calls.append(list(cmd))
+            def _fake_run_capture(cmd):
+                gpu_calls.append(list(cmd))
+                return "whisper_backend_init_gpu: device 0: NVIDIA T4 (type: 2)\n"
 
-            with patch("offline_pipeline._run", side_effect=_fake_run), patch(
+            with patch("offline_pipeline._run_capture_output", side_effect=_fake_run_capture), patch(
                 "offline_pipeline._resolve_whisper_gpu_layers_flag",
                 return_value="--gpu-layers",
             ):
-                run_whisper_cpp(
+                _, _, gpu_used = run_whisper_cpp(
                     whisper_bin=tmp_path / "whisper-cli",
                     model_path=tmp_path / "model.bin",
                     wav_path=wav_path,
@@ -150,9 +175,10 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                     gpu_layers=10,
                 )
 
-            self.assertEqual(len(calls), 1)
-            self.assertIn("--gpu-layers", calls[0])
-            self.assertNotIn("-ngl", calls[0])
+            self.assertEqual(len(gpu_calls), 1)
+            self.assertIn("--gpu-layers", gpu_calls[0])
+            self.assertNotIn("-ngl", gpu_calls[0])
+            self.assertTrue(gpu_used)
 
     def test_run_whisper_gpu_skips_layers_when_unsupported(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -166,15 +192,16 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                 "1\n00:00:00,000 --> 00:00:01,000\nhello world\n", encoding="utf-8"
             )
 
-            calls = []
+            gpu_calls = []
 
-            def _fake_run(cmd):
-                calls.append(list(cmd))
+            def _fake_run_capture(cmd):
+                gpu_calls.append(list(cmd))
+                return "whisper_backend_init_gpu: device 0: NVIDIA T4 (type: 2)\n"
 
-            with patch("offline_pipeline._run", side_effect=_fake_run), patch(
+            with patch("offline_pipeline._run_capture_output", side_effect=_fake_run_capture), patch(
                 "offline_pipeline._resolve_whisper_gpu_layers_flag", return_value=None
             ):
-                run_whisper_cpp(
+                _, _, gpu_used = run_whisper_cpp(
                     whisper_bin=tmp_path / "whisper-cli",
                     model_path=tmp_path / "model.bin",
                     wav_path=wav_path,
@@ -184,9 +211,90 @@ class TestRunWhisperGpuFallback(unittest.TestCase):
                     gpu_layers=10,
                 )
 
-            self.assertEqual(len(calls), 1)
-            self.assertNotIn("-ngl", calls[0])
-            self.assertNotIn("--gpu-layers", calls[0])
+            self.assertEqual(len(gpu_calls), 1)
+            self.assertNotIn("-ngl", gpu_calls[0])
+            self.assertNotIn("--gpu-layers", gpu_calls[0])
+            self.assertTrue(gpu_used)
+
+    def test_run_whisper_gpu_detects_actual_gpu_backend(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            wav_path = tmp_path / "audio.wav"
+            wav_path.write_bytes(b"fake")
+            out_dir = tmp_path / "out"
+            out_dir.mkdir()
+            srt_path = out_dir / "audio.srt"
+            srt_path.write_text(
+                "1\n00:00:00,000 --> 00:00:01,000\nhello world\n", encoding="utf-8"
+            )
+
+            with patch(
+                "offline_pipeline._run_capture_output",
+                return_value=(
+                    "whisper_backend_init_gpu: device 0: NVIDIA T4 (type: 2)\n"
+                ),
+            ), patch("offline_pipeline._resolve_whisper_gpu_layers_flag", return_value="-ngl"):
+                _, _, gpu_used = run_whisper_cpp(
+                    whisper_bin=tmp_path / "whisper-cli",
+                    model_path=tmp_path / "model.bin",
+                    wav_path=wav_path,
+                    out_dir=out_dir,
+                    language="en",
+                    use_gpu=True,
+                    gpu_layers=10,
+                    require_gpu=True,
+                )
+
+            self.assertTrue(gpu_used)
+
+    def test_run_whisper_gpu_required_fails_on_cpu_backend_banner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            wav_path = tmp_path / "audio.wav"
+            wav_path.write_bytes(b"fake")
+            out_dir = tmp_path / "out"
+            out_dir.mkdir()
+            srt_path = out_dir / "audio.srt"
+            srt_path.write_text(
+                "1\n00:00:00,000 --> 00:00:01,000\nhello world\n", encoding="utf-8"
+            )
+
+            with patch(
+                "offline_pipeline._run_capture_output",
+                return_value=(
+                    "whisper_backend_init_gpu: device 0: CPU (type: 0)\n"
+                    "whisper_backend_init_gpu: no GPU found\n"
+                ),
+            ), patch("offline_pipeline._resolve_whisper_gpu_layers_flag", return_value="-ngl"):
+                with self.assertRaises(RuntimeError):
+                    run_whisper_cpp(
+                        whisper_bin=tmp_path / "whisper-cli",
+                        model_path=tmp_path / "model.bin",
+                        wav_path=wav_path,
+                        out_dir=out_dir,
+                        language="en",
+                        use_gpu=True,
+                        gpu_layers=10,
+                        require_gpu=True,
+                    )
+
+
+class TestWhisperGpuBackendDetection(unittest.TestCase):
+    def test_detect_gpu_backend_cpu_only(self):
+        text = "whisper_backend_init_gpu: device 0: CPU (type: 0)"
+        self.assertFalse(_detect_whisper_gpu_backend_init(text))
+
+    def test_detect_gpu_backend_no_gpu_found(self):
+        text = "whisper_backend_init_gpu: no GPU found"
+        self.assertFalse(_detect_whisper_gpu_backend_init(text))
+
+    def test_detect_gpu_backend_real_gpu(self):
+        text = "whisper_backend_init_gpu: device 0: NVIDIA T4 (type: 2)"
+        self.assertTrue(_detect_whisper_gpu_backend_init(text))
+
+    def test_detect_gpu_backend_unknown(self):
+        text = "random log output without backend banner"
+        self.assertIsNone(_detect_whisper_gpu_backend_init(text))
 
 
 if __name__ == "__main__":

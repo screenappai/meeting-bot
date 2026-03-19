@@ -377,7 +377,7 @@ def main() -> int:
             segments = _parse_whisper_srt(srt_path)
         else:
             logger.info("Running whisper.cpp transcription...")
-            _, segments = run_whisper_cpp(
+            _, segments, _ = run_whisper_cpp(
                 whisper_bin=whisper_bin,
                 model_path=model_path,
                 wav_path=wav_path,
