@@ -100,6 +100,7 @@ PY
 #   Build with --build-arg WHISPER_CPP_ENABLE_CUDA=1 to compile CUDA support.
 #   Default remains CPU-only for portability.
 ARG WHISPER_CPP_ENABLE_CUDA=0
+ARG TARGETARCH
 RUN mkdir -p /app/tools/whisper.cpp/build/bin /app/tools/whisper.cpp/models \
         /app/tools/whisper.cpp/build/src /app/tools/whisper.cpp/build/ggml/src
 
@@ -114,11 +115,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
             git \
             ca-certificates \
         && rm -rf /var/lib/apt/lists/* \
-        && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ]; then \
+        && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ] && [ "${TARGETARCH:-}" = "amd64" ]; then \
              apt-get update && apt-get install -y --no-install-recommends nvidia-cuda-toolkit && rm -rf /var/lib/apt/lists/*; \
+           elif [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ]; then \
+             echo "WHISPER_CPP_ENABLE_CUDA=1 requested on TARGETARCH=${TARGETARCH:-unknown}; building CPU-only whisper.cpp for this platform."; \
            fi \
         && git clone --depth 1 https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp \
-        && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ]; then \
+        && if [ "$WHISPER_CPP_ENABLE_CUDA" = "1" ] && [ "${TARGETARCH:-}" = "amd64" ]; then \
              export WHISPER_GPU_FLAGS="-DGGML_CUDA=ON -DGGML_METAL=OFF -DGGML_VULKAN=OFF -DGGML_SYCL=OFF"; \
            else \
              export WHISPER_GPU_FLAGS="-DGGML_CUDA=OFF -DGGML_METAL=OFF -DGGML_VULKAN=OFF -DGGML_SYCL=OFF"; \

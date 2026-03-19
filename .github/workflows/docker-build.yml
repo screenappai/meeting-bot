@@ -242,6 +242,8 @@ jobs:
           labels: ${{ steps.manager_meta.outputs.labels }}
           cache-from: type=gha,scope=manager
           cache-to: type=gha,mode=max,scope=manager
+          build-args: |
+            WHISPER_CPP_ENABLE_CUDA=1
 
       # PR-only: run a cheap smoke check to catch dependency mismatches
       # (e.g., SpeechBrain <-> huggingface_hub API incompatibilities) without
@@ -488,4 +490,3 @@ jobs:
           echo ""
           echo "✅ All three images built and pushed successfully!"
           echo ""
-
