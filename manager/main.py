@@ -2214,6 +2214,10 @@ class MeetingManager:
             "  WHISPER_CPP_USE_GPU: %s",
             os.environ.get("WHISPER_CPP_USE_GPU", "false"),
         )
+        logger.debug(
+            "  WHISPER_CPP_REQUIRE_GPU: %s",
+            os.environ.get("WHISPER_CPP_REQUIRE_GPU", "false"),
+        )
         logger.debug("  FIRESTORE_DATABASE: %s", self.firestore_database)
 
         # Log session mode detection

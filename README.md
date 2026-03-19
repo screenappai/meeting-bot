@@ -356,6 +356,7 @@ S3_USE_MINIO_COMPATIBILITY=true
 | `OFFLINE_TRANSCRIPTION_LANGUAGE` | whisper.cpp language code | `en` |
 | `OFFLINE_MAX_SPEAKERS` | Max offline diarization speaker clusters | `6` |
 | `WHISPER_CPP_USE_GPU` | Enable GPU path for whisper.cpp when available | `false` |
+| `WHISPER_CPP_REQUIRE_GPU` | Fail transcription if GPU runtime is unavailable or GPU execution fails (no CPU fallback) | `false` |
 | `WHISPER_CPP_GPU_LAYERS` | whisper.cpp GPU layer count when GPU is enabled | `35` |
 | `AZURE_SPEECH_REGION` | Azure Speech region (AU-only: `australiaeast`/`australiasoutheast`) | - |
 | `AZURE_SPEECH_ENDPOINT` | Azure Speech regional endpoint (`https://<region>.api.cognitive.microsoft.com`) | - |

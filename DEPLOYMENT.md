@@ -245,11 +245,22 @@ At runtime, enable GPU usage for whisper.cpp with:
 
 ```bash
 WHISPER_CPP_USE_GPU=true
+WHISPER_CPP_REQUIRE_GPU=false
 WHISPER_CPP_GPU_LAYERS=35
 ```
 
 If GPU execution fails or isn't available, manager automatically falls back to
 the CPU whisper path and logs the reason.
+
+For strict benchmarking (to prevent silent CPU fallback), set:
+
+```bash
+WHISPER_CPP_USE_GPU=true
+WHISPER_CPP_REQUIRE_GPU=true
+```
+
+In this mode, transcription fails fast if no GPU runtime is present or if GPU
+execution fails.
 
 > Note: do not commit model weights to git unless licensing and your repo
 > policies allow it.

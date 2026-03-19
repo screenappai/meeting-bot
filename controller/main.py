@@ -264,6 +264,27 @@ class MeetingController:
             "memory": os.getenv("MANAGER_MEMORY_LIMIT", "8Gi"),
             "ephemeral-storage": os.getenv("MANAGER_EPHEMERAL_STORAGE_LIMIT", "2Gi"),
         }
+        self.enable_meeting_bot_gpu_scheduling = os.getenv(
+            "ENABLE_MEETING_BOT_GPU_SCHEDULING", "false"
+        ).lower() in ("true", "1", "yes")
+        self.meeting_bot_gpu_node_selector_key = os.getenv(
+            "MEETING_BOT_GPU_NODE_SELECTOR_KEY", "workload"
+        )
+        self.meeting_bot_gpu_node_selector_value = os.getenv(
+            "MEETING_BOT_GPU_NODE_SELECTOR_VALUE", "meeting-bot-gpu"
+        )
+        self.meeting_bot_gpu_taint_key = os.getenv(
+            "MEETING_BOT_GPU_TAINT_KEY", "workload"
+        )
+        self.meeting_bot_gpu_taint_value = os.getenv(
+            "MEETING_BOT_GPU_TAINT_VALUE", "meeting-bot-gpu"
+        )
+        self.meeting_bot_gpu_taint_effect = os.getenv(
+            "MEETING_BOT_GPU_TAINT_EFFECT", "NoSchedule"
+        )
+        self.meeting_bot_gpu_resource_request = os.getenv(
+            "MEETING_BOT_GPU_RESOURCE_REQUEST", "1"
+        )
 
         # Dry-run mode - logs K8s operations but doesn't execute them
         self.dry_run = os.getenv("DRY_RUN", "").lower() in ("true", "1", "yes")
@@ -365,6 +386,16 @@ class MeetingController:
             "  Manager Resources: requests=%s limits=%s",
             self.manager_resource_requests,
             self.manager_resource_limits,
+        )
+        logger.info(
+            "  GPU Scheduling: enabled=%s selector=%s=%s taint=%s=%s:%s request_gpu=%s",
+            self.enable_meeting_bot_gpu_scheduling,
+            self.meeting_bot_gpu_node_selector_key,
+            self.meeting_bot_gpu_node_selector_value,
+            self.meeting_bot_gpu_taint_key,
+            self.meeting_bot_gpu_taint_value,
+            self.meeting_bot_gpu_taint_effect,
+            self.meeting_bot_gpu_resource_request,
         )
         logger.info(
             "  Orphan Session Remediation: enabled=%s action=%s min_age_minutes=%d "
@@ -773,7 +804,15 @@ class MeetingController:
                 "AZURE_SPEECH_FALLBACK_TO_OFFLINE",
                 "AZURE_SPEECH_KEY",
                 "WHISPER_CPP_USE_GPU",
+                "WHISPER_CPP_REQUIRE_GPU",
                 "WHISPER_CPP_GPU_LAYERS",
+                "ENABLE_MEETING_BOT_GPU_SCHEDULING",
+                "MEETING_BOT_GPU_NODE_SELECTOR_KEY",
+                "MEETING_BOT_GPU_NODE_SELECTOR_VALUE",
+                "MEETING_BOT_GPU_TAINT_KEY",
+                "MEETING_BOT_GPU_TAINT_VALUE",
+                "MEETING_BOT_GPU_TAINT_EFFECT",
+                "MEETING_BOT_GPU_RESOURCE_REQUEST",
             ]
             manager_env_names = {env_var.name for env_var in manager_env}
             forwarded_manager_runtime_env_vars: List[str] = []
@@ -894,6 +933,9 @@ class MeetingController:
                 ),
             )
 
+            pod_node_selector = None
+            pod_tolerations = None
+
             # Container 2: manager (Python orchestrator that calls meeting-bot API)
             manager_container = client.V1Container(
                 name="manager",
@@ -906,6 +948,24 @@ class MeetingController:
                     limits=dict(self.manager_resource_limits),
                 ),
             )
+            if self.enable_meeting_bot_gpu_scheduling:
+                manager_container.resources.requests["nvidia.com/gpu"] = (
+                    self.meeting_bot_gpu_resource_request
+                )
+                manager_container.resources.limits["nvidia.com/gpu"] = (
+                    self.meeting_bot_gpu_resource_request
+                )
+                pod_node_selector = {
+                    self.meeting_bot_gpu_node_selector_key: self.meeting_bot_gpu_node_selector_value
+                }
+                pod_tolerations = [
+                    client.V1Toleration(
+                        key=self.meeting_bot_gpu_taint_key,
+                        operator="Equal",
+                        value=self.meeting_bot_gpu_taint_value,
+                        effect=self.meeting_bot_gpu_taint_effect,
+                    )
+                ]
 
             # Define the pod template with BOTH containers
             template = client.V1PodTemplateSpec(
@@ -943,6 +1003,8 @@ class MeetingController:
                         fs_group=1001,  # Ensures volume mounts have correct permissions
                     ),
                     volumes=job_volumes,
+                    node_selector=pod_node_selector,
+                    tolerations=pod_tolerations,
                 ),
             )
 

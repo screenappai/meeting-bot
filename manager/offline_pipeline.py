@@ -29,6 +29,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -301,6 +302,37 @@ def _which(binary: str) -> Optional[str]:
     return shutil.which(binary)
 
 
+@lru_cache(maxsize=8)
+def _whisper_cli_help(whisper_bin: str) -> str:
+    """Return whisper-cli help output for runtime flag compatibility checks."""
+
+    try:
+        completed = subprocess.run(
+            [whisper_bin, "--help"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except Exception as exc:
+        logger.debug("Unable to inspect whisper-cli flags for %s: %s", whisper_bin, exc)
+        return ""
+
+    return f"{completed.stdout}\n{completed.stderr}".lower()
+
+
+def _whisper_cli_supports_flag(whisper_bin: Path, flag: str) -> bool:
+    return flag.lower() in _whisper_cli_help(str(whisper_bin))
+
+
+def _resolve_whisper_gpu_layers_flag(whisper_bin: Path) -> Optional[str]:
+    if _whisper_cli_supports_flag(whisper_bin, "-ngl"):
+        return "-ngl"
+    if _whisper_cli_supports_flag(whisper_bin, "--gpu-layers"):
+        return "--gpu-layers"
+    return None
+
+
 def _parse_bool_env(var_name: str, default: bool) -> bool:
     raw = os.getenv(var_name)
     if raw is None or raw.strip() == "":
@@ -353,6 +385,7 @@ def resolve_whisper_gpu_settings(
     *,
     use_gpu: Optional[bool] = None,
     gpu_layers: Optional[int] = None,
+    require_gpu: Optional[bool] = None,
 ) -> Tuple[bool, Optional[int]]:
     """Resolve GPU settings for whisper.cpp with safe CPU fallback defaults."""
 
@@ -361,10 +394,20 @@ def resolve_whisper_gpu_settings(
         if use_gpu is not None
         else _parse_bool_env("WHISPER_CPP_USE_GPU", default=False)
     )
+    gpu_required = (
+        require_gpu
+        if require_gpu is not None
+        else _parse_bool_env("WHISPER_CPP_REQUIRE_GPU", default=False)
+    )
     if not gpu_requested:
         return False, None
 
     if not _is_gpu_runtime_available():
+        if gpu_required:
+            raise RuntimeError(
+                "WHISPER_CPP_REQUIRE_GPU=true but no GPU runtime detected. "
+                "Refusing CPU fallback."
+            )
         logger.warning(
             "WHISPER_CPP_USE_GPU=true but no GPU runtime detected; using CPU mode."
         )
@@ -472,6 +515,7 @@ def run_whisper_cpp(
     language: str,
     use_gpu: bool = False,
     gpu_layers: Optional[int] = None,
+    require_gpu: bool = False,
 ) -> Tuple[Path, List[Segment]]:
     out_dir.mkdir(parents=True, exist_ok=True)
     base = wav_path.stem
@@ -493,7 +537,15 @@ def run_whisper_cpp(
     gpu_cmd = list(base_cmd)
     if use_gpu:
         if gpu_layers is not None:
-            gpu_cmd.extend(["-ngl", str(gpu_layers)])
+            gpu_layers_flag = _resolve_whisper_gpu_layers_flag(whisper_bin)
+            if gpu_layers_flag is not None:
+                gpu_cmd.extend([gpu_layers_flag, str(gpu_layers)])
+            else:
+                logger.warning(
+                    "WHISPER_CPP_GPU_LAYERS=%s requested but whisper-cli does not "
+                    "support -ngl/--gpu-layers; using binary default GPU layering.",
+                    gpu_layers,
+                )
     else:
         gpu_cmd.append("-ng")
 
@@ -502,6 +554,11 @@ def run_whisper_cpp(
     except Exception as gpu_err:
         if not use_gpu:
             raise
+        if require_gpu:
+            raise RuntimeError(
+                "whisper.cpp GPU execution failed with WHISPER_CPP_REQUIRE_GPU=true; "
+                "refusing CPU fallback."
+            ) from gpu_err
         logger.warning(
             "whisper.cpp GPU run failed; retrying on CPU. Error: %s",
             gpu_err,
@@ -824,9 +881,11 @@ def transcribe_and_diarize_local_media(
     whisper_bin_path, whisper_model_path = resolve_whisper_paths(
         whisper_bin=whisper_bin, model_path=whisper_model
     )
+    whisper_require_gpu = _parse_bool_env("WHISPER_CPP_REQUIRE_GPU", default=False)
     whisper_use_gpu, whisper_resolved_gpu_layers = resolve_whisper_gpu_settings(
         use_gpu=use_gpu,
         gpu_layers=whisper_gpu_layers,
+        require_gpu=whisper_require_gpu,
     )
     logger.info(
         "whisper.cpp execution mode: %s",
@@ -856,6 +915,7 @@ def transcribe_and_diarize_local_media(
             language=language,
             use_gpu=whisper_use_gpu,
             gpu_layers=whisper_resolved_gpu_layers,
+            require_gpu=whisper_require_gpu and whisper_use_gpu,
         )
 
         diarization_info: Dict[str, Any] = {
@@ -906,6 +966,7 @@ def transcribe_and_diarize_local_media(
                     if use_gpu is not None
                     else _parse_bool_env("WHISPER_CPP_USE_GPU", default=False)
                 ),
+                "gpu_required": whisper_require_gpu,
                 "gpu_used": whisper_use_gpu,
                 "gpu_layers": whisper_resolved_gpu_layers,
             },
