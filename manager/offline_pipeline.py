@@ -585,7 +585,6 @@ def run_whisper_cpp(
         "-osrt",
         "-of",
         str(out_prefix),
-        "-np",
     ]
 
     gpu_cmd = list(base_cmd)
