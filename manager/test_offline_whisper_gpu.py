@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from offline_pipeline import (
+    _compose_whisper_ld_library_path,
     _detect_whisper_gpu_backend_init,
     resolve_whisper_gpu_settings,
     run_whisper_cpp,
@@ -46,6 +47,22 @@ class TestWhisperGpuSettings(unittest.TestCase):
                 use_gpu, layers = resolve_whisper_gpu_settings()
         self.assertTrue(use_gpu)
         self.assertEqual(layers, 28)
+
+    def test_compose_whisper_ld_library_path_prioritizes_whisper_and_system_cuda(self):
+        with patch("offline_pipeline.Path.exists", return_value=True):
+            composed = _compose_whisper_ld_library_path(
+                "/usr/lib/x86_64-linux-gnu:/custom/path:/usr/lib/x86_64-linux-gnu"
+            )
+
+        entries = composed.split(":")
+        self.assertGreaterEqual(len(entries), 5)
+        self.assertEqual(entries[0], "/app/tools/whisper.cpp/build/src")
+        self.assertEqual(entries[1], "/app/tools/whisper.cpp/build/ggml/src")
+        self.assertEqual(entries[2], "/usr/local/nvidia/lib64")
+        self.assertEqual(entries[3], "/usr/lib/x86_64-linux-gnu")
+        self.assertEqual(entries[4], "/lib/x86_64-linux-gnu")
+        self.assertIn("/custom/path", entries)
+        self.assertEqual(entries.count("/usr/lib/x86_64-linux-gnu"), 1)
 
 
 class TestRunWhisperGpuFallback(unittest.TestCase):

@@ -28,6 +28,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -318,6 +319,62 @@ def _run_capture_output(cmd: List[str]) -> str:
     return output
 
 
+def _compose_whisper_ld_library_path(existing: Optional[str]) -> str:
+    """Build an LD_LIBRARY_PATH that prioritizes whisper + system CUDA paths.
+
+    AKS GPU workloads can inject a default LD_LIBRARY_PATH that prefers Mesa paths.
+    For whisper.cpp CUDA runs we explicitly prioritize whisper's shared libraries
+    and system CUDA loader directories first, while preserving any existing entries.
+    """
+
+    preferred_paths = [
+        "/app/tools/whisper.cpp/build/src",
+        "/app/tools/whisper.cpp/build/ggml/src",
+        "/usr/local/nvidia/lib64",
+        "/usr/lib/x86_64-linux-gnu",
+        "/lib/x86_64-linux-gnu",
+        "/usr/lib/aarch64-linux-gnu",
+        "/lib/aarch64-linux-gnu",
+        "/usr/lib64",
+        "/lib64",
+    ]
+
+    ordered: List[str] = []
+    seen: set[str] = set()
+
+    for path in preferred_paths:
+        if not Path(path).exists() or path in seen:
+            continue
+        seen.add(path)
+        ordered.append(path)
+
+    if existing:
+        for path in existing.split(":"):
+            candidate = path.strip()
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            ordered.append(candidate)
+
+    return ":".join(ordered)
+
+
+@contextmanager
+def _temporary_env(updates: Dict[str, str]):
+    previous: Dict[str, Optional[str]] = {}
+    for key, value in updates.items():
+        previous[key] = os.environ.get(key)
+        os.environ[key] = value
+    try:
+        yield
+    finally:
+        for key, prior in previous.items():
+            if prior is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = prior
+
+
 def _which(binary: str) -> Optional[str]:
     return shutil.which(binary)
 
@@ -603,28 +660,33 @@ def run_whisper_cpp(
         gpu_cmd.append("-ng")
 
     actual_gpu_used = False
+    whisper_ld_library_path = _compose_whisper_ld_library_path(
+        os.getenv("LD_LIBRARY_PATH")
+    )
+    whisper_env = {"LD_LIBRARY_PATH": whisper_ld_library_path}
     try:
-        if use_gpu:
-            gpu_output = _run_capture_output(gpu_cmd)
-            gpu_backend_init = _detect_whisper_gpu_backend_init(gpu_output)
-            if gpu_backend_init is True:
-                actual_gpu_used = True
-            elif gpu_backend_init is False:
-                logger.warning(
-                    "whisper.cpp was asked to use GPU but initialized CPU/no-GPU backend."
-                )
-            else:
-                logger.warning(
-                    "Could not confirm whisper.cpp GPU backend initialization from output."
-                )
+        with _temporary_env(whisper_env):
+            if use_gpu:
+                gpu_output = _run_capture_output(gpu_cmd)
+                gpu_backend_init = _detect_whisper_gpu_backend_init(gpu_output)
+                if gpu_backend_init is True:
+                    actual_gpu_used = True
+                elif gpu_backend_init is False:
+                    logger.warning(
+                        "whisper.cpp was asked to use GPU but initialized CPU/no-GPU backend."
+                    )
+                else:
+                    logger.warning(
+                        "Could not confirm whisper.cpp GPU backend initialization from output."
+                    )
 
-            if require_gpu and gpu_backend_init is not True:
-                raise RuntimeError(
-                    "WHISPER_CPP_REQUIRE_GPU=true but whisper.cpp did not initialize a "
-                    "non-CPU GPU backend."
-                )
-        else:
-            _run(gpu_cmd)
+                if require_gpu and gpu_backend_init is not True:
+                    raise RuntimeError(
+                        "WHISPER_CPP_REQUIRE_GPU=true but whisper.cpp did not initialize a "
+                        "non-CPU GPU backend."
+                    )
+            else:
+                _run(gpu_cmd)
     except Exception as gpu_err:
         if not use_gpu:
             raise
@@ -639,7 +701,8 @@ def run_whisper_cpp(
         )
         cpu_cmd = list(base_cmd)
         cpu_cmd.append("-ng")
-        _run(cpu_cmd)
+        with _temporary_env(whisper_env):
+            _run(cpu_cmd)
         actual_gpu_used = False
 
     srt_path = out_dir / f"{base}.srt"
