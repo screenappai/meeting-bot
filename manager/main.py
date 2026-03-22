@@ -1155,7 +1155,23 @@ class MeetingManager:
                         transcript_data.get("word_count"),
                     )
 
-                    transcription_text = (transcript_data.get("transcript") or "").strip()
+                    from offline_pipeline import Segment, _segments_to_markdown
+
+                    raw_segments = transcript_data.get("segments") or []
+                    if raw_segments:
+                        segments = [
+                            Segment(
+                                start=seg.get("start", 0.0),
+                                end=seg.get("end", 0.0),
+                                text=seg.get("text", ""),
+                                speaker=seg.get("speaker"),
+                            )
+                            for seg in raw_segments
+                        ]
+                        transcription_text = _segments_to_markdown(segments)
+                    else:
+                        transcription_text = (transcript_data.get("transcript") or "").strip()
+
                     if transcription_text:
                         try:
                             firestore_meeting_id = self.fs_meeting_id or self.meeting_id
