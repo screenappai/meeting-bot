@@ -4362,15 +4362,21 @@ class MeetingController:
         return False, ""
 
     def _scan_upcoming_meetings(self):
-        """Scan for meetings starting soon and enqueue them.
+        """Scan for meetings starting soon (or recently missed) and enqueue them.
+
+        The window covers both the 8-minute lookahead and a backward window equal
+        to PAST_MEETING_GRACE_MINUTES, so meetings that were synced to Firestore
+        just before (or after) their start time are still picked up.  Deduplication
+        is handled by the existing bot_instance_id check and the Kubernetes
+        _is_bot_already_assigned() annotation check, ensuring no meeting gets a
+        second bot.
 
         Note: This method handles both Firestore Timestamp and ISO string formats
         for the 'start' field, as calendar sync systems may use either format.
         """
         now = datetime.now(timezone.utc)
-        target_time = now + timedelta(minutes=8)
-        window_start = target_time - timedelta(seconds=30)
-        window_end = target_time + timedelta(seconds=30)
+        window_start = now - timedelta(minutes=self.past_meeting_grace_minutes)
+        window_end = now + timedelta(minutes=8, seconds=30)
 
         logger.info(f"Scanning meetings: {window_start} to {window_end}")
 
@@ -4549,6 +4555,13 @@ class MeetingController:
                     self._link_meeting_to_existing_bot(doc, existing_job)
                 else:
                     # No active bot - create new job directly
+                    if start_time < now:
+                        logger.info(
+                            "LATE_SYNC_JOIN: meeting=%s, start=%s, lag_seconds=%.0f",
+                            doc.id,
+                            start_time,
+                            (now - start_time).total_seconds(),
+                        )
                     logger.info(f"Creating bot for meeting {doc.id}")
                     success = self._create_bot_for_meeting(
                         doc, org_id, join_url, user_id
