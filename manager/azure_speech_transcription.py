@@ -6,6 +6,8 @@ import json
 import logging
 import mimetypes
 import os
+import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,6 +176,30 @@ class AzureSpeechTranscriptionAdapter:
             f"?api-version={self.config.api_version}"
         )
 
+    def _convert_to_wav(self, audio_path: Path) -> Optional[Path]:
+        """Convert audio to 16-bit PCM WAV at 16kHz mono for Azure compatibility."""
+        wav_fd, wav_path_str = tempfile.mkstemp(suffix=".wav")
+        os.close(wav_fd)
+        wav_path = Path(wav_path_str)
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(audio_path),
+            "-ac", "1",
+            "-ar", "16000",
+            "-sample_fmt", "s16",
+            "-vn",
+            str(wav_path),
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        if result.returncode == 0:
+            logger.info("Converted audio to WAV PCM 16kHz mono for Azure upload")
+            return wav_path
+        logger.warning(
+            "WAV conversion failed, using original audio: %s", result.stderr[:200]
+        )
+        wav_path.unlink(missing_ok=True)
+        return None
+
     def transcribe_audio(
         self,
         audio_uri: str,
@@ -206,8 +232,16 @@ class AzureSpeechTranscriptionAdapter:
         if enable_timestamps:
             definition["wordLevelTimestampsEnabled"] = True
 
-        mime = mimetypes.guess_type(str(audio_path))[0] or "application/octet-stream"
         headers = {"Ocp-Apim-Subscription-Key": self.config.key}
+
+        # Convert to WAV PCM 16kHz mono — Azure Speech Fast Transcription reliably
+        # accepts WAV regardless of API version, region, or diarization settings.
+        # Compressed formats (M4A, WebM) can trigger 422 InvalidAudioFormat.
+        wav_path = self._convert_to_wav(audio_path)
+        upload_path = wav_path if wav_path else audio_path
+        mime = "audio/wav" if wav_path else (
+            mimetypes.guess_type(str(audio_path))[0] or "application/octet-stream"
+        )
 
         logger.info(
             "Submitting Azure Speech fast transcription: endpoint=%s, locale=%s, diarization=%s",
@@ -217,17 +251,21 @@ class AzureSpeechTranscriptionAdapter:
         )
         started = time.time()
 
-        with audio_path.open("rb") as audio_file:
-            files = {
-                "audio": (audio_path.name, audio_file, mime),
-                "definition": (None, json.dumps(definition), "application/json"),
-            }
-            response = self.session.post(
-                self._transcribe_url,
-                headers=headers,
-                files=files,
-                timeout=self.config.request_timeout_seconds,
-            )
+        try:
+            with upload_path.open("rb") as audio_file:
+                files = {
+                    "audio": (upload_path.name, audio_file, mime),
+                    "definition": (None, json.dumps(definition), "application/json"),
+                }
+                response = self.session.post(
+                    self._transcribe_url,
+                    headers=headers,
+                    files=files,
+                    timeout=self.config.request_timeout_seconds,
+                )
+        finally:
+            if wav_path and wav_path.exists():
+                wav_path.unlink(missing_ok=True)
 
         if response.status_code != 200:
             raise RuntimeError(
@@ -305,27 +343,29 @@ class AzureSpeechTranscriptionAdapter:
     ) -> bool:
         try:
             if format == "txt":
-                with open(output_path, "w", encoding="utf-8") as f:
-                    f.write(transcript_data.get("transcript", "").strip())
-                    f.write("\n\n")
-                    f.write("--- Metadata ---\n")
-                    f.write(f"Words: {transcript_data.get('word_count', 0)}\n")
-                    f.write(
-                        "Processing Time: "
-                        f"{transcript_data.get('processing_time_ms', 0) / 1000:.2f}s\n"
-                    )
-                    f.write(f"Model: {transcript_data.get('model', 'N/A')}\n")
-                    f.write(f"Locale: {transcript_data.get('locale', 'N/A')}\n")
+                from offline_pipeline import (
+                    Segment as _Segment,
+                    _segments_to_markdown,
+                )
 
-                    segments = transcript_data.get("segments") or []
-                    if segments:
-                        f.write("\n\n--- Segments ---\n")
-                        for seg in segments:
-                            speaker = f"{seg['speaker']}: " if seg.get("speaker") else ""
-                            f.write(
-                                f"[{seg.get('start', 0):0.2f}-{seg.get('end', 0):0.2f}] "
-                                f"{speaker}{seg.get('text', '')}\n"
-                            )
+                raw_segments = transcript_data.get("segments") or []
+                segs = [
+                    _Segment(
+                        start=s.get("start", 0.0),
+                        end=s.get("end", 0.0),
+                        text=s.get("text", ""),
+                        speaker=s.get("speaker"),
+                    )
+                    for s in raw_segments
+                    if s.get("text")
+                ]
+                body = (
+                    _segments_to_markdown(segs)
+                    if segs
+                    else (transcript_data.get("transcript") or "").strip()
+                )
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(body)
             elif format == "json":
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(transcript_data, f, indent=2, ensure_ascii=False)
