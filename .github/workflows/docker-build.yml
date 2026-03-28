@@ -126,7 +126,7 @@ jobs:
 
       - name: Scan meeting-bot image with Grype (ADV-894)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@1638637db639e0ade3258b51db49a9a137574c3e # v6
         with:
           image: ${{ env.REGISTRY }}/meeting-bot@${{ steps.docker_build.outputs.digest }}
           fail-build: true
@@ -302,7 +302,7 @@ jobs:
 
       - name: Scan manager image with Grype (ADV-894)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@1638637db639e0ade3258b51db49a9a137574c3e # v6
         with:
           image: ${{ env.REGISTRY }}/manager@${{ steps.manager_docker_build.outputs.digest }}
           fail-build: true
@@ -429,7 +429,7 @@ jobs:
 
       - name: Scan controller image with Grype (ADV-894)
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@1638637db639e0ade3258b51db49a9a137574c3e # v6
         with:
           image: ${{ env.REGISTRY }}/controller@${{ steps.controller_docker_build.outputs.digest }}
           fail-build: true
