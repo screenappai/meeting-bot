@@ -705,6 +705,27 @@ class MeetingManager:
         )
         return metadata
 
+    def _update_bot_instance_stage(self, stage: str) -> None:
+        """Write processing_stage to bot_instances doc for real-time frontend display."""
+        bot_instance_id = (
+            os.environ.get("BOT_INSTANCE_ID") or os.environ.get("bot_instance_id")
+        )
+        if not bot_instance_id or not self.firestore_client:
+            return
+        try:
+            from google.cloud import firestore as fs_lib
+
+            db = fs_lib.Client(database=self.firestore_database)
+            db.collection("bot_instances").document(bot_instance_id).update(
+                {
+                    "processing_stage": stage,
+                    "processing_stage_updated_at": fs_lib.SERVER_TIMESTAMP,
+                }
+            )
+            logger.info("Bot instance stage updated: %s (id=%s)", stage, bot_instance_id)
+        except Exception as e:
+            logger.warning("Failed to update bot instance stage to %s: %s", stage, e)
+
     def process_meeting(self) -> bool:
         """
         Process the meeting recording job
@@ -848,6 +869,7 @@ class MeetingManager:
             mp4_path = None
             converter = None
             audio_extract_started_at = time.monotonic()
+            self._update_bot_instance_stage("converting")
             try:
                 logger.info("Step 2.5: Extracting audio-only for transcription...")
                 from media_converter import MediaConverter
@@ -1084,6 +1106,7 @@ class MeetingManager:
                 else recording_path
             )
 
+            self._update_bot_instance_stage("transcribing")
             if self.transcription_mode == "none":
                 logger.info("Step 3: Transcription skipped (TRANSCRIPTION_MODE=none)")
                 logger.debug("POST-MEETING DECISION: Skipping transcription")
@@ -1412,6 +1435,7 @@ class MeetingManager:
 
             if self.generate_mp4_artifact:
                 mp4_convert_started_at = time.monotonic()
+                self._update_bot_instance_stage("converting")
                 try:
                     logger.info("Step 3.5: Generating MP4 playback artifact...")
                     if converter is None:
@@ -1441,6 +1465,7 @@ class MeetingManager:
             # Step 4: Upload all files to ALL attendees (fanout from container)
             # Find all meetings with the same URL on the same day = attendees
             fanout_started_at = time.monotonic()
+            self._update_bot_instance_stage("uploading")
             logger.info("Step 4: Discovering attendees and uploading files to all...")
             logger.debug("=" * 80)
             logger.debug(
