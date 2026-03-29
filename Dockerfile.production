@@ -77,6 +77,12 @@ COPY --chown=nodejs:nodejs auto_launch_protocols.json /etc/opt/chrome/policies/m
 # Copy package files
 COPY package*.json ./
 
+# Prevent Puppeteer from downloading its own Chrome binary during npm ci.
+# The application uses google-chrome-stable (/usr/bin/google-chrome) via
+# executablePath — Puppeteer's bundled Chrome is never used and would
+# otherwise embed a stale browser with known CVEs.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci && npm cache clean --force
 
