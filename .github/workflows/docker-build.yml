@@ -116,6 +116,7 @@ jobs:
           image: ${{ env.REGISTRY }}/meeting-bot@${{ steps.docker_build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
+          only-fixed: true
 
       - name: Output Meeting-Bot Image Reference
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
@@ -278,6 +279,7 @@ jobs:
           image: ${{ env.REGISTRY }}/manager@${{ steps.manager_docker_build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
+          only-fixed: true
 
       - name: Output Manager Image Reference
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
@@ -390,6 +392,7 @@ jobs:
           image: ${{ env.REGISTRY }}/controller@${{ steps.controller_docker_build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
+          only-fixed: true
 
       - name: Output Controller Image Reference
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')

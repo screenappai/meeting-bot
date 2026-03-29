@@ -25,3 +25,7 @@ sentry-sdk>=2.35.0,<3.0.0
 
 # Optional: Better logging
 python-json-logger==4.0.0
+
+# Pin wheel and jaraco-context to fix GHSA-8rrh-rw8j-w5fx and GHSA-58pv-8j8x-9vj2
+wheel>=0.46.2
+jaraco-context>=6.1.0

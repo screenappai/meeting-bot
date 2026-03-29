@@ -81,7 +81,11 @@ COPY package*.json ./
 RUN npm ci && npm cache clean --force
 
 # Install Playwright and its dependencies
-RUN npx playwright install --with-deps
+# Install only the system-level dependencies Playwright needs for Chromium.
+# We intentionally skip downloading the Playwright-bundled Chromium binary
+# since the application uses google-chrome-stable (executablePath: /usr/bin/google-chrome).
+# This avoids embedding a stale bundled Chrome with known CVEs.
+RUN npx playwright install-deps chromium
 
 # Copy source code
 COPY . .

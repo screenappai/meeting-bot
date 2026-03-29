@@ -2,7 +2,7 @@
 # Python 3.11 with ffmpeg for media conversion
 # Processes individual meeting recordings with media conversion and upload
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Install system dependencies and upgrade existing packages to fix OS-level CVEs (openssl)
 RUN apt-get update \

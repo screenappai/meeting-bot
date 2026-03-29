@@ -1,7 +1,7 @@
 # Meeting Bot Controller
 # Python 3.11 - Creates Kubernetes Jobs to process meetings
 
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Install system dependencies and upgrade existing packages to fix OS-level CVEs (openssl)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
