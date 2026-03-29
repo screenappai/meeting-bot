@@ -56,6 +56,6 @@
     "fast-xml-parser": ">=5.3.8",
     "flatted": ">=3.4.2",
     "path-to-regexp": "0.1.13",
-    "picomatch": ">=2.3.2"
+    "picomatch": ">=4.0.4"
   }
 }
