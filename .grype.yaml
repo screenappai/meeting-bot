@@ -1,0 +1,15 @@
+# Grype ignore rules for meeting-bot container images (ADV-894)
+#
+# picomatch bundled inside npm's own internal node_modules is not part of
+# our application dependency tree and does not run at container runtime.
+# The npm CLI is only present for build operations, not production execution.
+# Location: /usr/local/lib/node_modules/npm/node_modules/picomatch
+ignore:
+  - vulnerability: GHSA-c2c7-rcm5-vvqj
+    package:
+      name: picomatch
+      location: "/usr/local/lib/node_modules/npm/node_modules/picomatch/package.json"
+  - vulnerability: GHSA-3v7f-55p6-f55p
+    package:
+      name: picomatch
+      location: "/usr/local/lib/node_modules/npm/node_modules/picomatch/package.json"
