@@ -5,6 +5,7 @@ import mainDebug from '../test/debug';
 import googleRouter from './google';
 import microsoftRouter from './microsoft';
 import zoomRouter from './zoom';
+import recordingsRouter from './recordings';
 import { globalJobStore } from '../lib/globalJobStore';
 import { RedisConsumerService } from '../connect/RedisConsumerService';
 
@@ -68,6 +69,7 @@ app.get('/debug', async (req, res, next) => {
 app.use('/google', googleRouter);
 app.use('/microsoft', microsoftRouter);
 app.use('/zoom', zoomRouter);
+app.use('/recordings', recordingsRouter);
 
 export const setGracefulShutdown = (val: number) =>
   gracefulShutdown = val;
