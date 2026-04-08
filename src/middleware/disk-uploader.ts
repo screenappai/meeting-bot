@@ -14,6 +14,7 @@ import config from '../config';
 import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
+import { RecordingRetentionPolicy } from '../lib/storage/retention';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -45,6 +46,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 export interface IUploader {
   uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
+  waitForWritesToComplete(timeoutMs?: number): Promise<void>;
 }
 
 // Save to disk and upload in one session
@@ -81,6 +83,7 @@ class DiskUploader implements IUploader {
   private diskWriteSuccess: LogAggregator;
 
   private forceUpload: boolean;
+  private retentionPolicy: RecordingRetentionPolicy;
 
   private constructor(
     token: string,
@@ -107,6 +110,7 @@ class DiskUploader implements IUploader {
     this.writing = false;
     this.diskWriteSuccess = new LogAggregator(this._logger, `Success writing temp chunk to disk ${this._userId}`);
     this.forceUpload = false;
+    this.retentionPolicy = new RecordingRetentionPolicy(logger);
   }
 
   public static async initialize(
@@ -309,6 +313,22 @@ class DiskUploader implements IUploader {
     } catch(err) {
       this._logger.info('Error: Unable to save the chunk to disk...', this._userId, this._teamId, err);
       return false;
+    }
+  }
+
+  public async waitForWritesToComplete(timeoutMs: number = 30000): Promise<void> {
+    const startTime = Date.now();
+    const checkInterval = 100;
+
+    while (this.writing) {
+      if (Date.now() - startTime > timeoutMs) {
+        throw new Error(`Timeout waiting for writes to complete after ${timeoutMs}ms`);
+      }
+      await new Promise(resolve => setTimeout(resolve, checkInterval));
+    }
+
+    if (this.queue.length > 0) {
+      this._logger.warn('write_queue_not_empty_after_wait', { queueLength: this.queue.length, userId: this._userId });
     }
   }
 
@@ -637,11 +657,20 @@ class DiskUploader implements IUploader {
         // Route to selected object storage provider (S3 or Azure) based on configuration
         uploadResult = await this.uploadRecordingToObjectStorage();
       } else {
-        throw new Error(`Unsupported UPLOADER_TYPE configuration: ${config.uploaderType}`);
+        this._logger.error(`Unsupported UPLOADER_TYPE configuration: ${config.uploaderType}`);
+        const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+        await this.retentionPolicy.decideAndExecute(
+          { success: false, error: new Error(`Unsupported UPLOADER_TYPE: ${config.uploaderType}`), uploaderConfigured: false },
+          filePath
+        );
+        return false;
       }
 
-      // Delete temp file after the upload is finished
-      await this.deleteTempFileAsync();
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+      await this.retentionPolicy.decideAndExecute(
+        { success: uploadResult, error: uploadResult ? null : new Error('Upload returned false'), uploaderConfigured: true },
+        filePath
+      );
 
       // Send optional notifications on success
       if (uploadResult) {
@@ -669,6 +698,15 @@ class DiskUploader implements IUploader {
       return uploadResult;
     } catch (err) {
       this._logger.info('Unable to upload recording to server...', { error: err, userId: this._userId, teamId: this._teamId });
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+      try {
+        await this.retentionPolicy.decideAndExecute(
+          { success: false, error: err instanceof Error ? err : new Error(String(err)), uploaderConfigured: true },
+          filePath
+        );
+      } catch (retentionErr) {
+        this._logger.error('Failed to execute retention policy', { error: retentionErr });
+      }
       return false;
     }
   }

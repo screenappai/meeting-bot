@@ -17,6 +17,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { SilenceMonitor } from '../lib/meeting-end/SilenceMonitor';
+import { ParticipantStateResolver } from '../lib/meeting-end/ParticipantStateResolver';
+import { MeetingEndDecisionEngine } from '../lib/meeting-end/MeetingEndDecisionEngine';
+import type { SilenceMonitorConfig, MeetingEndConfig, SilenceEvent, EndReason } from '../lib/meeting-end/types';
 
 const execAsync = promisify(exec);
 
@@ -551,6 +555,9 @@ export class GoogleMeetBot extends MeetBotBase {
 
     let ffmpegFailed = false;
     let ffmpegError: Error | null = null;
+    let silenceMonitor: SilenceMonitor | null = null;
+    let cleanupAllTimers: (() => void) | null = null;
+    let cleanupBrowserIntervals: (() => Promise<void>) | null = null;
 
     try {
       await recorder.start();
@@ -565,9 +572,68 @@ export class GoogleMeetBot extends MeetBotBase {
       });
 
       let meetingEnded = false;
+      let endReason: EndReason | null = null;
+
+      const trackedTimers: Array<NodeJS.Timeout> = [];
+      const trackedIntervals: Array<NodeJS.Timeout> = [];
+
+      cleanupAllTimers = () => {
+        trackedTimers.forEach(t => clearTimeout(t));
+        trackedIntervals.forEach(i => clearInterval(i));
+        trackedTimers.length = 0;
+        trackedIntervals.length = 0;
+      };
+
+      cleanupBrowserIntervals = async () => {
+        try {
+          await this.page.evaluate(() => (window as any)._cleanupBrowserIntervals?.());
+        } catch {}
+      };
+
+      let lastParticipantCheckTime = 0;
+      const PARTICIPANT_CHECK_INTERVAL_MS = 30000;
+
+      const silenceMonitorConfig: SilenceMonitorConfig = {
+        checkIntervalMs: 5000,
+        silenceThreshold: 200,
+        primaryThresholdMs: config.inactivityLimit * 60 * 1000,
+        fallbackThresholdMs: config.endFallbackSilenceMinutes * 60 * 1000,
+      };
+
+      const meetingEndConfig: MeetingEndConfig = {
+        primaryThresholdMs: config.inactivityLimit * 60 * 1000,
+        fallbackThresholdMs: config.endFallbackSilenceMinutes * 60 * 1000,
+        aloneConfirmationRequired: 3,
+        pageChangedConfirmationRequired: 3,
+        enableParticipantCountEnd: config.enableParticipantCountEnd,
+      };
+
+      silenceMonitor = new SilenceMonitor(silenceMonitorConfig, this._logger);
+      const participantResolver = new ParticipantStateResolver(this.page, this._logger);
+      const decisionEngine = new MeetingEndDecisionEngine(meetingEndConfig, this._logger);
+
       await this.page.exposeFunction('screenAppMeetEnd', () => {
-        this._logger.info('Meeting ended signal received from browser');
-        meetingEnded = true;
+        const decision = decisionEngine.onBrowserSignal();
+        if (decision.action === 'end') {
+          this._logger.info('Meeting ended signal received from browser', { reason: decision.reason });
+          meetingEnded = true;
+          endReason = decision.reason;
+          silenceMonitor!.stop();
+          cleanupAllTimers!();
+          void cleanupBrowserIntervals!();
+        }
+      });
+
+      await this.page.exposeFunction('screenAppMaxDuration', () => {
+        const decision = decisionEngine.onMaxDuration();
+        if (decision.action === 'end') {
+          this._logger.info('Meeting ended: max duration reached', { reason: decision.reason });
+          meetingEnded = true;
+          endReason = decision.reason;
+          silenceMonitor!.stop();
+          cleanupAllTimers!();
+          void cleanupBrowserIntervals!();
+        }
       });
 
       this.page.on('console', async msg => {
@@ -578,128 +644,73 @@ export class GoogleMeetBot extends MeetBotBase {
         }
       });
 
-      const inactivityLimitMs = config.inactivityLimit * 60 * 1000;
+      this._logger.info('Starting audio silence detection for Google Meet', {
+        primaryThresholdMin: config.inactivityLimit,
+        fallbackThresholdMin: config.endFallbackSilenceMinutes,
+        activateAfterMin: config.activateInactivityDetectionAfter,
+      });
 
-      const monitorAudioSilence = async () => {
-        try {
-          this._logger.info('Starting audio silence detection for Google Meet', {
-            inactivityLimitMs,
-            inactivityLimitMinutes: inactivityLimitMs / 60000
-          });
-          let consecutiveSilentChecks = 0;
-          const checkIntervalSeconds = 5;
-          const checksNeeded = Math.ceil(inactivityLimitMs / 1000 / checkIntervalSeconds);
+      const activationTimer = setTimeout(() => {
+        if (meetingEnded) return;
+        silenceMonitor!.start((event: SilenceEvent) => {
+          if (meetingEnded) return;
 
-          const checkInterval = setInterval(async () => {
-            try {
-              const { stdout } = await execAsync(
-                'timeout 1 parec --device=virtual_output.monitor --format=s16le --rate=16000 --channels=1 2>/dev/null | ' +
-                'od -An -td2 -v | awk \'BEGIN{max=0} {for(i=1;i<=NF;i++) {val=($i<0)?-$i:$i; if(val>max) max=val}} END{print max}\''
-              );
+          const decision = decisionEngine.onSilenceEvent(event);
 
-              const peakLevel = parseInt(stdout.trim()) || 0;
-              const silenceThreshold = 200;
+          if (decision.action === 'end') {
+            this._logger.warn('Meeting ending via silence decision', { reason: decision.reason });
+            meetingEnded = true;
+            endReason = decision.reason;
+            silenceMonitor!.stop();
+            cleanupAllTimers!();
+            void cleanupBrowserIntervals!();
+            return;
+          }
 
-              this._logger.debug('Audio level check', { peakLevel, threshold: silenceThreshold });
-
-              if (peakLevel < silenceThreshold) {
-                consecutiveSilentChecks++;
-                this._logger.info(`Silence detected: ${consecutiveSilentChecks}/${checksNeeded} checks`, { peakLevel });
-
-                if (consecutiveSilentChecks >= checksNeeded) {
-                  this._logger.warn('Audio silence threshold reached, ending Google Meet meeting', {
-                    userId,
-                    teamId,
-                    silenceDurationMs: inactivityLimitMs,
-                    silenceDurationMinutes: inactivityLimitMs / 60000,
-                    finalPeakLevel: peakLevel,
-                    checksNeeded,
-                    checksDetected: consecutiveSilentChecks
-                  });
-                  clearInterval(checkInterval);
+          if (decisionEngine.shouldCheckParticipants()) {
+            const now = Date.now();
+            if (now - lastParticipantCheckTime >= PARTICIPANT_CHECK_INTERVAL_MS) {
+              lastParticipantCheckTime = now;
+              this._logger.info('Running participant check after silence threshold');
+              participantResolver.resolve().then((state) => {
+                if (meetingEnded) return;
+                const participantDecision = decisionEngine.onParticipantState(state);
+                if (participantDecision.action === 'end') {
+                  this._logger.warn('Meeting ending via participant decision', { reason: participantDecision.reason });
                   meetingEnded = true;
+                  endReason = participantDecision.reason;
+                  silenceMonitor!.stop();
+                  cleanupAllTimers!();
+                  void cleanupBrowserIntervals!();
                 }
-              } else {
-                if (consecutiveSilentChecks > 0) {
-                  this._logger.info('Audio detected, resetting silence counter', { peakLevel });
-                }
-                consecutiveSilentChecks = 0;
-              }
-            } catch (err) {
-              this._logger.error('Error checking audio level:', err);
+              }).catch((err) => {
+                this._logger.error('Participant check failed', { error: err });
+              });
             }
-          }, 5000);
-
-        } catch (error) {
-          this._logger.error('Failed to initialize audio silence detection:', error);
-          this._logger.warn('Will rely on participant detection only');
-        }
-      };
-
-      setTimeout(() => {
-        monitorAudioSilence();
+          }
+        });
       }, config.activateInactivityDetectionAfter * 60 * 1000);
+      trackedTimers.push(activationTimer);
+
+      await this.page.exposeFunction('screenAppCleanupBrowser', async () => {
+        try {
+          await this.page.evaluate(() => {
+            if (typeof (window as any)._cleanupBrowserIntervals === 'function') {
+              (window as any)._cleanupBrowserIntervals();
+            }
+          });
+        } catch (err) {
+          this._logger.warn('Browser cleanup failed', { error: err });
+        }
+      });
 
       await this.page.evaluate(
-        ({ activateAfterMinutes, maxDuration }: { activateAfterMinutes: number, maxDuration: number }) => {
-          setTimeout(() => {
+        ({ maxDuration }: { maxDuration: number }) => {
+          const maxDurationTimer = setTimeout(() => {
             console.log(`Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`);
-            (window as any).screenAppMeetEnd();
+            (window as any).screenAppMaxDuration();
           }, maxDuration);
           console.log(`Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`);
-
-          setTimeout(() => {
-            console.log('Activating participant count detection...');
-
-            const detectLoneParticipant = () => {
-              const interval = setInterval(() => {
-                try {
-                  const peopleBtn = document.querySelector('button[aria-label*="People"]');
-                  if (peopleBtn) {
-                    const label = peopleBtn.getAttribute('aria-label') || '';
-                    const match = label.match(/(\d+)/);
-                    if (match) {
-                      const count = parseInt(match[1]);
-                      if (count >= 2) return;
-                    }
-                  }
-
-                  const buttons = Array.from(document.querySelectorAll('button'));
-                  for (const btn of buttons) {
-                    const text = btn.textContent || '';
-                    const label = btn.getAttribute('aria-label') || '';
-                    const match = (text + ' ' + label).match(/(\d+)\s*(participant|people|joined)/i);
-                    if (match && parseInt(match[1]) >= 2) return;
-                  }
-
-                  const leaveCallButton = document.querySelector('button[aria-label="Leave call"]');
-                  if (!leaveCallButton) {
-                    console.log('Google Meet page state changed - ending recording');
-                    clearInterval(interval);
-                    (window as any).screenAppMeetEnd();
-                    return;
-                  }
-
-                  const bodyText = document.body.innerText;
-                  if (bodyText.includes("You've been removed from the meeting") ||
-                      bodyText.includes('No one responded to your request to join the call')) {
-                    console.log('Bot removed or not admitted - ending recording');
-                    clearInterval(interval);
-                    (window as any).screenAppMeetEnd();
-                    return;
-                  }
-
-                  console.log('Bot is alone, ending meeting');
-                  clearInterval(interval);
-                  (window as any).screenAppMeetEnd();
-                } catch (error) {
-                  console.error('Participant detection error:', error);
-                }
-              }, 5000);
-            };
-
-            detectLoneParticipant();
-          }, activateAfterMinutes * 60 * 1000);
 
           const dismissModalsInterval = setInterval(() => {
             try {
@@ -739,9 +750,13 @@ export class GoogleMeetBot extends MeetBotBase {
           setTimeout(() => {
             clearInterval(dismissModalsInterval);
           }, maxDuration);
+
+          (window as any)._cleanupBrowserIntervals = () => {
+            clearInterval(dismissModalsInterval);
+            clearTimeout(maxDurationTimer);
+          };
         },
         {
-          activateAfterMinutes: config.activateInactivityDetectionAfter,
           maxDuration: duration,
         }
       );
@@ -754,6 +769,7 @@ export class GoogleMeetBot extends MeetBotBase {
       this._logger.info('Recording period ended', {
         meetingEnded,
         ffmpegFailed,
+        endReason,
         recordedDuration: Math.floor((Date.now() - startTime) / 1000) + 's'
       });
 
@@ -767,19 +783,30 @@ export class GoogleMeetBot extends MeetBotBase {
       ffmpegError = error instanceof Error ? error : new Error(String(error));
       throw error;
     } finally {
+      silenceMonitor?.stop();
+      cleanupAllTimers?.();
+      try { await cleanupBrowserIntervals?.(); } catch {}
       this._logger.info('Stopping ffmpeg recording...');
       await recorder.stop();
 
-      this._logger.info('Uploading recorded file...', { outputPath });
+      this._logger.info('Saving recording to temp storage...', { outputPath });
 
       let uploadSuccess = false;
       if (fs.existsSync(outputPath)) {
-        const fileBuffer = fs.readFileSync(outputPath);
-        await uploader.saveDataToTempFile(fileBuffer);
-
-        fs.unlinkSync(outputPath);
-        this._logger.info('Recording uploaded and temporary file cleaned up');
-        uploadSuccess = true;
+        try {
+          const fileBuffer = fs.readFileSync(outputPath);
+          const saved = await uploader.saveDataToTempFile(fileBuffer);
+          if (saved) {
+            await uploader.waitForWritesToComplete();
+            fs.unlinkSync(outputPath);
+            this._logger.info('Recording saved to temp storage and source file cleaned up');
+            uploadSuccess = true;
+          } else {
+            this._logger.error('saveDataToTempFile returned false, preserving recording file', { outputPath });
+          }
+        } catch (err) {
+          this._logger.error('Failed to save recording to temp storage, preserving file', { error: err, outputPath });
+        }
       } else {
         this._logger.error('Recording file not found!', { outputPath });
       }
@@ -790,9 +817,9 @@ export class GoogleMeetBot extends MeetBotBase {
       if (ffmpegFailed) {
         this._logger.error('Recording failed due to FFmpeg error', { botId, eventId, userId, teamId });
       } else if (!uploadSuccess) {
-        this._logger.error('Recording completed but file upload failed', { botId, eventId, userId, teamId });
+        this._logger.error('Recording completed but save to temp storage failed', { botId, eventId, userId, teamId });
       } else {
-        this._logger.info('Recording completed successfully ✨', { botId, eventId, userId, teamId });
+        this._logger.info('Recording saved to temp storage successfully', { botId, eventId, userId, teamId });
       }
     }
   }
