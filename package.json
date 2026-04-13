@@ -30,7 +30,7 @@
     "@aws-sdk/lib-storage": "^3.876.0",
     "@google-cloud/storage": "^7.16.0",
     "@sentry/node": "^9.27.0",
-    "axios": "^1.7.7",
+    "axios": "^1.15.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",
@@ -51,7 +51,7 @@
   },
   "overrides": {
     "@tootallnate/once": ">=3.0.1",
-    "basic-ftp": ">=5.2.0",
+    "basic-ftp": ">=5.2.2",
     "brace-expansion": ">=5.0.5",
     "fast-xml-parser": ">=5.3.8",
     "flatted": ">=3.4.2",
