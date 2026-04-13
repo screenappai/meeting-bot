@@ -625,14 +625,16 @@ class MeetingController:
                 org_id, meeting_url
             )
             if is_assigned:
-                logger.warning(
+                logger.info(
                     "DUPLICATE_PREVENTED: Bot already assigned for org_id='%s', "
-                    "meeting_url='%s', existing_job='%s'. Skipping job creation.",
+                    "meeting_url='%s', existing_job='%s'. Treating as already handled.",
                     org_id,
                     meeting_url,
                     existing_job,
                 )
-                return False
+                # This is an expected deduplication path, not a job creation failure.
+                # The already-running job is responsible for completing session work.
+                return True
 
             logger.info(f"Creating Kubernetes Job: {job_name}")
 
