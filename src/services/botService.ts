@@ -36,7 +36,12 @@ export const patchBotStatus = async ({
     });
     return response.data.success;
   } catch(e) {
-    logger.error('Can\'t update the bot status', e.message, e?.response?.data);
+    logger.warn('Skipping bot status update (non-fatal)', {
+      eventId,
+      botId,
+      provider,
+      httpStatus: e?.response?.status,
+    });
     return false;
   }
 };

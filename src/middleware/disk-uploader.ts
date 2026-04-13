@@ -546,7 +546,12 @@ class DiskUploader implements IUploader {
 
       return uploadResult;
     } catch (err) {
-      this._logger.info('Unable to upload recording to server...', { error: err, userId: this._userId, teamId: this._teamId });
+      this._logger.warn('Recording upload to external server was not completed (non-fatal)', {
+        userId: this._userId,
+        teamId: this._teamId,
+        uploaderType: config.uploaderType,
+        forceUpload: this.forceUpload,
+      });
       return false;
     }
   }
