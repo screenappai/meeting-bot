@@ -1226,9 +1226,11 @@ class MeetingManager:
                             "Azure transcription completed with empty text payload"
                         )
                 except Exception as azure_err:
-                    logger.exception(
-                        "Azure transcription failed (non-fatal): %s",
+                    logger.warning(
+                        "Azure transcription unavailable (non-fatal); "
+                        "fallback path engaged: %s",
                         azure_err,
+                        exc_info=True,
                     )
                     if self.azure_speech_fallback_to_offline:
                         logger.warning(

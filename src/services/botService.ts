@@ -16,6 +16,14 @@ export const patchBotStatus = async ({
     provider: 'google' | 'microsoft' | 'zoom',
     status: BotStatus[],
 }, logger: Logger) => {
+  if (!token || !String(token).trim()) {
+    logger.warn('Skipping bot status update because auth token is missing', {
+      eventId,
+      botId,
+      provider,
+    });
+    return false;
+  }
   try {
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<
@@ -52,6 +60,16 @@ export const addBotLog = async ({
     category: LogCategory,
     subCategory: LogSubCategory<LogCategory>,
 }, logger: Logger) => {
+  if (!token || !String(token).trim()) {
+    logger.warn('Skipping bot log upload because auth token is missing', {
+      eventId,
+      botId,
+      provider,
+      category,
+      subCategory,
+    });
+    return false;
+  }
   try {
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<
