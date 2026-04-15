@@ -189,6 +189,18 @@ class MeetingController:
             for s in os.getenv("MEETING_STATUS_VALUES", "scheduled").split(",")
             if s.strip()
         ]
+        
+        # Query mode for meeting_sessions collection (similar to MEETINGS_QUERY_MODE)
+        self.meeting_sessions_query_mode = (
+            os.getenv(
+                "MEETING_SESSIONS_QUERY_MODE",
+                # 'collection' -> use meeting_sessions as a collection
+                # 'collection_group' -> query across all orgs (requires indexes)
+                "collection",
+            )
+            .strip()
+            .lower()
+        )
 
         # Only create a bot instance when meeting doesn't already have one.
         self.meeting_bot_instance_field = os.getenv(
@@ -411,6 +423,10 @@ class MeetingController:
             "  Meeting discovery: mode=%s path=%s",
             self.meetings_query_mode,
             self.meetings_collection_path,
+        )
+        logger.info(
+            "  Meeting sessions query: mode=%s",
+            self.meeting_sessions_query_mode,
         )
         logger.info(
             "  Past meeting guard: grace_minutes=%d",
@@ -1979,8 +1995,12 @@ class MeetingController:
 
     def _query_queued_meeting_sessions(self) -> List[firestore.DocumentSnapshot]:
         # Query across all orgs.
+        if self.meeting_sessions_query_mode == "collection_group":
+            coll = self.db.collection_group("meeting_sessions")
+        else:
+            coll = self.db.collection("meeting_sessions")
         q = (
-            self.db.collection_group("meeting_sessions")
+            coll
             .where(field_path="status", op_string="==", value="queued")
             .limit(self.max_claim_per_poll)
         )
@@ -2129,8 +2149,12 @@ class MeetingController:
                 logger.debug("SESSION_VALIDATION_SKIPPED: reason=batch_v1_unavailable")
                 return
 
+            if self.meeting_sessions_query_mode == "collection_group":
+                coll = self.db.collection_group("meeting_sessions")
+            else:
+                coll = self.db.collection("meeting_sessions")
             q = (
-                self.db.collection_group("meeting_sessions")
+                coll
                 .where(
                     field_path="status", op_string="in", value=["claimed", "processing"]
                 )
@@ -2728,8 +2752,12 @@ class MeetingController:
     ) -> List[firestore.DocumentSnapshot]:
         """Find completed sessions where fan-out hasn't succeeded yet."""
 
+        if self.meeting_sessions_query_mode == "collection_group":
+            coll = self.db.collection_group("meeting_sessions")
+        else:
+            coll = self.db.collection("meeting_sessions")
         q = (
-            self.db.collection_group("meeting_sessions")
+            coll
             .where(field_path="status", op_string="==", value="complete")
             .limit(self.max_claim_per_poll)
         )
