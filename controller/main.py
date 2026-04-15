@@ -190,12 +190,21 @@ class MeetingController:
             if s.strip()
         ]
         
+        # Collection path for meeting_sessions (similar to MEETINGS_COLLECTION_PATH)
+        self.meeting_sessions_collection_path = os.getenv(
+            "MEETING_SESSIONS_COLLECTION_PATH",
+            # Default to a flat collection for simplicity.
+            # If your schema is per-org, set MEETING_SESSIONS_COLLECTION_PATH to
+            # organizations/<org_id>/meeting_sessions and also set MEETING_SESSIONS_QUERY_MODE.
+            "meeting_sessions",
+        )
         # Query mode for meeting_sessions collection (similar to MEETINGS_QUERY_MODE)
         self.meeting_sessions_query_mode = (
             os.getenv(
                 "MEETING_SESSIONS_QUERY_MODE",
-                # 'collection' -> use meeting_sessions as a collection
-                # 'collection_group' -> query across all orgs (requires indexes)
+                # 'collection' -> use MEETING_SESSIONS_COLLECTION_PATH as a collection
+                # 'collection_group' -> treat MEETING_SESSIONS_COLLECTION_PATH as a collection id
+                #                     and query across all orgs (requires indexes)
                 "collection",
             )
             .strip()
@@ -425,8 +434,9 @@ class MeetingController:
             self.meetings_collection_path,
         )
         logger.info(
-            "  Meeting sessions query: mode=%s",
+            "  Meeting sessions query: mode=%s path=%s",
             self.meeting_sessions_query_mode,
+            self.meeting_sessions_collection_path,
         )
         logger.info(
             "  Past meeting guard: grace_minutes=%d",
@@ -1994,11 +2004,11 @@ class MeetingController:
             return None
 
     def _query_queued_meeting_sessions(self) -> List[firestore.DocumentSnapshot]:
-        # Query across all orgs.
+        # Query based on configured collection path and mode.
         if self.meeting_sessions_query_mode == "collection_group":
-            coll = self.db.collection_group("meeting_sessions")
+            coll = self.db.collection_group(self.meeting_sessions_collection_path)
         else:
-            coll = self.db.collection("meeting_sessions")
+            coll = self.db.collection(self.meeting_sessions_collection_path)
         q = (
             coll
             .where(field_path="status", op_string="==", value="queued")
@@ -2150,9 +2160,9 @@ class MeetingController:
                 return
 
             if self.meeting_sessions_query_mode == "collection_group":
-                coll = self.db.collection_group("meeting_sessions")
+                coll = self.db.collection_group(self.meeting_sessions_collection_path)
             else:
-                coll = self.db.collection("meeting_sessions")
+                coll = self.db.collection(self.meeting_sessions_collection_path)
             q = (
                 coll
                 .where(
@@ -2753,9 +2763,9 @@ class MeetingController:
         """Find completed sessions where fan-out hasn't succeeded yet."""
 
         if self.meeting_sessions_query_mode == "collection_group":
-            coll = self.db.collection_group("meeting_sessions")
+            coll = self.db.collection_group(self.meeting_sessions_collection_path)
         else:
-            coll = self.db.collection("meeting_sessions")
+            coll = self.db.collection(self.meeting_sessions_collection_path)
         q = (
             coll
             .where(field_path="status", op_string="==", value="complete")
