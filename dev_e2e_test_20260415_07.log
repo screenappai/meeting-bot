@@ -1,0 +1,89 @@
+[2026-04-15 06:48:37 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-15 06:48:39 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aJCAAA= start=2026-04-15T07:00:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZTdjYWVhNGEtOTUzNC00MzI4LWJhYTItNTE...
+[2026-04-15 06:50:27 UTC] Found synced Firestore meeting doc: eWLecT03v2NpQnwlZSkO
+[2026-04-15 06:50:27 UTC] Queued meeting eWLecT03v2NpQnwlZSkO for recording; controller trigger start=2026-04-15T06:52:27.009664+00:00
+[2026-04-15 06:50:27 UTC] Waiting until 2026-04-15T06:52:00+00:00 for host join window (92s)
+[2026-04-15 06:50:27 UTC] Waiting for host join window: sleeping 60s (92s remaining)
+[2026-04-15 06:51:27 UTC] Waiting for host join window: sleeping 32s (32s remaining)
+[2026-04-15 06:52:00 UTC] Opening Teams join URL (meeting_start=2026-04-15T07:00:00+00:00 admit_deadline=2026-04-15T07:02:00+00:00).
+[2026-04-15 06:52:15 UTC] Host joined meeting; waiting for meeting-bot admission.
+[2026-04-15 06:52:15 UTC] Admission deadline set to 2026-04-15T07:02:00+00:00 (timeout=584s).
+[2026-04-15 06:52:16 UTC] Admission status: bot_in_lobby=False bot_in_meeting=True visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 06:52:19 UTC] Admit action attempted for bot 'AdviseWell Bot Dev' (attempt 1).
+[2026-04-15 06:52:27 UTC] Bot 'AdviseWell Bot Dev' appears in participant list (confirmed).
+[2026-04-15 06:52:27 UTC] Playback page ready: http://127.0.0.1:46249/index.html
+[2026-04-15 06:52:36 UTC] Warning: share flow could not be fully confirmed; continuing to playback.
+[2026-04-15 06:52:36 UTC] Playback progress: 0.0s / 557.6s
+[2026-04-15 06:52:46 UTC] Playback progress: 10.0s / 557.6s
+[2026-04-15 06:52:56 UTC] Playback progress: 20.0s / 557.6s
+[2026-04-15 06:53:06 UTC] Playback progress: 30.1s / 557.6s
+[2026-04-15 06:53:16 UTC] Playback progress: 39.9s / 557.6s
+[2026-04-15 06:53:26 UTC] Playback progress: 50.0s / 557.6s
+[2026-04-15 06:53:36 UTC] Playback progress: 60.1s / 557.6s
+[2026-04-15 06:53:46 UTC] Playback progress: 70.1s / 557.6s
+[2026-04-15 06:53:56 UTC] Playback progress: 80.1s / 557.6s
+[2026-04-15 06:54:06 UTC] Playback progress: 90.2s / 557.6s
+[2026-04-15 06:54:16 UTC] Playback progress: 100.2s / 557.6s
+[2026-04-15 06:54:26 UTC] Playback progress: 110.2s / 557.6s
+[2026-04-15 06:54:36 UTC] Playback progress: 120.3s / 557.6s
+[2026-04-15 06:54:46 UTC] Playback progress: 130.3s / 557.6s
+[2026-04-15 06:54:56 UTC] Playback progress: 140.3s / 557.6s
+[2026-04-15 06:55:06 UTC] Playback progress: 150.3s / 557.6s
+[2026-04-15 06:55:16 UTC] Playback progress: 160.4s / 557.6s
+[2026-04-15 06:55:26 UTC] Playback progress: 170.4s / 557.6s
+[2026-04-15 06:55:36 UTC] Playback progress: 180.4s / 557.6s
+[2026-04-15 06:55:46 UTC] Playback progress: 190.4s / 557.6s
+[2026-04-15 06:55:56 UTC] Playback progress: 200.5s / 557.6s
+[2026-04-15 06:56:06 UTC] Playback progress: 210.5s / 557.6s
+[2026-04-15 06:56:17 UTC] Playback progress: 220.6s / 557.6s
+[2026-04-15 06:56:27 UTC] Playback progress: 230.6s / 557.6s
+[2026-04-15 06:56:37 UTC] Playback progress: 240.6s / 557.6s
+[2026-04-15 06:56:47 UTC] Playback progress: 250.6s / 557.6s
+[2026-04-15 06:56:57 UTC] Playback progress: 260.7s / 557.6s
+[2026-04-15 06:57:07 UTC] Playback progress: 270.7s / 557.6s
+[2026-04-15 06:57:17 UTC] Playback progress: 280.7s / 557.6s
+[2026-04-15 06:57:27 UTC] Playback progress: 290.8s / 557.6s
+[2026-04-15 06:57:37 UTC] Playback progress: 300.8s / 557.6s
+[2026-04-15 06:57:47 UTC] Playback progress: 310.8s / 557.6s
+[2026-04-15 06:57:57 UTC] Playback progress: 320.9s / 557.6s
+[2026-04-15 06:58:07 UTC] Playback progress: 330.9s / 557.6s
+[2026-04-15 06:58:17 UTC] Playback progress: 340.9s / 557.6s
+[2026-04-15 06:58:27 UTC] Playback progress: 351.0s / 557.6s
+[2026-04-15 06:58:37 UTC] Playback progress: 361.0s / 557.6s
+[2026-04-15 06:58:47 UTC] Playback progress: 371.0s / 557.6s
+[2026-04-15 06:58:57 UTC] Playback progress: 381.0s / 557.6s
+[2026-04-15 06:59:07 UTC] Playback progress: 391.1s / 557.6s
+[2026-04-15 06:59:17 UTC] Playback progress: 401.1s / 557.6s
+[2026-04-15 06:59:27 UTC] Playback progress: 411.1s / 557.6s
+[2026-04-15 06:59:37 UTC] Playback progress: 421.1s / 557.6s
+[2026-04-15 06:59:47 UTC] Playback progress: 431.2s / 557.6s
+[2026-04-15 06:59:57 UTC] Playback progress: 441.2s / 557.6s
+[2026-04-15 07:00:07 UTC] Playback progress: 451.2s / 557.6s
+[2026-04-15 07:00:17 UTC] Playback progress: 461.3s / 557.6s
+[2026-04-15 07:00:27 UTC] Playback progress: 471.3s / 557.6s
+[2026-04-15 07:00:37 UTC] Playback progress: 481.3s / 557.6s
+[2026-04-15 07:00:47 UTC] Playback progress: 491.4s / 557.6s
+[2026-04-15 07:00:57 UTC] Playback progress: 501.4s / 557.6s
+[2026-04-15 07:01:07 UTC] Playback progress: 511.4s / 557.6s
+[2026-04-15 07:01:17 UTC] Playback progress: 521.5s / 557.6s
+[2026-04-15 07:01:27 UTC] Playback progress: 531.5s / 557.6s
+[2026-04-15 07:01:38 UTC] Playback progress: 541.5s / 557.6s
+[2026-04-15 07:01:48 UTC] Playback progress: 551.5s / 557.6s
+[2026-04-15 07:01:59 UTC] Warning: failed to end meeting from Teams UI; continuing.
+[2026-04-15 07:02:00 UTC] Processing wait updated session_id from meeting state: 29c1f11f16db4da01a50153d...
+[2026-04-15 07:02:00 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:03:01 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:04:02 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:05:03 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:06:04 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:07:04 UTC] Processing status: session_id=29c1f11f16db4da01a50153d... session_status=processing meeting_status=completed recording_status=none transcription=True recording_url=False artifacts=False
+[2026-04-15 07:07:35 UTC] Processing wait updated session_id from meeting state: 29c1f11f16db4da0...
+[2026-04-15 07:07:35 UTC] Processing completion detected after 335s (meeting doc has transcription + recording_url).
+[2026-04-15 07:07:35 UTC] Updated validation session_id from processing wait: 29c1f11f16db4da0...
+
+=== RUN SUMMARY ===
+Report: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776236858.json
+Success: True
+Recent errors found (last 1h): 15
+Warnings:
+  - meeting_sessions/{session_id} document not found

@@ -1,0 +1,33 @@
+[2026-04-14 22:47:12 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-14 22:47:14 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIkAAA= start=2026-04-14T23:00:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_NmFmNDk0Y2QtMDRhNi00NzU1LThkZmQtMzg...
+[2026-04-14 22:50:18 UTC] Found synced Firestore meeting doc: BnGype48cVkVupadXnLB
+[2026-04-14 22:50:18 UTC] Queued meeting BnGype48cVkVupadXnLB for recording; controller trigger start=2026-04-14T22:52:18.166095+00:00
+[2026-04-14 22:50:18 UTC] Waiting until 2026-04-14T22:52:00+00:00 for host join window (101s)
+[2026-04-14 22:50:18 UTC] Waiting for host join window: sleeping 60s (101s remaining)
+[2026-04-14 22:51:18 UTC] Waiting for host join window: sleeping 41s (41s remaining)
+[2026-04-14 22:52:00 UTC] Opening Teams join URL (meeting_start=2026-04-14T23:00:00+00:00 admit_deadline=2026-04-14T23:02:00+00:00).
+node:events:486
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: write EPIPE
+    at afterWriteDispatched (node:internal/stream_base_commons:159:15)
+    at writeGeneric (node:internal/stream_base_commons:150:3)
+    at Socket._writeGeneric (node:net:966:11)
+    at Socket._write (node:net:978:8)
+    at writeOrBuffer (node:internal/streams/writable:570:12)
+    at _write (node:internal/streams/writable:499:10)
+    at Writable.write (node:internal/streams/writable:508:10)
+    at PipeTransport.send (/home/mattkellock/git/.venv/lib/python3.11/site-packages/playwright/driver/package/lib/server/utils/pipeTransport.js:52:21)
+    at dispatcherConnection.onmessage (/home/mattkellock/git/.venv/lib/python3.11/site-packages/playwright/driver/package/lib/cli/driver.js:60:59)
+    at DispatcherConnection.sendEvent (/home/mattkellock/git/.venv/lib/python3.11/site-packages/playwright/driver/package/lib/server/dispatchers/dispatcher.js:176:10)
+Emitted 'error' event on Socket instance at:
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:89:21) {
+  errno: -32,
+  code: 'EPIPE',
+  syscall: 'write'
+}
+
+Node.js v24.13.0

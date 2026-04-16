@@ -1,0 +1,19 @@
+[2026-04-14 22:52:27 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-14 22:52:30 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIlAAA= start=2026-04-14T23:05:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_OWUwY2IyNTMtNDgzMC00ZGNmLWI1ZGUtOGI...
+[2026-04-14 22:55:18 UTC] Found synced Firestore meeting doc: aKUyVb44gPj0zLhie3Ia
+[2026-04-14 22:55:18 UTC] Queued meeting aKUyVb44gPj0zLhie3Ia for recording; controller trigger start=2026-04-14T22:57:18.455514+00:00
+[2026-04-14 22:55:18 UTC] Waiting until 2026-04-14T22:57:00+00:00 for host join window (101s)
+[2026-04-14 22:55:18 UTC] Waiting for host join window: sleeping 60s (101s remaining)
+[2026-04-14 22:56:18 UTC] Waiting for host join window: sleeping 41s (41s remaining)
+[2026-04-14 22:57:00 UTC] Opening Teams join URL (meeting_start=2026-04-14T23:05:00+00:00 admit_deadline=2026-04-14T23:07:00+00:00).
+[2026-04-14 22:57:16 UTC] Host joined meeting; waiting for meeting-bot admission.
+[2026-04-14 22:57:16 UTC] Admission deadline set to 2026-04-14T23:07:00+00:00 (timeout=583s).
+[2026-04-14 22:57:17 UTC] Admission status: bot_in_lobby=True bot_in_meeting=True visible_admit_buttons=8 matched_lobby_rows=8
+[2026-04-14 22:57:17 UTC] Admit action attempted for bot 'AdviseWell Bot Dev' (attempt 1).
+[2026-04-14 22:57:24 UTC] Bot 'AdviseWell Bot Dev' appears in participant list (confirmed).
+[2026-04-14 22:57:24 UTC] Teams tab media mute enforced (media_elements_muted=2).
+[2026-04-14 22:57:24 UTC] Playback page ready: http://127.0.0.1:41505/index.html
+[2026-04-14 22:57:24 UTC] Playback tab media unmute enforced (media_elements_unmuted=1).
+[2026-04-14 22:57:24 UTC] Teams tab media mute enforced (media_elements_muted=2).
+[DEBUG start_share_flow] Looking for Share/Present button...
+[DEBUG start_share_flow] Share button clicked: True

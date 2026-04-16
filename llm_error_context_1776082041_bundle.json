@@ -1,0 +1,468 @@
+{
+  "report_path": "teams_e2e_report_1776082041.json",
+  "firebase_detail_path": "llm_error_context_1776082041_firebase.json",
+  "generated_bundle_path": "llm_error_context_1776082041_bundle.json",
+  "run_summary": {
+    "success": true,
+    "started_at_utc": "2026-04-13T11:47:48.755676+00:00",
+    "ended_at_utc": "2026-04-13T12:07:21.263114+00:00",
+    "meeting_id": "RWfFW4xGkOgTrwG1HSfg",
+    "session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+    "browser": {
+      "joined_host": true,
+      "admitted_bot": true,
+      "share_started": false,
+      "video_finished": true,
+      "meeting_ended": false,
+      "meeting_start_utc": "2026-04-13T12:00:00+00:00",
+      "bot_admit_deadline_utc": "2026-04-13T12:02:00+00:00",
+      "host_joined_at_utc": "2026-04-13T11:52:16.310717+00:00"
+    },
+    "processing": {
+      "completed": true,
+      "timed_out": false,
+      "waited_seconds": 320,
+      "max_wait_seconds": 600,
+      "effective_session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+      "completion_reason": "meeting_session.status=complete",
+      "state": {
+        "source_meeting_id": "RWfFW4xGkOgTrwG1HSfg",
+        "meeting_exists": true,
+        "meeting_status": "completed",
+        "meeting_recording_status": "complete",
+        "meeting_session_status": "queued",
+        "meeting_session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+        "meeting_updated_at": "2026-04-13T12:07:14.605070+00:00",
+        "has_transcription": true,
+        "has_recording_url": true,
+        "has_artifacts": true,
+        "requested_session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+        "effective_session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+        "session_exists": true,
+        "session_status": "complete",
+        "session_updated_at": "2026-04-13T12:07:15.175901+00:00"
+      }
+    },
+    "validation": {
+      "session_id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+      "session_exists": true,
+      "source_meeting_id": "RWfFW4xGkOgTrwG1HSfg",
+      "checks": [
+        {
+          "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+          "meeting_id": "RWfFW4xGkOgTrwG1HSfg",
+          "has_transcription": true,
+          "has_recording_url": true,
+          "has_artifacts": true,
+          "gcs_prefix": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/",
+          "gcs_blob_count": 7,
+          "gcs_recording_present": true,
+          "gcs_transcript_present": true,
+          "recording_url_exists": true,
+          "missing_artifacts": []
+        }
+      ],
+      "missing": [],
+      "warnings": [],
+      "ok": true
+    }
+  },
+  "firebase_outputs": {
+    "meeting_firestore_path": "organizations/advisewell/meetings/RWfFW4xGkOgTrwG1HSfg",
+    "session_firestore_path": "organizations/advisewell/meeting_sessions/24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+    "recording_url": "gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm",
+    "recording_blob_path": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm",
+    "artifacts": {
+      "recording_mp4": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.mp4",
+      "transcript_json": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.json",
+      "transcript_vtt": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.vtt",
+      "transcript_txt": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.txt",
+      "transcript_md": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.md",
+      "recording_m4a": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.m4a",
+      "recording_webm": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm"
+    },
+    "gcs_prefix": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/",
+    "transcription_firestore_text": "**Speaker A:** You\n\n**Speaker B:** You\n",
+    "transcription_gcs_path": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.txt",
+    "transcription_gcs_text": "[0.00-2.00] Speaker A: You\n[600.00-602.00] Speaker B: You"
+  },
+  "error_analysis": {
+    "total_error_lines": 60,
+    "error_sources": {
+      "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg": 12,
+      "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb": 26,
+      "controller": 22
+    },
+    "error_pattern_counts": {
+      "no_recording_found": 3,
+      "waiting_at_lobby_retry": 4,
+      "x11_tmp_warning": 1,
+      "cant_update_bot_status_or_log": 3,
+      "graphql_resolver_missing": 12,
+      "files_valid_domains_runtime": 10,
+      "upload_to_server_failed_nonfatal": 1,
+      "transcription_empty_from_azure": 1,
+      "cuda_not_available_info": 1,
+      "stream_504_recoverable": 16,
+      "job_creation_failed": 2
+    },
+    "note": "The log window is 1 hour and may include errors from prior runs; use focused_errors for likely relevant lines to this session."
+  },
+  "focused_errors": [
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:58:14,889\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"SESSION_JOB_FAILED: session_id=24ca4ecc054cd441, org_id=advisewell, meeting_url=https://teams.microsoft.com/l/meetup-join/19%3amee, status=job_creation_failed\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:58:14,900\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"LLM_CONTEXT: Session 24ca4ecc054cd441 was claimed but job creation failed. The session will be marked as failed. Check BOT_JOB_BLOCKED or BOT_JOB_FAILED logs above for the specific reason. Common causes: missing user_id, missing meeting_url, K8s quota, or API errors.\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsChatQueriesSetConsumptionHorizonMutation\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsChatQueriesSetConsumptionHorizonMutation\" - {\"message\":\"Resolver for Mutation.setConsumptionHorizon is missing\",\"locations\":[]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useConsumptionHorizon: Failed to execute consumptionHorizon update mutation: convId 19:meeting_OWZkYzRlMzctYjYxYy00YTAzLTg1NWEtZjE1YzUwYjFmY2Vl@thread.v2, messageId 1776081146339, clientMessageId , originalArrivalTime 1776081146339, error Error "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useConsumptionHorizon: updateConsumptionHorizons: Failed to update consumption horizon, convId: 19:meeting_OWZkYzRlMzctYjYxYy00YTAzLTg1NWEtZjE1YzUwYjFmY2Vl@thread.v2. Unknown error. "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.261Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.286Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.288Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.288Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.293Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.987Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" - {\"message\":\"Resolver for Query.typingUsers is missing\",\"locations\":[]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" - {\"message\":\"Unexpected error value: \\\"Subscription field must return Async Iterable. Received: undefined.\\\"\",\"locations\":[],\"path\":[\"typingUsersEvent\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.002Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.002Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" - {\"message\":\"Cannot read properties of undefined (reading 'logger')\",\"locations\":[],\"path\":[\"subscribeToCrossDeviceAttachType\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.013Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.014Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.014Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.015Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T12:03:00.728Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] Can't update the bot status "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T12:03:01.232Z] [info] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] Unable to upload recording to server... {\"error\":{},\"userId\":\"Mw6Awnh1WtN7631PrSYyGXlpozz1\",\"teamId\":\"advisewell\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:03:22,451\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"Azure transcription failed (non-fatal): Azure Speech transcription returned no transcript data\", \"component\": \"manager\", \"exc_info\": \"Traceback (most recent call last):\\n  File \\\"/app/main.py\\\", line 1154, in process_meeting\\n    raise RuntimeError(\\n        \\\"Azure Speech transcription returned no transcript data\\\"\\n    )\\nRuntimeError: Azure Speech transcription returned no transcript data\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:07:14,602\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  FANOUT RESULT: user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1, uploaded=7, failed=0, success=True\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:07:14,603\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  Failed: 0\", \"component\": \"manager\"}"
+    }
+  ],
+  "all_errors_raw": [
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "{\"timestamp\": \"2026-04-13 11:47:05,628\", \"logger\": \"meeting_monitor\", \"level\": \"ERROR\", \"message\": \"\\u274c No recording directory/files found. Checked: /recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1, /scratch/tempvideo/Mw6Awnh1WtN7631PrSYyGXlpozz1, /usr/src/app/dist/_tempvideo/Mw6Awnh1WtN7631PrSYyGXlpozz1\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "{\"timestamp\": \"2026-04-13 11:47:05,713\", \"logger\": \"__main__\", \"level\": \"WARNING\", \"message\": \"Meeting monitoring ended without a recording. This may indicate the bot was not admitted to the meeting (lobby timeout or access denied), the meeting ended before recording started, or a recording failure occurred.\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "{\"timestamp\": \"2026-04-13 11:47:05,714\", \"logger\": \"__main__\", \"level\": \"DEBUG\", \"message\": \"POST-MEETING DECISION: No recording file - meeting may have ended prematurely or recording failed\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "{\"timestamp\": \"2026-04-13 11:47:05,714\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"Processing failed\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "_XSERVTransmkdir: ERROR: euid != 0,directory /tmp/.X11-unix will not be created."
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:46:35.346Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] Cant finish wait at the lobby check {\"userDenied\":false,\"waitingAtLobbySuccess\":false,\"bodyText\":\"Hi, AdviseWell Bot Dev. Someone will let you in when the meeting starts.\\nMicrosoft Teams meeting\\nYour camera is turned off\\nGo to your device settings to troubleshoot\\nBackground filters\\nComputer microphone and speaker controls\\nComputer audio\\nChrome_Audio_Input\\nMic off\\nVirtual_Dummy_Output\\nPhone audio\\nPhone audio\\nNo audio\\nDon't use audio\\nCancel\\nJoin now\\nSign in\\nDownload the Teams app\\nNeed help?\"}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:46:35.346Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] Closing the browser on error... locator.waitFor: Timeout 1500000ms exceeded."
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:47:05.385Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] Can't update the bot status "
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:47:05.388Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] Can't add the bot log "
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:47:05.388Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] KnownError is not retryable: "
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:47:05.388Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] KnownError JobStore is permanently exiting: {\"error\":{\"retryable\":false,\"maxRetries\":0,\"documentBodyText\":\"Hi, AdviseWell Bot Dev. Someone will let you in when the meeting starts.\\nMicrosoft Teams meeting\\nYour camera is turned off\\nGo to your device settings to troubleshoot\\nBackground filters\\nComputer microphone and speaker controls\\nComputer audio\\nChrome_Audio_Input\\nMic off\\nVirtual_Dummy_Output\\nPhone audio\\nPhone audio\\nNo audio\\nDon't use audio\\nCancel\\nJoin now\\nSign in\\nDownload the Teams app\\nNeed help?\"}}"
+    },
+    {
+      "source": "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg",
+      "line": "[2026-04-13T11:47:05.388Z] [error] [correlationId: d23e02db-792e-5d65-a028-f032e1776e3a] [botType: microsoft] LogBasedMetric Bot has permanently failed. [errorType: WaitingAtLobbyRetryError] "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsChatQueriesSetConsumptionHorizonMutation\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsChatQueriesSetConsumptionHorizonMutation\" - {\"message\":\"Resolver for Mutation.setConsumptionHorizon is missing\",\"locations\":[]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useConsumptionHorizon: Failed to execute consumptionHorizon update mutation: convId 19:meeting_OWZkYzRlMzctYjYxYy00YTAzLTg1NWEtZjE1YzUwYjFmY2Vl@thread.v2, messageId 1776081146339, clientMessageId , originalArrivalTime 1776081146339, error Error "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:52:30.925Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useConsumptionHorizon: updateConsumptionHorizons: Failed to update consumption horizon, convId: 19:meeting_OWZkYzRlMzctYjYxYy00YTAzLTg1NWEtZjE1YzUwYjFmY2Vl@thread.v2. Unknown error. "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.261Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.286Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.288Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.288Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:25.293Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.987Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" - {\"message\":\"Resolver for Query.typingUsers is missing\",\"locations\":[]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" - {\"message\":\"Unexpected error value: \\\"Subscription field must return Async Iterable. Received: undefined.\\\"\",\"locations\":[],\"path\":[\"typingUsersEvent\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:34.988Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.002Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.002Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" - {\"message\":\"Cannot read properties of undefined (reading 'logger')\",\"locations\":[],\"path\":[\"subscribeToCrossDeviceAttachType\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.013Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[Core-ca2777ca-ea3f-45ef-802c-f28f361154fc] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.014Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.014Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T11:53:35.015Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T12:03:00.728Z] [error] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] Can't update the bot status "
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "[2026-04-13T12:03:01.232Z] [info] [correlationId: 50ee99fc-204f-5d37-8deb-28ff6a2a8b56] [botType: microsoft] Unable to upload recording to server... {\"error\":{},\"userId\":\"Mw6Awnh1WtN7631PrSYyGXlpozz1\",\"teamId\":\"advisewell\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:03:22,451\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"Azure transcription failed (non-fatal): Azure Speech transcription returned no transcript data\", \"component\": \"manager\", \"exc_info\": \"Traceback (most recent call last):\\n  File \\\"/app/main.py\\\", line 1154, in process_meeting\\n    raise RuntimeError(\\n        \\\"Azure Speech transcription returned no transcript data\\\"\\n    )\\nRuntimeError: Azure Speech transcription returned no transcript data\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:07:14,602\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  FANOUT RESULT: user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1, uploaded=7, failed=0, success=True\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "pod:meeting-bot-a919efbb-3849-4d52-8eee-82cc26478ffc-hx2rb",
+      "line": "{\"timestamp\": \"2026-04-13 12:07:14,603\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  Failed: 0\", \"component\": \"manager\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:11:58,863\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:11:58,863\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:11:58,865\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:11:58,865\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:13:08,757\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"SESSION_JOB_FAILED: session_id=4ce47212f0ef9720, org_id=advisewell, meeting_url=https://teams.microsoft.com/l/meetup-join/19%3amee, status=job_creation_failed\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:13:08,768\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"LLM_CONTEXT: Session 4ce47212f0ef9720 was claimed but job creation failed. The session will be marked as failed. Check BOT_JOB_BLOCKED or BOT_JOB_FAILED logs above for the specific reason. Common causes: missing user_id, missing meeting_url, K8s quota, or API errors.\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:13:09,781\", \"logger\": \"__main__\", \"level\": \"WARNING\", \"message\": \"FANOUT_VALIDATION: session_id=13fbbb99ce301a7c, status=FAILED, validated=1/1, errors=['User Mw6Awnh1WtN7631PrSYyGXlpozz1 missing transcription']\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:26:58,866\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:26:58,866\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:26:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:26:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:41:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:41:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:41:58,870\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:41:58,870\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:56:58,871\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:56:58,871\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:56:58,873\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:56:58,873\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:58:14,889\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"SESSION_JOB_FAILED: session_id=24ca4ecc054cd441, org_id=advisewell, meeting_url=https://teams.microsoft.com/l/meetup-join/19%3amee, status=job_creation_failed\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:58:14,900\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"LLM_CONTEXT: Session 24ca4ecc054cd441 was claimed but job creation failed. The session will be marked as failed. Check BOT_JOB_BLOCKED or BOT_JOB_FAILED logs above for the specific reason. Common causes: missing user_id, missing meeting_url, K8s quota, or API errors.\", \"component\": \"controller\"}"
+    },
+    {
+      "source": "controller",
+      "line": "{\"timestamp\": \"2026-04-13 11:58:15,371\", \"logger\": \"__main__\", \"level\": \"WARNING\", \"message\": \"FANOUT_VALIDATION: session_id=13fbbb99ce301a7c, status=FAILED, validated=1/1, errors=['User Mw6Awnh1WtN7631PrSYyGXlpozz1 missing transcription']\", \"component\": \"controller\"}"
+    }
+  ],
+  "hard_errors": []
+}

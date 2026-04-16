@@ -1,0 +1,136 @@
+[2026-04-15 02:20:50 UTC] Requested Firestore COLLECTION_GROUP indexes for meetings.start; waiting for READY.
+[2026-04-15 02:20:50 UTC] Firestore index readiness meetings.start: no COLLECTION_GROUP entries yet
+[2026-04-15 02:21:16 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:21:43 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:22:09 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:22:35 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:23:01 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:23:27 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:23:53 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:24:19 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:24:46 UTC] Firestore index readiness meetings.start: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:25:05 UTC] Requested Firestore COLLECTION_GROUP indexes for meeting_sessions.status; waiting for READY.
+[2026-04-15 02:25:05 UTC] Firestore index readiness meeting_sessions.status: no COLLECTION_GROUP entries yet
+[2026-04-15 02:25:31 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:25:57 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:26:24 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:26:50 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:27:16 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:27:42 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:28:11 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:28:37 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:29:03 UTC] Firestore index readiness meeting_sessions.status: ASCENDING:CREATING, CONTAINS:CREATING, DESCENDING:CREATING
+[2026-04-15 02:29:13 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-15 02:29:15 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIxAAA= start=2026-04-15T02:40:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_ODAxOWIyMDktMmE3My00MzNkLTlkZmYtM2M...
+[2026-04-15 02:30:16 UTC] Found synced Firestore meeting doc: QNGIcKVYK7CR8tXYr6A4
+[2026-04-15 02:30:16 UTC] Queued meeting QNGIcKVYK7CR8tXYr6A4 for recording; controller trigger start=2026-04-15T02:32:16.704961+00:00
+[2026-04-15 02:30:16 UTC] Waiting until 2026-04-15T02:32:00+00:00 for host join window (103s)
+[2026-04-15 02:30:16 UTC] Waiting for host join window: sleeping 60s (103s remaining)
+[2026-04-15 02:31:16 UTC] Waiting for host join window: sleeping 43s (43s remaining)
+[2026-04-15 02:32:00 UTC] Opening Teams join URL (meeting_start=2026-04-15T02:40:00+00:00 admit_deadline=2026-04-15T02:42:00+00:00).
+[2026-04-15 02:32:19 UTC] Host joined meeting; waiting for meeting-bot admission.
+[2026-04-15 02:32:19 UTC] Admission deadline set to 2026-04-15T02:42:00+00:00 (timeout=580s).
+[2026-04-15 02:32:19 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:32:35 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:32:51 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:33:06 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:33:22 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:33:38 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:33:53 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:34:09 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:34:25 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:34:40 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:34:56 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:35:11 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:35:27 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:35:43 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:35:58 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:36:14 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:36:30 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:36:45 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:37:01 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:37:17 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:37:33 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:37:48 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:38:04 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:38:20 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:38:35 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:38:51 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:39:06 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:39:22 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:39:35 UTC] Admit action attempted for bot 'AdviseWell Bot Dev' (attempt 1).
+[2026-04-15 02:39:40 UTC] Admission status: bot_in_lobby=False bot_in_meeting=True visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 02:39:43 UTC] Bot 'AdviseWell Bot Dev' appears in participant list (confirmed).
+[2026-04-15 02:39:43 UTC] Playback page ready: http://127.0.0.1:39821/index.html
+[2026-04-15 02:39:50 UTC] Warning: share flow could not be fully confirmed; continuing to playback.
+[2026-04-15 02:39:50 UTC] Playback progress: 0.0s / 557.6s
+[2026-04-15 02:40:00 UTC] Playback progress: 10.0s / 557.6s
+[2026-04-15 02:40:10 UTC] Playback progress: 20.0s / 557.6s
+[2026-04-15 02:40:20 UTC] Playback progress: 30.1s / 557.6s
+[2026-04-15 02:40:30 UTC] Playback progress: 40.1s / 557.6s
+[2026-04-15 02:40:40 UTC] Playback progress: 50.2s / 557.6s
+[2026-04-15 02:40:51 UTC] Playback progress: 60.2s / 557.6s
+[2026-04-15 02:41:01 UTC] Playback progress: 70.2s / 557.6s
+[2026-04-15 02:41:11 UTC] Playback progress: 80.3s / 557.6s
+[2026-04-15 02:41:21 UTC] Playback progress: 90.3s / 557.6s
+[2026-04-15 02:41:31 UTC] Playback progress: 100.4s / 557.6s
+[2026-04-15 02:41:41 UTC] Playback progress: 110.4s / 557.6s
+[2026-04-15 02:41:51 UTC] Playback progress: 120.4s / 557.6s
+[2026-04-15 02:42:01 UTC] Playback progress: 130.5s / 557.6s
+[2026-04-15 02:42:11 UTC] Playback progress: 140.5s / 557.6s
+[2026-04-15 02:42:21 UTC] Playback progress: 150.5s / 557.6s
+[2026-04-15 02:42:31 UTC] Playback progress: 160.6s / 557.6s
+[2026-04-15 02:42:41 UTC] Playback progress: 170.7s / 557.6s
+[2026-04-15 02:42:51 UTC] Playback progress: 180.7s / 557.6s
+[2026-04-15 02:43:01 UTC] Playback progress: 190.7s / 557.6s
+[2026-04-15 02:43:11 UTC] Playback progress: 200.8s / 557.6s
+[2026-04-15 02:43:21 UTC] Playback progress: 210.8s / 557.6s
+[2026-04-15 02:43:31 UTC] Playback progress: 220.9s / 557.6s
+[2026-04-15 02:43:41 UTC] Playback progress: 230.9s / 557.6s
+[2026-04-15 02:43:51 UTC] Playback progress: 240.9s / 557.6s
+[2026-04-15 02:44:01 UTC] Playback progress: 251.0s / 557.6s
+[2026-04-15 02:44:11 UTC] Playback progress: 261.0s / 557.6s
+[2026-04-15 02:44:21 UTC] Playback progress: 271.1s / 557.6s
+[2026-04-15 02:44:31 UTC] Playback progress: 281.1s / 557.6s
+[2026-04-15 02:44:42 UTC] Playback progress: 291.1s / 557.6s
+[2026-04-15 02:44:52 UTC] Playback progress: 301.2s / 557.6s
+[2026-04-15 02:45:02 UTC] Playback progress: 311.2s / 557.6s
+[2026-04-15 02:45:12 UTC] Playback progress: 321.2s / 557.6s
+[2026-04-15 02:45:22 UTC] Playback progress: 331.3s / 557.6s
+[2026-04-15 02:45:32 UTC] Playback progress: 341.3s / 557.6s
+[2026-04-15 02:45:42 UTC] Playback progress: 351.3s / 557.6s
+[2026-04-15 02:45:52 UTC] Playback progress: 361.4s / 557.6s
+[2026-04-15 02:46:02 UTC] Playback progress: 371.4s / 557.6s
+[2026-04-15 02:46:12 UTC] Playback progress: 381.4s / 557.6s
+[2026-04-15 02:46:22 UTC] Playback progress: 391.5s / 557.6s
+[2026-04-15 02:46:32 UTC] Playback progress: 401.5s / 557.6s
+[2026-04-15 02:46:42 UTC] Playback progress: 411.5s / 557.6s
+[2026-04-15 02:46:52 UTC] Playback progress: 421.6s / 557.6s
+[2026-04-15 02:47:02 UTC] Playback progress: 431.6s / 557.6s
+[2026-04-15 02:47:12 UTC] Playback progress: 441.7s / 557.6s
+[2026-04-15 02:47:22 UTC] Playback progress: 451.7s / 557.6s
+[2026-04-15 02:47:32 UTC] Playback progress: 461.8s / 557.6s
+[2026-04-15 02:47:42 UTC] Playback progress: 471.8s / 557.6s
+[2026-04-15 02:47:52 UTC] Playback progress: 481.8s / 557.6s
+[2026-04-15 02:48:02 UTC] Playback progress: 491.9s / 557.6s
+[2026-04-15 02:48:12 UTC] Playback progress: 501.9s / 557.6s
+[2026-04-15 02:48:22 UTC] Playback progress: 511.9s / 557.6s
+[2026-04-15 02:48:32 UTC] Playback progress: 522.0s / 557.6s
+[2026-04-15 02:48:42 UTC] Playback progress: 532.0s / 557.6s
+[2026-04-15 02:48:52 UTC] Playback progress: 542.0s / 557.6s
+[2026-04-15 02:49:02 UTC] Playback progress: 552.1s / 557.6s
+[2026-04-15 02:49:13 UTC] Warning: failed to end meeting from Teams UI; continuing.
+[2026-04-15 02:49:14 UTC] Processing wait updated session_id from meeting state: 7d7ea4c9b1874a873861bd1b...
+[2026-04-15 02:49:14 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 02:50:15 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 02:51:16 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 02:52:17 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 02:53:18 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 02:54:19 UTC] Processing status: session_id=7d7ea4c9b1874a873861bd1b... session_status=processing meeting_status=completed recording_status=none transcription=True recording_url=False artifacts=False
+[2026-04-15 02:54:35 UTC] Processing completion detected after 320s (meeting_session.status=complete).
+[2026-04-15 02:54:35 UTC] Updated validation session_id from processing wait: 7d7ea4c9b1874a873861bd1b...
+
+=== RUN SUMMARY ===
+Report: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776221677.json
+Success: True
+No recent errors and all expected outputs were present.

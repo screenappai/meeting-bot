@@ -1,0 +1,18 @@
+[2026-04-14 14:03:14 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-14 14:03:18 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIfAAA= start=2026-04-14T14:15:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_YTY5MjRjNmQtOWNiNi00MTZkLWFkMjItY2E...
+[2026-04-14 14:05:21 UTC] Found synced Firestore meeting doc: 84DrFKL3kMaRnOem4PwA
+[2026-04-14 14:05:21 UTC] Queued meeting 84DrFKL3kMaRnOem4PwA for recording; controller trigger start=2026-04-14T14:07:21.037793+00:00
+[2026-04-14 14:05:21 UTC] Waiting until 2026-04-14T14:07:00+00:00 for host join window (98s)
+[2026-04-14 14:05:21 UTC] Waiting for host join window: sleeping 60s (98s remaining)
+[2026-04-14 14:06:21 UTC] Waiting for host join window: sleeping 38s (38s remaining)
+[2026-04-14 14:06:59 UTC] Opening Teams join URL (meeting_start=2026-04-14T14:15:00+00:00 admit_deadline=2026-04-14T14:17:00+00:00).
+[2026-04-14 14:07:19 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:07:36 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:07:52 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:08:08 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:08:24 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:08:40 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:08:56 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+[2026-04-14 14:09:12 UTC] Waiting for host to enter meeting UI: leave_buttons=0 people_buttons=0
+Fatal error: Host did not appear to join the Teams meeting. If Teams asks for sign-in, sign in manually and rerun. Debug artifacts: {'screenshot': '/home/mattkellock/git/meeting-bot/teams_join_timeout_1776175760.png', 'body_dump': '/home/mattkellock/git/meeting-bot/teams_join_timeout_1776175760.txt', 'url': 'https://teams.microsoft.com/v2/'}
+Partial report written: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776175760.json

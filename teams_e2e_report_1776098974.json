@@ -1,0 +1,50 @@
+{
+  "started_at_utc": "2026-04-13T16:45:00.903072+00:00",
+  "config": {
+    "video_file": "/home/mattkellock/Downloads/YTDown.com_YouTube_Bernie-vs-Claude_Media_h3AtWdeu_G0_001_1080p.mp4",
+    "user_email": "matt@advisewell.co",
+    "user_id": null,
+    "organization_id": null,
+    "bot_display_name": null,
+    "host_display_name": "Matt (Host)",
+    "gcp_project": "aw-development-7226",
+    "bucket": "advisewell-firebase-development",
+    "firestore_database": "(default)",
+    "kube_context": "aks-development",
+    "namespace": "default",
+    "profile_dir": "/home/mattkellock/.cache/teams-e2e-playwright",
+    "ms_env_file": null,
+    "log_window_hours": 1,
+    "skip_index_ensure": true,
+    "index_wait_seconds": 420,
+    "fail_on_recent_errors": true,
+    "process_wait_minutes": 10,
+    "process_poll_seconds": 15,
+    "meeting_duration_minutes": 30,
+    "join_lead_minutes": 3,
+    "bot_wait_minutes": 20,
+    "bot_join_deadline_minutes_after_start": 2,
+    "calendar_sync_wait_minutes": 8,
+    "skip_queue_after_sync": false,
+    "require_session_doc": false,
+    "manual_signin_wait_minutes": 0,
+    "title_prefix": "Automated Meeting Bot E2E",
+    "headless": false,
+    "dry_run": false
+  },
+  "phases": {
+    "firestore_index_readiness": {
+      "started_at": "2026-04-13T16:45:01.835361+00:00",
+      "ended_at": "2026-04-13T16:45:01.835376+00:00",
+      "result": {
+        "ready": true,
+        "skipped": true,
+        "reason": "skip_index_ensure"
+      }
+    }
+  },
+  "success": false,
+  "resolved_ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.production",
+  "ended_at_utc": "2026-04-13T16:49:34.173841+00:00",
+  "fatal_error": "Timeout of 300.0s exceeded, last exception: 503 Getting metadata from plugin failed with error: Reauthentication is needed. Please run `gcloud auth application-default login` to reauthenticate."
+}

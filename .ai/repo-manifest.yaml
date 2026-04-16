@@ -1,0 +1,38 @@
+repo_id: meeting-bot
+primary_languages:
+  - typescript
+  - python
+  - shell
+entrypoints:
+  - src/index.ts
+  - controller/main.py
+  - manager/main.py
+  - docker-compose.yml
+critical_paths:
+  - src/
+  - controller/
+  - manager/
+  - scripts/
+  - tests/
+bounded_contexts:
+  - name: ts-service-layer
+    roots:
+      - src/
+  - name: controller-runtime
+    roots:
+      - controller/
+  - name: manager-runtime
+    roots:
+      - manager/
+docs_paths:
+  - README.md
+  - DEPLOYMENT.md
+  - CHANGELOG.md
+  - tests/
+exclude_paths:
+  - node_modules/
+  - dist/
+test_commands:
+  - npm run build
+  - npm run lint
+  - npm run test:manager-offline-smoke

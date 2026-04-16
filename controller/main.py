@@ -806,6 +806,11 @@ class MeetingController:
                 # Sentry error monitoring
                 client.V1EnvVar(name="SENTRY_DSN", value=self.sentry_dsn),
                 client.V1EnvVar(name="SENTRY_ENVIRONMENT", value=self.node_env),
+                # Required for meeting-bot container validation
+                client.V1EnvVar(name="GCP_PROJECT_ID", value=self.project_id),
+                client.V1EnvVar(name="MANAGER_IMAGE", value=self.manager_image),
+                client.V1EnvVar(name="MEETING_BOT_IMAGE", value=self.meeting_bot_image),
+                client.V1EnvVar(name="GCS_BUCKET", value=self.gcs_bucket),
             ]
             manager_env = env_vars + [
                 # Manager needs to communicate with meeting-bot on localhost

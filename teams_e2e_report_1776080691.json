@@ -1,0 +1,466 @@
+{
+  "started_at_utc": "2026-04-13T11:20:51.794135+00:00",
+  "config": {
+    "video_file": "/home/mattkellock/Downloads/YTDown.com_YouTube_Bernie-vs-Claude_Media_h3AtWdeu_G0_001_1080p.mp4",
+    "user_email": "matt@advisewell.co",
+    "user_id": null,
+    "organization_id": null,
+    "bot_display_name": null,
+    "host_display_name": "Matt (Host)",
+    "gcp_project": "aw-development-7226",
+    "bucket": "advisewell-firebase-development",
+    "firestore_database": "(default)",
+    "kube_context": "aks-development",
+    "namespace": "default",
+    "profile_dir": "/home/mattkellock/.cache/teams-e2e-playwright",
+    "ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.development",
+    "log_window_hours": 1,
+    "skip_index_ensure": false,
+    "index_wait_seconds": 420,
+    "fail_on_recent_errors": false,
+    "process_wait_minutes": 10,
+    "process_poll_seconds": 15,
+    "meeting_duration_minutes": 30,
+    "join_lead_minutes": 8,
+    "bot_wait_minutes": 20,
+    "bot_join_deadline_minutes_after_start": 2,
+    "calendar_sync_wait_minutes": 8,
+    "skip_queue_after_sync": false,
+    "require_session_doc": false,
+    "manual_signin_wait_minutes": 0,
+    "title_prefix": "Automated Meeting Bot E2E",
+    "headless": false,
+    "dry_run": false
+  },
+  "phases": {
+    "firestore_index_readiness": {
+      "started_at": "2026-04-13T11:20:53.019010+00:00",
+      "ended_at": "2026-04-13T11:20:54.964113+00:00",
+      "result": {
+        "ready": true,
+        "checks": [
+          {
+            "collection_group": "meetings",
+            "field": "start",
+            "ready": true,
+            "required_signatures": [
+              [
+                "COLLECTION_GROUP",
+                "ASCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "DESCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "CONTAINS"
+              ]
+            ]
+          },
+          {
+            "collection_group": "meeting_sessions",
+            "field": "status",
+            "ready": true,
+            "required_signatures": [
+              [
+                "COLLECTION_GROUP",
+                "ASCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "DESCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "CONTAINS"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "resolve_identity": {
+      "started_at": "2026-04-13T11:20:54.964119+00:00",
+      "ended_at": "2026-04-13T11:20:55.688184+00:00",
+      "identity": {
+        "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+        "user_email": "matt@advisewell.co",
+        "organization_id": "advisewell",
+        "auto_join_meetings": true,
+        "bot_display_name": "AdviseWell Bot Dev"
+      }
+    },
+    "schedule_meeting": {
+      "started_at": "2026-04-13T11:20:55.688247+00:00",
+      "ended_at": "2026-04-13T11:20:59.060670+00:00",
+      "meeting": {
+        "graph_event_id": "AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aH8AAA=",
+        "subject": "Automated Meeting Bot E2E 2026-04-13 11:30 UTC",
+        "join_url": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZWM1YzdmN2EtMTJiYS00MmUzLWIwNzMtZWU3MzUyZGE2Yjgz%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d",
+        "start_utc": "2026-04-13T11:30:00+00:00",
+        "end_utc": "2026-04-13T11:30:00+00:00",
+        "raw_event": {
+          "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('39044f5b-eef8-4a01-ad43-63c216d177f0')/events/$entity",
+          "@odata.etag": "W/\"3esfPcUY40Ou7pSZKIdSmwABYpCORA==\"",
+          "id": "AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aH8AAA=",
+          "createdDateTime": "2026-04-13T11:20:55.8758146Z",
+          "lastModifiedDateTime": "2026-04-13T11:20:58.5112256Z",
+          "changeKey": "3esfPcUY40Ou7pSZKIdSmwABYpCORA==",
+          "categories": [],
+          "transactionId": null,
+          "originalStartTimeZone": "UTC",
+          "originalEndTimeZone": "UTC",
+          "iCalUId": "040000008200E00074C5B7101A82E008000000004601A49837CBDC0100000000000000001000000007A23A8055E0B14DBD515F5FD7936B71",
+          "uid": "040000008200E00074C5B7101A82E008000000004601A49837CBDC0100000000000000001000000007A23A8055E0B14DBD515F5FD7936B71",
+          "reminderMinutesBeforeStart": 15,
+          "isReminderOn": true,
+          "hasAttachments": false,
+          "subject": "Automated Meeting Bot E2E 2026-04-13 11:30 UTC",
+          "bodyPreview": "Automated meeting-bot validation run.\r\n________________________________________________________________________________\r\nMicrosoft Teams meeting\r\nJoin: https://teams.microsoft.com/meet/44388972672388?p=uHavfcYuq6C0nwAOEL\r\nMeeting ID: 443 889 726 723 88\r\nP",
+          "importance": "normal",
+          "sensitivity": "normal",
+          "isAllDay": false,
+          "isCancelled": false,
+          "isOrganizer": true,
+          "responseRequested": true,
+          "seriesMasterId": null,
+          "showAs": "busy",
+          "type": "singleInstance",
+          "webLink": "https://outlook.office365.com/owa/?itemid=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aH8AAA%3D&exvsurl=1&path=/calendar/item",
+          "onlineMeetingUrl": null,
+          "isOnlineMeeting": true,
+          "onlineMeetingProvider": "teamsForBusiness",
+          "allowNewTimeProposals": true,
+          "occurrenceId": null,
+          "isDraft": false,
+          "hideAttendees": false,
+          "responseStatus": {
+            "response": "organizer",
+            "time": "0001-01-01T00:00:00Z"
+          },
+          "body": {
+            "contentType": "html",
+            "content": "<html>\r\n<head>\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\r\n</head>\r\n<body>\r\nAutomated meeting-bot validation run.<br>\r\n<div class=\"me-email-text\" lang=\"en-US\" style=\"max-width:1024px; color:#242424; font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif\">\r\n<div aria-hidden=\"true\" style=\"margin-bottom:24px; overflow:hidden; white-space:nowrap\">\r\n________________________________________________________________________________</div>\r\n<div style=\"margin-bottom:12px\"><span class=\"me-email-text\" style=\"font-size:20px; color:#242424; font-weight:600\">Microsoft Teams meeting</span>\r\n</div>\r\n<div style=\"margin-bottom:6px\"><span class=\"me-email-text\" style=\"font-size:20px; color:#242424; font-weight:600\">Join:\r\n</span><a href=\"https://teams.microsoft.com/meet/44388972672388?p=uHavfcYuq6C0nwAOEL\" id=\"meet_invite_block.action.join_link\" title=\"Meeting join\" aria-label=\"Meeting join\" class=\"me-email-link\" style=\"font-size:20px; text-decoration:underline; color:#5B5FC7\">https://teams.microsoft.com/meet/44388972672388?p=uHavfcYuq6C0nwAOEL</a>\r\n</div>\r\n<div style=\"margin-bottom:6px\"><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">Meeting ID:\r\n</span><span class=\"me-email-text\" style=\"font-size:14px; color:#242424\">443 889 726 723 88</span>\r\n</div>\r\n<div style=\"margin-bottom:32px\"><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">Passcode:\r\n</span><span class=\"me-email-text\" style=\"font-size:14px; color:#242424\">3Cn3fG92</span>\r\n</div>\r\n<div style=\"margin-bottom:12px; max-width:1024px\">\r\n<hr style=\"border:0; background:#616161; height:1px\">\r\n</div>\r\n<div style=\"margin-bottom:24px\"><a href=\"https://aka.ms/JoinTeamsMeeting?omkt=en-US\" id=\"meet_invite_block.action.help\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">Need help?</a>\r\n<span style=\"color:#616161\">|</span> <a href=\"https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZWM1YzdmN2EtMTJiYS00MmUzLWIwNzMtZWU3MzUyZGE2Yjgz%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d\" id=\"meet_invite_block.action.join_link_compatibility\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">\r\nSystem reference</a> </div>\r\n<div><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">For organizers:\r\n</span><a href=\"https://teams.microsoft.com/meetingOptions/?organizerId=39044f5b-eef8-4a01-ad43-63c216d177f0&amp;tenantId=b0395074-1725-4f2c-994d-349c90f9b2b6&amp;threadId=19_meeting_ZWM1YzdmN2EtMTJiYS00MmUzLWIwNzMtZWU3MzUyZGE2Yjgz@thread.v2&amp;messageId=0&amp;language=en-US\" id=\"meet_invite_block.action.organizer_meet_options\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">Meeting\r\n options</a> </div>\r\n<div style=\"margin-top:24px; margin-bottom:6px\"></div>\r\n<div style=\"margin-bottom:24px\"></div>\r\n<div aria-hidden=\"true\" style=\"margin-bottom:24px; overflow:hidden; white-space:nowrap\">\r\n________________________________________________________________________________</div>\r\n</div>\r\n</body>\r\n</html>\r\n"
+          },
+          "start": {
+            "dateTime": "2026-04-13T11:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-04-13T11:30:00.0000000",
+            "timeZone": "UTC"
+          },
+          "location": {
+            "displayName": "Microsoft Teams Meeting",
+            "locationType": "default",
+            "uniqueId": "Microsoft Teams Meeting",
+            "uniqueIdType": "private"
+          },
+          "locations": [
+            {
+              "displayName": "Microsoft Teams Meeting",
+              "locationType": "default",
+              "uniqueId": "Microsoft Teams Meeting",
+              "uniqueIdType": "private"
+            }
+          ],
+          "recurrence": null,
+          "attendees": [
+            {
+              "type": "required",
+              "status": {
+                "response": "none",
+                "time": "0001-01-01T00:00:00Z"
+              },
+              "emailAddress": {
+                "name": "Matt Kellock",
+                "address": "matt@advisewell.co"
+              }
+            }
+          ],
+          "organizer": {
+            "emailAddress": {
+              "name": "Matt Kellock",
+              "address": "matt@advisewell.co"
+            }
+          },
+          "onlineMeeting": {
+            "joinUrl": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZWM1YzdmN2EtMTJiYS00MmUzLWIwNzMtZWU3MzUyZGE2Yjgz%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d"
+          }
+        }
+      },
+      "session_id": "aaf30368b9c213c0fd4e24b65bd77584afb9674b5f97a0ee7492917017dbf7d9"
+    },
+    "calendar_sync_observation": {
+      "started_at": "2026-04-13T11:20:59.061011+00:00",
+      "ended_at": "2026-04-13T11:25:18.762829+00:00",
+      "source_meeting_id": "smeU9m0KmxVC6dCJKPVi",
+      "source_meeting_found": true,
+      "initial_session_id": "aaf30368b9c213c0fd4e24b65bd77584afb9674b5f97a0ee7492917017dbf7d9",
+      "source_meeting_session_id": "72096ad7876299ce",
+      "effective_session_id": "72096ad7876299ce"
+    },
+    "browser_flow": {
+      "started_at": "2026-04-13T11:25:18.762834+00:00",
+      "ended_at": "2026-04-13T11:39:13.184347+00:00",
+      "result": {
+        "joined_host": true,
+        "admitted_bot": true,
+        "share_started": false,
+        "video_finished": true,
+        "meeting_ended": false,
+        "meeting_start_utc": "2026-04-13T11:30:00+00:00",
+        "bot_admit_deadline_utc": "2026-04-13T11:32:00+00:00",
+        "host_joined_at_utc": "2026-04-13T11:25:36.402098+00:00"
+      },
+      "error": null
+    },
+    "processing_wait": {
+      "started_at": "2026-04-13T11:39:13.184356+00:00",
+      "ended_at": "2026-04-13T11:44:48.669508+00:00",
+      "wait_minutes": 10,
+      "result": {
+        "completed": true,
+        "timed_out": false,
+        "waited_seconds": 335,
+        "max_wait_seconds": 600,
+        "effective_session_id": "72096ad7876299ce",
+        "completion_reason": "meeting doc has transcription + recording_url",
+        "state": {
+          "source_meeting_id": "smeU9m0KmxVC6dCJKPVi",
+          "meeting_exists": true,
+          "meeting_status": "completed",
+          "meeting_recording_status": "complete",
+          "meeting_session_status": "processing",
+          "meeting_session_id": "72096ad7876299ce",
+          "meeting_updated_at": "2026-04-13T11:44:33.348750+00:00",
+          "has_transcription": true,
+          "has_recording_url": true,
+          "has_artifacts": true,
+          "requested_session_id": "72096ad7876299ce",
+          "effective_session_id": "72096ad7876299ce",
+          "session_exists": false,
+          "session_status": "",
+          "session_updated_at": null
+        }
+      }
+    },
+    "kubernetes_logs": {
+      "started_at": "2026-04-13T11:44:48.669513+00:00",
+      "ended_at": "2026-04-13T11:44:49.994181+00:00",
+      "sources": [
+        "controller",
+        "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+        "pod:meeting-bot-68529a71-27df-497f-b464-359bf06bb31a-g79kg"
+      ],
+      "error_count": 42,
+      "errors": [
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "{\"timestamp\": \"2026-04-13 11:40:33,583\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"Azure transcription failed (non-fatal): Azure Speech transcription returned no transcript data\", \"component\": \"manager\", \"exc_info\": \"Traceback (most recent call last):\\n  File \\\"/app/main.py\\\", line 1154, in process_meeting\\n    raise RuntimeError(\\n        \\\"Azure Speech transcription returned no transcript data\\\"\\n    )\\nRuntimeError: Azure Speech transcription returned no transcript data\"}"
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "ggml_cuda_init: failed to initialize CUDA: no CUDA-capable device is detected"
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "{\"timestamp\": \"2026-04-13 11:44:33,346\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  FANOUT RESULT: user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1, uploaded=7, failed=0, success=True\", \"component\": \"manager\"}"
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "{\"timestamp\": \"2026-04-13 11:44:33,346\", \"logger\": \"__main__\", \"level\": \"INFO\", \"message\": \"  Failed: 0\", \"component\": \"manager\"}"
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "_XSERVTransmkdir: ERROR: euid != 0,directory /tmp/.X11-unix will not be created."
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:37.506Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[Core-ebec32f3-e125-4036-bd52-7e1d931e5ff1] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:37.523Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[Core-ebec32f3-e125-4036-bd52-7e1d931e5ff1] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:37.525Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:37.525Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:37.528Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.250Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.251Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersQuery\" - {\"message\":\"Resolver for Query.typingUsers is missing\",\"locations\":[]} "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.251Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.251Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsTypingIndicatorTypingUsersSubscription\", at field selection path \"typingUsersEvent\" - {\"message\":\"Unexpected error value: \\\"Subscription field must return Async Iterable. Received: undefined.\\\"\",\"locations\":[],\"path\":[\"typingUsersEvent\"]} "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.251Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[Core-ebec32f3-e125-4036-bd52-7e1d931e5ff1] FilesValidDomainsService: files-valid-domains-service: isValidCache failed: Unexpected end of JSON input "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.267Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.267Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsComposeMessageMobileAttachUpdatesSubscription\", at field selection path \"subscribeToCrossDeviceAttachType\" - {\"message\":\"Cannot read properties of undefined (reading 'logger')\",\"locations\":[],\"path\":[\"subscribeToCrossDeviceAttachType\"]} "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.274Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[Core-ebec32f3-e125-4036-bd52-7e1d931e5ff1] FilesValidDomainsService: FilesValidDomainsService: getValidDomains failed with error: Cannot read properties of undefined (reading 'map') "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.275Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.275Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] resolverUncaughtErrorBoundary__doNotAssignToGraphQLTeam: Uncaught error in a GraphQL resolver for operation \"ComponentsFilesCommonValidFileDomainsQuery\", at field selection path \"filesValidDomains\" - {\"message\":\"FilesValidDomainsService::getValidDomains::UnhandledRuntimeException\",\"locations\":[],\"path\":[\"filesValidDomains\"]} "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:30:47.276Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] [Playwright chrome logger] CID[main] useGetValidFileDomains: Exception while executing validFileDomainsQuery: Error: FilesValidDomainsService::getValidDomains::UnhandledRuntimeException "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:40:18.052Z] [error] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] Can't update the bot status "
+        },
+        {
+          "source": "pod:meeting-bot-4e3028a2-cd95-4ca7-9b66-15ec36226e02-sltbk",
+          "line": "[2026-04-13T11:40:18.554Z] [info] [correlationId: 5d006509-87f4-5238-ad74-caffeb57210a] [botType: microsoft] Unable to upload recording to server... {\"error\":{},\"userId\":\"Mw6Awnh1WtN7631PrSYyGXlpozz1\",\"teamId\":\"advisewell\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 10:56:58,860\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 10:56:58,860\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 10:56:58,862\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 10:56:58,862\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:11:58,863\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:11:58,863\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:11:58,865\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:11:58,865\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:13:08,757\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"SESSION_JOB_FAILED: session_id=4ce47212f0ef9720, org_id=advisewell, meeting_url=https://teams.microsoft.com/l/meetup-join/19%3amee, status=job_creation_failed\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:13:08,768\", \"logger\": \"__main__\", \"level\": \"ERROR\", \"message\": \"LLM_CONTEXT: Session 4ce47212f0ef9720 was claimed but job creation failed. The session will be marked as failed. Check BOT_JOB_BLOCKED or BOT_JOB_FAILED logs above for the specific reason. Common causes: missing user_id, missing meeting_url, K8s quota, or API errors.\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:13:09,781\", \"logger\": \"__main__\", \"level\": \"WARNING\", \"message\": \"FANOUT_VALIDATION: session_id=13fbbb99ce301a7c, status=FAILED, validated=1/1, errors=['User Mw6Awnh1WtN7631PrSYyGXlpozz1 missing transcription']\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:26:58,866\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:26:58,866\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:26:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:26:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:41:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:41:58,868\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:41:58,870\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed non-terminating stream error 504 Deadline Exceeded, attempting to reopen\", \"component\": \"controller\"}"
+        },
+        {
+          "source": "controller",
+          "line": "{\"timestamp\": \"2026-04-13 11:41:58,870\", \"logger\": \"subscriber-streams\", \"level\": \"DEBUG\", \"message\": \"Observed recoverable stream error 504 Deadline Exceeded, reopening stream\", \"component\": \"controller\"}"
+        }
+      ]
+    },
+    "validation": {
+      "started_at": "2026-04-13T11:44:49.994201+00:00",
+      "ended_at": "2026-04-13T11:44:51.123836+00:00",
+      "result": {
+        "session_id": "72096ad7876299ce",
+        "session_exists": false,
+        "source_meeting_id": "smeU9m0KmxVC6dCJKPVi",
+        "checks": [
+          {
+            "scope": "fallback_source_only",
+            "reason": "No subscribers found in session; validating source meeting only."
+          },
+          {
+            "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+            "meeting_id": "smeU9m0KmxVC6dCJKPVi",
+            "has_transcription": true,
+            "has_recording_url": true,
+            "has_artifacts": true,
+            "gcs_prefix": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/smeU9m0KmxVC6dCJKPVi/",
+            "gcs_blob_count": 7,
+            "gcs_recording_present": true,
+            "gcs_transcript_present": true,
+            "recording_url_exists": true,
+            "missing_artifacts": []
+          }
+        ],
+        "missing": [],
+        "warnings": [
+          "meeting_sessions/{session_id} document not found"
+        ],
+        "ok": true
+      }
+    }
+  },
+  "success": true,
+  "resolved_ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.development",
+  "ended_at_utc": "2026-04-13T11:44:51.123845+00:00"
+}

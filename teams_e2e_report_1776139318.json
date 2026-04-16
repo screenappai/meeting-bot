@@ -1,0 +1,371 @@
+{
+  "started_at_utc": "2026-04-14T03:27:42.373266+00:00",
+  "config": {
+    "video_file": "/home/mattkellock/Downloads/YTDown.com_YouTube_Bernie-vs-Claude_Media_h3AtWdeu_G0_001_1080p.mp4",
+    "user_email": "matt@advisewell.co",
+    "user_id": null,
+    "organization_id": null,
+    "bot_display_name": null,
+    "host_display_name": "Matt (Host)",
+    "gcp_project": "aw-development-7226",
+    "bucket": "advisewell-firebase-development",
+    "firestore_database": "(default)",
+    "kube_context": "aks-development",
+    "namespace": "default",
+    "profile_dir": "/home/mattkellock/.cache/teams-e2e-playwright",
+    "ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.development",
+    "log_window_hours": 1,
+    "skip_index_ensure": false,
+    "index_wait_seconds": 420,
+    "fail_on_recent_errors": false,
+    "process_wait_minutes": 20,
+    "process_poll_seconds": 15,
+    "meeting_duration_minutes": 30,
+    "join_lead_minutes": 8,
+    "bot_wait_minutes": 20,
+    "bot_join_deadline_minutes_after_start": 2,
+    "calendar_sync_wait_minutes": 8,
+    "skip_queue_after_sync": false,
+    "require_session_doc": false,
+    "manual_signin_wait_minutes": 0,
+    "title_prefix": "Automated Meeting Bot E2E",
+    "headless": false,
+    "dry_run": false
+  },
+  "phases": {
+    "firestore_index_readiness": {
+      "started_at": "2026-04-14T03:27:43.330434+00:00",
+      "ended_at": "2026-04-14T03:27:45.260915+00:00",
+      "result": {
+        "ready": true,
+        "checks": [
+          {
+            "collection_group": "meetings",
+            "field": "start",
+            "ready": true,
+            "required_signatures": [
+              [
+                "COLLECTION_GROUP",
+                "ASCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "DESCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "CONTAINS"
+              ]
+            ]
+          },
+          {
+            "collection_group": "meeting_sessions",
+            "field": "status",
+            "ready": true,
+            "required_signatures": [
+              [
+                "COLLECTION_GROUP",
+                "ASCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "DESCENDING"
+              ],
+              [
+                "COLLECTION_GROUP",
+                "CONTAINS"
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    "resolve_identity": {
+      "started_at": "2026-04-14T03:27:45.260922+00:00",
+      "ended_at": "2026-04-14T03:27:45.970780+00:00",
+      "identity": {
+        "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+        "user_email": "matt@advisewell.co",
+        "organization_id": "advisewell",
+        "auto_join_meetings": true,
+        "bot_display_name": "AdviseWell Bot Dev"
+      }
+    },
+    "schedule_meeting": {
+      "started_at": "2026-04-14T03:27:45.970841+00:00",
+      "ended_at": "2026-04-14T03:27:49.483357+00:00",
+      "meeting": {
+        "graph_event_id": "AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIWAAA=",
+        "subject": "Automated Meeting Bot E2E 2026-04-14 03:40 UTC",
+        "join_url": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZTFjYTBlMzYtZDYwNS00NDQwLWJiNDMtYjNhM2UxNGE3NzY5%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d",
+        "start_utc": "2026-04-14T03:40:00+00:00",
+        "end_utc": "2026-04-14T03:40:00+00:00",
+        "raw_event": {
+          "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('39044f5b-eef8-4a01-ad43-63c216d177f0')/events/$entity",
+          "@odata.etag": "W/\"3esfPcUY40Ou7pSZKIdSmwABYpDfug==\"",
+          "id": "AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIWAAA=",
+          "createdDateTime": "2026-04-14T03:27:46.1550384Z",
+          "lastModifiedDateTime": "2026-04-14T03:27:48.901682Z",
+          "changeKey": "3esfPcUY40Ou7pSZKIdSmwABYpDfug==",
+          "categories": [],
+          "transactionId": null,
+          "originalStartTimeZone": "UTC",
+          "originalEndTimeZone": "UTC",
+          "iCalUId": "040000008200E00074C5B7101A82E008000000007A3776A9BECBDC0100000000000000001000000045EC930873528B47B39EC01167952C9C",
+          "uid": "040000008200E00074C5B7101A82E008000000007A3776A9BECBDC0100000000000000001000000045EC930873528B47B39EC01167952C9C",
+          "reminderMinutesBeforeStart": 15,
+          "isReminderOn": true,
+          "hasAttachments": false,
+          "subject": "Automated Meeting Bot E2E 2026-04-14 03:40 UTC",
+          "bodyPreview": "Automated meeting-bot validation run.\r\n________________________________________________________________________________\r\nMicrosoft Teams meeting\r\nJoin: https://teams.microsoft.com/meet/44545428316744?p=Uchkh87mQkL09WIRJp\r\nMeeting ID: 445 454 283 167 44\r\nP",
+          "importance": "normal",
+          "sensitivity": "normal",
+          "isAllDay": false,
+          "isCancelled": false,
+          "isOrganizer": true,
+          "responseRequested": true,
+          "seriesMasterId": null,
+          "showAs": "busy",
+          "type": "singleInstance",
+          "webLink": "https://outlook.office365.com/owa/?itemid=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIWAAA%3D&exvsurl=1&path=/calendar/item",
+          "onlineMeetingUrl": null,
+          "isOnlineMeeting": true,
+          "onlineMeetingProvider": "teamsForBusiness",
+          "allowNewTimeProposals": true,
+          "occurrenceId": null,
+          "isDraft": false,
+          "hideAttendees": false,
+          "responseStatus": {
+            "response": "organizer",
+            "time": "0001-01-01T00:00:00Z"
+          },
+          "body": {
+            "contentType": "html",
+            "content": "<html>\r\n<head>\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\r\n</head>\r\n<body>\r\nAutomated meeting-bot validation run.<br>\r\n<div class=\"me-email-text\" lang=\"en-US\" style=\"max-width:1024px; color:#242424; font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif\">\r\n<div aria-hidden=\"true\" style=\"margin-bottom:24px; overflow:hidden; white-space:nowrap\">\r\n________________________________________________________________________________</div>\r\n<div style=\"margin-bottom:12px\"><span class=\"me-email-text\" style=\"font-size:20px; color:#242424; font-weight:600\">Microsoft Teams meeting</span>\r\n</div>\r\n<div style=\"margin-bottom:6px\"><span class=\"me-email-text\" style=\"font-size:20px; color:#242424; font-weight:600\">Join:\r\n</span><a href=\"https://teams.microsoft.com/meet/44545428316744?p=Uchkh87mQkL09WIRJp\" id=\"meet_invite_block.action.join_link\" title=\"Meeting join\" aria-label=\"Meeting join\" class=\"me-email-link\" style=\"font-size:20px; text-decoration:underline; color:#5B5FC7\">https://teams.microsoft.com/meet/44545428316744?p=Uchkh87mQkL09WIRJp</a>\r\n</div>\r\n<div style=\"margin-bottom:6px\"><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">Meeting ID:\r\n</span><span class=\"me-email-text\" style=\"font-size:14px; color:#242424\">445 454 283 167 44</span>\r\n</div>\r\n<div style=\"margin-bottom:32px\"><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">Passcode:\r\n</span><span class=\"me-email-text\" style=\"font-size:14px; color:#242424\">VQ9fU7bw</span>\r\n</div>\r\n<div style=\"margin-bottom:12px; max-width:1024px\">\r\n<hr style=\"border:0; background:#616161; height:1px\">\r\n</div>\r\n<div style=\"margin-bottom:24px\"><a href=\"https://aka.ms/JoinTeamsMeeting?omkt=en-US\" id=\"meet_invite_block.action.help\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">Need help?</a>\r\n<span style=\"color:#616161\">|</span> <a href=\"https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZTFjYTBlMzYtZDYwNS00NDQwLWJiNDMtYjNhM2UxNGE3NzY5%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d\" id=\"meet_invite_block.action.join_link_compatibility\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">\r\nSystem reference</a> </div>\r\n<div><span class=\"me-email-text-secondary\" style=\"font-size:14px; color:#616161\">For organizers:\r\n</span><a href=\"https://teams.microsoft.com/meetingOptions/?organizerId=39044f5b-eef8-4a01-ad43-63c216d177f0&amp;tenantId=b0395074-1725-4f2c-994d-349c90f9b2b6&amp;threadId=19_meeting_ZTFjYTBlMzYtZDYwNS00NDQwLWJiNDMtYjNhM2UxNGE3NzY5@thread.v2&amp;messageId=0&amp;language=en-US\" id=\"meet_invite_block.action.organizer_meet_options\" class=\"me-email-link\" style=\"font-size:14px; text-decoration:underline; color:#5B5FC7\">Meeting\r\n options</a> </div>\r\n<div style=\"margin-top:24px; margin-bottom:6px\"></div>\r\n<div style=\"margin-bottom:24px\"></div>\r\n<div aria-hidden=\"true\" style=\"margin-bottom:24px; overflow:hidden; white-space:nowrap\">\r\n________________________________________________________________________________</div>\r\n</div>\r\n</body>\r\n</html>\r\n"
+          },
+          "start": {
+            "dateTime": "2026-04-14T03:40:00.0000000",
+            "timeZone": "UTC"
+          },
+          "end": {
+            "dateTime": "2026-04-14T03:40:00.0000000",
+            "timeZone": "UTC"
+          },
+          "location": {
+            "displayName": "Microsoft Teams Meeting",
+            "locationType": "default",
+            "uniqueId": "Microsoft Teams Meeting",
+            "uniqueIdType": "private"
+          },
+          "locations": [
+            {
+              "displayName": "Microsoft Teams Meeting",
+              "locationType": "default",
+              "uniqueId": "Microsoft Teams Meeting",
+              "uniqueIdType": "private"
+            }
+          ],
+          "recurrence": null,
+          "attendees": [
+            {
+              "type": "required",
+              "status": {
+                "response": "none",
+                "time": "0001-01-01T00:00:00Z"
+              },
+              "emailAddress": {
+                "name": "Matt Kellock",
+                "address": "matt@advisewell.co"
+              }
+            }
+          ],
+          "organizer": {
+            "emailAddress": {
+              "name": "Matt Kellock",
+              "address": "matt@advisewell.co"
+            }
+          },
+          "onlineMeeting": {
+            "joinUrl": "https://teams.microsoft.com/l/meetup-join/19%3ameeting_ZTFjYTBlMzYtZDYwNS00NDQwLWJiNDMtYjNhM2UxNGE3NzY5%40thread.v2/0?context=%7b%22Tid%22%3a%22b0395074-1725-4f2c-994d-349c90f9b2b6%22%2c%22Oid%22%3a%2239044f5b-eef8-4a01-ad43-63c216d177f0%22%7d"
+          }
+        }
+      },
+      "session_id": "0756f79c2c3e3e343a696eece5eefd9cb1e64b6b743f4902dedb383c657c9aac"
+    },
+    "calendar_sync_observation": {
+      "started_at": "2026-04-14T03:27:49.483641+00:00",
+      "ended_at": "2026-04-14T03:30:22.078589+00:00",
+      "source_meeting_id": "j6GxMO8KWLbprxlt4ZRQ",
+      "source_meeting_found": true,
+      "initial_session_id": "0756f79c2c3e3e343a696eece5eefd9cb1e64b6b743f4902dedb383c657c9aac",
+      "source_meeting_session_id": null,
+      "effective_session_id": "0756f79c2c3e3e343a696eece5eefd9cb1e64b6b743f4902dedb383c657c9aac"
+    },
+    "browser_flow": {
+      "started_at": "2026-04-14T03:30:22.078595+00:00",
+      "ended_at": "2026-04-14T03:41:53.702812+00:00",
+      "result": {
+        "joined_host": true,
+        "admitted_bot": true,
+        "share_started": false,
+        "video_finished": true,
+        "meeting_ended": false,
+        "meeting_start_utc": "2026-04-14T03:40:00+00:00",
+        "bot_admit_deadline_utc": "2026-04-14T03:42:00+00:00",
+        "host_joined_at_utc": "2026-04-14T03:32:17.198060+00:00"
+      },
+      "error": null
+    },
+    "processing_wait": {
+      "started_at": "2026-04-14T03:41:53.702819+00:00",
+      "ended_at": "2026-04-14T04:01:52.938430+00:00",
+      "wait_minutes": 20,
+      "result": {
+        "completed": false,
+        "timed_out": true,
+        "waited_seconds": 1199,
+        "max_wait_seconds": 1200,
+        "effective_session_id": "189a97bac8f0cb45",
+        "completion_reason": "still processing",
+        "state": {
+          "source_meeting_id": "j6GxMO8KWLbprxlt4ZRQ",
+          "meeting_exists": true,
+          "meeting_status": "completed",
+          "meeting_recording_status": "none",
+          "meeting_session_status": "processing",
+          "meeting_session_id": "189a97bac8f0cb45",
+          "meeting_updated_at": "2026-04-14T04:00:11.949000+00:00",
+          "has_transcription": false,
+          "has_recording_url": false,
+          "has_artifacts": false,
+          "requested_session_id": "189a97bac8f0cb45",
+          "effective_session_id": "189a97bac8f0cb45",
+          "session_exists": false,
+          "session_status": "",
+          "session_updated_at": null
+        }
+      }
+    },
+    "kubernetes_logs": {
+      "started_at": "2026-04-14T04:01:52.938435+00:00",
+      "ended_at": "2026-04-14T04:01:57.342908+00:00",
+      "sources": [
+        "controller",
+        "pod:meeting-bot-18341338-777a-44a0-aaac-10f617dbeb82-gmtj9",
+        "pod:meeting-bot-3969ce37-5d89-4b50-bee8-e206e8c2d4a2-x45tr",
+        "pod:meeting-bot-5085e219-dcbe-44b7-aa28-b263e2915ee8-bkq9h",
+        "pod:meeting-bot-6ebad48d-39db-4eb3-987e-bf7405c21aa7-hx59l",
+        "pod:meeting-bot-b6e045bf-a59f-4cc6-8747-8d22471768bb-dcbb2",
+        "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+        "pod:meeting-bot-f867a635-6d24-41df-af00-7a9192fdcac3-86rmb"
+      ],
+      "in_scope_only": true,
+      "scope_tokens": [
+        "189a97bac8f0cb45",
+        "0756f79c2c3e3e343a696eece5eefd9cb1e64b6b743f4902dedb383c657c9aac",
+        "0756f79c2c3e3e34",
+        "0756f79c2c3e3e343a696eec",
+        "j6gxmo8kwlbprxlt4zrq",
+        "j6gxmo8kwlbprxlt"
+      ],
+      "scope_markers": [
+        "189a97bac8f0cb45",
+        "0756f79c2c3e3e343a696eece5eefd9cb1e64b6b743f4902dedb383c657c9aac",
+        "0756f79c2c3e3e34",
+        "0756f79c2c3e3e343a696eec",
+        "j6gxmo8kwlbprxlt4zrq",
+        "j6gxmo8kwlbprxlt",
+        "d406f00d-d363-5198-8614-4cab7dfa2f4f"
+      ],
+      "correlation_ids": [
+        "d406f00d-d363-5198-8614-4cab7dfa2f4f"
+      ],
+      "ignored_patterns": [
+        "resolveruncaughterrorboundary__donotassigntographqlteam",
+        "filesvaliddomainsservice",
+        "usegetvalidfiledomains",
+        "componentstypingindicatortypingusers",
+        "componentscomposemessagemobileattachupdatessubscription",
+        "useconsumptionhorizon:\\s*failed to execute consumptionhorizon update mutation",
+        "useconsumptionhorizon:\\s*updateconsumptionhorizons:\\s*failed to update consumption horizon",
+        "\\\"logger\\\"\\s*:\\s*\\\"kubernetes\\.client\\.rest\\\".*\\\"level\\\"\\s*:\\s*\\\"debug\\\"",
+        "_xservtransmkdir",
+        "ggml_cuda_init:\\s*failed to initialize cuda",
+        "azure transcription unavailable \\(non-fatal\\); fallback path engaged"
+      ],
+      "error_count": 6,
+      "errors": [
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:04.496Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] Cant finish wait at the lobby check {\"userDenied\":false,\"waitingAtLobbySuccess\":false,\"bodyText\":\"Hi, AdviseWell Bot Dev. Someone will let you in when the meeting starts.\\nMicrosoft Teams meeting\\nYour camera is turned off\\nGo to your device settings to troubleshoot\\nBackground filters\\nComputer microphone and speaker controls\\nComputer audio\\nChrome_Audio_Input\\nMic off\\nVirtual_Dummy_Output\\nPhone audio\\nPhone audio\\nNo audio\\nDon't use audio\\nCancel\\nJoin now\\nSign in\\nDownload the Teams app\\nNeed help?\"}"
+        },
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:04.496Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] Closing the browser on error... locator.waitFor: Timeout 1500000ms exceeded."
+        },
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:34.535Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] Can't add the bot log "
+        },
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:34.535Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] KnownError is not retryable: "
+        },
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:34.535Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] KnownError JobStore is permanently exiting: {\"error\":{\"retryable\":false,\"maxRetries\":0,\"documentBodyText\":\"Hi, AdviseWell Bot Dev. Someone will let you in when the meeting starts.\\nMicrosoft Teams meeting\\nYour camera is turned off\\nGo to your device settings to troubleshoot\\nBackground filters\\nComputer microphone and speaker controls\\nComputer audio\\nChrome_Audio_Input\\nMic off\\nVirtual_Dummy_Output\\nPhone audio\\nPhone audio\\nNo audio\\nDon't use audio\\nCancel\\nJoin now\\nSign in\\nDownload the Teams app\\nNeed help?\"}}"
+        },
+        {
+          "source": "pod:meeting-bot-bdd7db8b-c56d-46e8-a912-524c630c3e57-zjzd8",
+          "line": "[2026-04-14T03:56:34.535Z] [error] [correlationId: d406f00d-d363-5198-8614-4cab7dfa2f4f] [botType: microsoft] LogBasedMetric Bot has permanently failed. [errorType: WaitingAtLobbyRetryError] "
+        }
+      ]
+    },
+    "validation": {
+      "started_at": "2026-04-14T04:01:57.342921+00:00",
+      "ended_at": "2026-04-14T04:01:58.243905+00:00",
+      "result": {
+        "session_id": "189a97bac8f0cb45",
+        "session_exists": false,
+        "source_meeting_id": "j6GxMO8KWLbprxlt4ZRQ",
+        "checks": [
+          {
+            "scope": "fallback_source_only",
+            "reason": "No subscribers found in session; validating source meeting only."
+          },
+          {
+            "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+            "meeting_id": "j6GxMO8KWLbprxlt4ZRQ",
+            "firebase_meeting_doc_path": "organizations/advisewell/meetings/j6GxMO8KWLbprxlt4ZRQ",
+            "has_transcription": false,
+            "transcription": null,
+            "has_recording_url": false,
+            "recording_url": "",
+            "has_artifacts": false,
+            "artifacts": {},
+            "gcs_prefix": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/",
+            "expected_gcs_prefix": "gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/",
+            "gcs_blob_count": 0,
+            "gcs_recording_present": false,
+            "gcs_transcript_present": false,
+            "missing_artifacts": []
+          }
+        ],
+        "missing": [
+          "Missing transcription in organizations/advisewell/meetings/j6GxMO8KWLbprxlt4ZRQ (expected transcript under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/)",
+          "Missing recording_url in organizations/advisewell/meetings/j6GxMO8KWLbprxlt4ZRQ (expected recording under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/)",
+          "Missing artifacts map in organizations/advisewell/meetings/j6GxMO8KWLbprxlt4ZRQ",
+          "No recording file under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/",
+          "No transcript file under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/j6GxMO8KWLbprxlt4ZRQ/"
+        ],
+        "warnings": [
+          "meeting_sessions/{session_id} document not found"
+        ],
+        "ok": false
+      }
+    }
+  },
+  "success": false,
+  "resolved_ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.development",
+  "ended_at_utc": "2026-04-14T04:01:58.243915+00:00"
+}

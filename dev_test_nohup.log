@@ -1,0 +1,50 @@
+[2026-04-15 00:48:34 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-15 00:48:37 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aIsAAA= start=2026-04-15T01:00:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_MmI2YWU1NWQtZTZmYS00YmMyLWFkMjQtYzA...
+[2026-04-15 00:50:24 UTC] Found synced Firestore meeting doc: Dc2Zgurq6PbvPPmfYt5U
+[2026-04-15 00:50:25 UTC] Queued meeting Dc2Zgurq6PbvPPmfYt5U for recording; controller trigger start=2026-04-15T00:52:24.869748+00:00
+[2026-04-15 00:50:25 UTC] Waiting until 2026-04-15T00:52:00+00:00 for host join window (94s)
+[2026-04-15 00:50:25 UTC] Waiting for host join window: sleeping 60s (94s remaining)
+[2026-04-15 00:51:25 UTC] Waiting for host join window: sleeping 34s (34s remaining)
+[2026-04-15 00:51:59 UTC] Opening Teams join URL (meeting_start=2026-04-15T01:00:00+00:00 admit_deadline=2026-04-15T01:02:00+00:00).
+[2026-04-15 00:52:13 UTC] Host joined meeting; waiting for meeting-bot admission.
+[2026-04-15 00:52:13 UTC] Admission deadline set to 2026-04-15T01:02:00+00:00 (timeout=586s).
+[2026-04-15 00:52:13 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:52:29 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:52:44 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:53:00 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:53:15 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:53:31 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:53:47 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:54:02 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:54:18 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:54:33 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:54:49 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:55:04 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:55:20 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:55:35 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:55:51 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:56:06 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:56:22 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:56:37 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:56:53 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:57:08 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:57:24 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:57:39 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:57:55 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:58:12 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:58:28 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:58:44 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:58:59 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:59:15 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:59:30 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 00:59:46 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:00:01 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:00:17 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:00:32 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:00:48 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:01:03 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:01:19 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:01:34 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 01:01:50 UTC] Admission status: bot_in_lobby=False bot_in_meeting=False visible_admit_buttons=0 matched_lobby_rows=0
+Fatal error: Bot 'AdviseWell Bot Dev' was not admitted by 2026-04-15T01:02:00+00:00 (2 minutes after meeting start).
+Partial report written: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776214919.json

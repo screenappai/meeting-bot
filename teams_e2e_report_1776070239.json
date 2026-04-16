@@ -1,0 +1,107 @@
+{
+  "started_at_utc": "2026-04-13T08:50:37.229434+00:00",
+  "config": {
+    "video_file": "/home/mattkellock/Downloads/YTDown.com_YouTube_Bernie-vs-Claude_Media_h3AtWdeu_G0_001_1080p.mp4",
+    "user_email": "matt@advisewell.co",
+    "user_id": null,
+    "organization_id": null,
+    "bot_display_name": null,
+    "host_display_name": "Matt (Host)",
+    "gcp_project": "aw-development-7226",
+    "bucket": "advisewell-firebase-development",
+    "firestore_database": "(default)",
+    "kube_context": "aks-development",
+    "namespace": "default",
+    "profile_dir": "/home/mattkellock/.cache/teams-e2e-playwright",
+    "ms_env_file": null,
+    "log_window_hours": 1,
+    "fail_on_recent_errors": false,
+    "process_wait_minutes": 10,
+    "process_poll_seconds": 15,
+    "meeting_duration_minutes": 30,
+    "join_lead_minutes": 3,
+    "bot_wait_minutes": 20,
+    "bot_join_deadline_minutes_after_start": 2,
+    "calendar_sync_wait_minutes": 8,
+    "skip_queue_after_sync": false,
+    "require_session_doc": false,
+    "manual_signin_wait_minutes": 0,
+    "title_prefix": "Automated Meeting Bot E2E",
+    "headless": false,
+    "dry_run": true
+  },
+  "phases": {
+    "resolve_identity": {
+      "started_at": "2026-04-13T08:50:38.378820+00:00",
+      "ended_at": "2026-04-13T08:50:39.100359+00:00",
+      "identity": {
+        "user_id": "Mw6Awnh1WtN7631PrSYyGXlpozz1",
+        "user_email": "matt@advisewell.co",
+        "organization_id": "advisewell",
+        "auto_join_meetings": true,
+        "bot_display_name": "AdviseWell Bot Dev"
+      }
+    },
+    "schedule_meeting": {
+      "started_at": "2026-04-13T08:50:39.100428+00:00",
+      "ended_at": "2026-04-13T08:50:39.100468+00:00",
+      "meeting": {
+        "graph_event_id": "dry-run-event",
+        "subject": "Automated Meeting Bot E2E DRY RUN",
+        "join_url": "https://teams.microsoft.com/l/meetup-join/dry-run-1776070239",
+        "start_utc": "2026-04-13T09:00:00+00:00",
+        "end_utc": "2026-04-13T09:00:00+00:00",
+        "raw_event": {},
+        "dry_run": true
+      },
+      "session_id": "4f23468497308a6fc58f0524528766c34795fb470b150d619ec471ce2a0eaf0f"
+    },
+    "calendar_sync_observation": {
+      "started_at": "2026-04-13T08:50:39.100486+00:00",
+      "ended_at": "2026-04-13T08:50:39.100489+00:00",
+      "source_meeting_id": null,
+      "source_meeting_found": false,
+      "initial_session_id": "4f23468497308a6fc58f0524528766c34795fb470b150d619ec471ce2a0eaf0f",
+      "source_meeting_session_id": null,
+      "effective_session_id": "4f23468497308a6fc58f0524528766c34795fb470b150d619ec471ce2a0eaf0f"
+    },
+    "browser_flow": {
+      "started_at": "2026-04-13T08:50:39.100492+00:00",
+      "ended_at": "2026-04-13T08:50:39.100497+00:00",
+      "result": {
+        "dry_run": true
+      },
+      "error": null
+    },
+    "processing_wait": {
+      "started_at": "2026-04-13T08:50:39.100499+00:00",
+      "ended_at": "2026-04-13T08:50:39.100501+00:00",
+      "wait_minutes": 10,
+      "result": {
+        "dry_run": true,
+        "completed": true,
+        "waited_seconds": 0
+      }
+    },
+    "kubernetes_logs": {
+      "started_at": "2026-04-13T08:50:39.100504+00:00",
+      "ended_at": "2026-04-13T08:50:39.100722+00:00",
+      "sources": [],
+      "error_count": 0,
+      "errors": []
+    },
+    "validation": {
+      "started_at": "2026-04-13T08:50:39.100731+00:00",
+      "ended_at": "2026-04-13T08:50:39.100735+00:00",
+      "result": {
+        "ok": true,
+        "missing": [],
+        "checks": [],
+        "dry_run": true
+      }
+    }
+  },
+  "success": true,
+  "resolved_ms_env_file": "/home/mattkellock/git/advisewell/backend/functions/.env.production",
+  "ended_at_utc": "2026-04-13T08:50:39.100738+00:00"
+}

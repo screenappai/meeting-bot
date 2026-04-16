@@ -1,0 +1,95 @@
+[2026-04-15 07:06:22 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+[2026-04-15 07:06:25 UTC] Created Teams meeting event_id=AAMkAGMzYzM4YTY4LTM1YTktNDg5ZS1iM2Q2LWFhMDU1ZjZhMjZhZgBGAAAAAAAiUBGLmCRdSYmpx6Ji9t2VBwDd6x89xRjjQ67ulJkoh1KbAAAAAAENAADd6x89xRjjQ67ulJkoh1KbAAFj1aJDAAA= start=2026-04-15T07:20:00+00:00 join_url=https://teams.microsoft.com/l/meetup-join/19%3ameeting_Y2Q0Y2IxNGQtZmJlZi00YzFkLWI5YzUtMjE...
+[2026-04-15 07:10:14 UTC] Found synced Firestore meeting doc: bfTnxiYls30bvFYb2Niu
+[2026-04-15 07:10:14 UTC] Queued meeting bfTnxiYls30bvFYb2Niu for recording; controller trigger start=2026-04-15T07:12:14.548881+00:00
+[2026-04-15 07:10:14 UTC] Waiting until 2026-04-15T07:12:00+00:00 for host join window (105s)
+[2026-04-15 07:10:14 UTC] Waiting for host join window: sleeping 60s (105s remaining)
+[2026-04-15 07:11:14 UTC] Waiting for host join window: sleeping 45s (45s remaining)
+[2026-04-15 07:12:00 UTC] Opening Teams join URL (meeting_start=2026-04-15T07:20:00+00:00 admit_deadline=2026-04-15T07:22:00+00:00).
+[2026-04-15 07:12:17 UTC] Host joined meeting; waiting for meeting-bot admission.
+[2026-04-15 07:12:17 UTC] Admission deadline set to 2026-04-15T07:22:00+00:00 (timeout=582s).
+[2026-04-15 07:12:18 UTC] Admission status: bot_in_lobby=False bot_in_meeting=True visible_admit_buttons=0 matched_lobby_rows=0
+[2026-04-15 07:12:21 UTC] Bot 'AdviseWell Bot Dev' appears in participant list (confirmed).
+[2026-04-15 07:12:21 UTC] Playback page ready: http://127.0.0.1:36813/index.html
+[2026-04-15 07:12:30 UTC] Warning: share flow could not be fully confirmed; continuing to playback.
+[2026-04-15 07:12:30 UTC] Playback progress: 0.0s / 557.6s
+[2026-04-15 07:12:40 UTC] Playback progress: 10.0s / 557.6s
+[2026-04-15 07:12:50 UTC] Playback progress: 20.0s / 557.6s
+[2026-04-15 07:13:00 UTC] Playback progress: 30.1s / 557.6s
+[2026-04-15 07:13:11 UTC] Playback progress: 40.1s / 557.6s
+[2026-04-15 07:13:21 UTC] Playback progress: 50.1s / 557.6s
+[2026-04-15 07:13:31 UTC] Playback progress: 60.2s / 557.6s
+[2026-04-15 07:13:41 UTC] Playback progress: 70.2s / 557.6s
+[2026-04-15 07:13:51 UTC] Playback progress: 80.3s / 557.6s
+[2026-04-15 07:14:01 UTC] Playback progress: 90.3s / 557.6s
+[2026-04-15 07:14:11 UTC] Playback progress: 100.4s / 557.6s
+[2026-04-15 07:14:21 UTC] Playback progress: 110.4s / 557.6s
+[2026-04-15 07:14:31 UTC] Playback progress: 120.4s / 557.6s
+[2026-04-15 07:14:41 UTC] Playback progress: 130.4s / 557.6s
+[2026-04-15 07:14:51 UTC] Playback progress: 140.5s / 557.6s
+[2026-04-15 07:15:01 UTC] Playback progress: 150.5s / 557.6s
+[2026-04-15 07:15:11 UTC] Playback progress: 160.6s / 557.6s
+[2026-04-15 07:15:21 UTC] Playback progress: 170.6s / 557.6s
+[2026-04-15 07:15:31 UTC] Playback progress: 180.6s / 557.6s
+[2026-04-15 07:15:41 UTC] Playback progress: 190.7s / 557.6s
+[2026-04-15 07:15:51 UTC] Playback progress: 200.8s / 557.6s
+[2026-04-15 07:16:01 UTC] Playback progress: 210.8s / 557.6s
+[2026-04-15 07:16:11 UTC] Playback progress: 220.8s / 557.6s
+[2026-04-15 07:16:22 UTC] Playback progress: 230.9s / 557.6s
+[2026-04-15 07:16:32 UTC] Playback progress: 240.9s / 557.6s
+[2026-04-15 07:16:42 UTC] Playback progress: 251.0s / 557.6s
+[2026-04-15 07:16:52 UTC] Playback progress: 261.0s / 557.6s
+[2026-04-15 07:17:02 UTC] Playback progress: 271.1s / 557.6s
+[2026-04-15 07:17:12 UTC] Playback progress: 281.0s / 557.6s
+[2026-04-15 07:17:22 UTC] Playback progress: 290.9s / 557.6s
+[2026-04-15 07:17:32 UTC] Playback progress: 300.9s / 557.6s
+[2026-04-15 07:17:42 UTC] Playback progress: 311.0s / 557.6s
+[2026-04-15 07:17:52 UTC] Playback progress: 321.0s / 557.6s
+[2026-04-15 07:18:02 UTC] Playback progress: 331.0s / 557.6s
+[2026-04-15 07:18:12 UTC] Playback progress: 341.1s / 557.6s
+[2026-04-15 07:18:22 UTC] Playback progress: 351.1s / 557.6s
+[2026-04-15 07:18:32 UTC] Playback progress: 361.1s / 557.6s
+[2026-04-15 07:18:42 UTC] Playback progress: 371.3s / 557.6s
+[2026-04-15 07:18:52 UTC] Playback progress: 381.4s / 557.6s
+[2026-04-15 07:19:03 UTC] Playback progress: 391.4s / 557.6s
+[2026-04-15 07:19:13 UTC] Playback progress: 401.4s / 557.6s
+[2026-04-15 07:19:23 UTC] Playback progress: 411.6s / 557.6s
+[2026-04-15 07:19:33 UTC] Playback progress: 421.6s / 557.6s
+[2026-04-15 07:19:43 UTC] Playback progress: 431.7s / 557.6s
+[2026-04-15 07:19:53 UTC] Playback progress: 441.7s / 557.6s
+[2026-04-15 07:20:03 UTC] Playback progress: 451.8s / 557.6s
+[2026-04-15 07:20:13 UTC] Playback progress: 461.8s / 557.6s
+[2026-04-15 07:20:23 UTC] Playback progress: 471.9s / 557.6s
+[2026-04-15 07:20:33 UTC] Playback progress: 481.9s / 557.6s
+[2026-04-15 07:20:43 UTC] Playback progress: 491.9s / 557.6s
+[2026-04-15 07:20:53 UTC] Playback progress: 502.0s / 557.6s
+[2026-04-15 07:21:03 UTC] Playback progress: 512.0s / 557.6s
+[2026-04-15 07:21:13 UTC] Playback progress: 522.0s / 557.6s
+[2026-04-15 07:21:23 UTC] Playback progress: 532.1s / 557.6s
+[2026-04-15 07:21:34 UTC] Playback progress: 542.1s / 557.6s
+[2026-04-15 07:21:44 UTC] Playback progress: 552.2s / 557.6s
+[2026-04-15 07:21:54 UTC] Warning: failed to end meeting from Teams UI; continuing.
+[2026-04-15 07:21:55 UTC] Processing wait updated session_id from meeting state: 847f343f9b74f8dd4c0326a5...
+[2026-04-15 07:21:55 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:22:56 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:23:57 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:24:58 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:25:59 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:27:00 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:28:01 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:29:02 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:30:03 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:31:04 UTC] Processing status: session_id=847f343f9b74f8dd4c0326a5... session_status=processing meeting_status=completed recording_status=none transcription=False recording_url=False artifacts=False
+[2026-04-15 07:31:55 UTC] Processing completion wait timed out after 600s (still processing); proceeding to validation.
+[2026-04-15 07:31:55 UTC] Updated validation session_id from processing wait: 847f343f9b74f8dd4c0326a5...
+
+=== RUN SUMMARY ===
+Report: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776238321.json
+Success: False
+Recent errors found (last 1h): 115
+Missing outputs:
+  - Missing transcription in organizations/advisewell/meetings/bfTnxiYls30bvFYb2Niu (expected transcript under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/bfTnxiYls30bvFYb2Niu/)
+  - Missing recording_url in organizations/advisewell/meetings/bfTnxiYls30bvFYb2Niu (expected recording under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/bfTnxiYls30bvFYb2Niu/)
+  - Missing artifacts map in organizations/advisewell/meetings/bfTnxiYls30bvFYb2Niu
+  - No recording file under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/bfTnxiYls30bvFYb2Niu/
+  - No transcript file under gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/bfTnxiYls30bvFYb2Niu/

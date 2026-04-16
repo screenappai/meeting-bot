@@ -1,0 +1,39 @@
+{
+  "meeting": {
+    "id": "RWfFW4xGkOgTrwG1HSfg",
+    "firestore_path": "organizations/advisewell/meetings/RWfFW4xGkOgTrwG1HSfg",
+    "status": "completed",
+    "session_status": "processing",
+    "recording_status": "complete",
+    "updated_at": "2026-04-13 12:15:11.443000+00:00",
+    "meeting_session_id": "24ca4ecc054cd441"
+  },
+  "session": {
+    "id": "24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+    "firestore_path": "organizations/advisewell/meeting_sessions/24ca4ecc054cd4419f5579e937cff9c98e7e5ecd90de9f806a77ea304dd403f4",
+    "exists": true,
+    "status": "complete",
+    "updated_at": "2026-04-13 12:07:15.175901+00:00",
+    "error": null
+  },
+  "firebase_locations": {
+    "recording_url": "gs://advisewell-firebase-development/recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm",
+    "recording_blob_path": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm",
+    "artifacts": {
+      "recording_mp4": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.mp4",
+      "transcript_json": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.json",
+      "transcript_vtt": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.vtt",
+      "transcript_txt": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.txt",
+      "transcript_md": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.md",
+      "recording_m4a": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.m4a",
+      "recording_webm": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/recording.webm"
+    },
+    "gcs_prefix": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/"
+  },
+  "transcription": {
+    "firestore_field_type": "str",
+    "firestore_text": "**Speaker A:** You\n\n**Speaker B:** You\n",
+    "gcs_transcript_path": "recordings/Mw6Awnh1WtN7631PrSYyGXlpozz1/RWfFW4xGkOgTrwG1HSfg/transcript.txt",
+    "gcs_transcript_text": "[0.00-2.00] Speaker A: You\n[600.00-602.00] Speaker B: You"
+  }
+}

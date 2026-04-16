@@ -1,0 +1,3 @@
+[2026-04-15 07:55:35 UTC] Resolved identity user=matt@advisewell.co user_id=Mw6Awnh1WtN7631PrSYyGXlpozz1 org=advisewell bot_name=AdviseWell Bot Dev auto_join=True
+Fatal error: Failed to create Teams meeting: 400 {"error":{"code":"UnableToDeserializePostBody","message":"were unable to deserialize "}}
+Partial report written: /home/mattkellock/git/meeting-bot/teams_e2e_report_1776239735.json

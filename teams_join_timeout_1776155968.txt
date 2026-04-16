@@ -1,0 +1,39 @@
+url=https://teams.microsoft.com/v2/
+
+MK
+Activity
+Chat
+3
+3 chats with new messages
+Teams
+Calendar
+Calls
+New missed calls
+OneDrive
+Copilot
+Admin
+Jira Cloud
+GitHub Notifications
+Apps
+Has context menu
+Automated Meeting Bot E2E 2026-04-14 08:45 UTC
+Tuesday, Apr 148:45 AM–8:45 AMUTC1 other joined
+No camera is connected
+Allow Teams to access your camera. Go to your privacy settings to allow it.
+Computer microphone and speaker controls
+Computer audio
+None
+Allow Teams to access your mic. Go to your privacy settings to allow it.
+chrome_remote_desktop_session
+Phone audio
+Phone audio
+Room audio
+Room audio
+No audio
+Don't use audio
+Cancel
+Join now
+Need help?
+Allow Teams to access your mic
+Teams needs permission to access your device. Go to your privacy settings to allow it, then close this window and join again.
+Open privacy settings
