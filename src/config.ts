@@ -57,8 +57,28 @@ export default {
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
     180, // There's an upper limit on meeting duration 3 hours
   chromeExecutablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
-  inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
+  inactivityLimit: (() => {
+    const val = Number(process.env.MEETING_INACTIVITY_MINUTES);
+    if (!Number.isFinite(val) || val <= 0) {
+      if (process.env.MEETING_INACTIVITY_MINUTES !== undefined) {
+        console.warn(`Invalid MEETING_INACTIVITY_MINUTES value: "${process.env.MEETING_INACTIVITY_MINUTES}", using default 5`);
+      }
+      return 5;
+    }
+    return val;
+  })(),
   activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
+  endFallbackSilenceMinutes: (() => {
+    const val = Number(process.env.MEETING_END_FALLBACK_SILENCE_MINUTES);
+    if (!Number.isFinite(val) || val <= 0) {
+      if (process.env.MEETING_END_FALLBACK_SILENCE_MINUTES !== undefined) {
+        console.warn(`Invalid MEETING_END_FALLBACK_SILENCE_MINUTES value: "${process.env.MEETING_END_FALLBACK_SILENCE_MINUTES}", using default 15`);
+      }
+      return 15;
+    }
+    return val;
+  })(),
+  enableParticipantCountEnd: process.env.ENABLE_PARTICIPANT_COUNT_END !== 'false',
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
   joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES ? Number(process.env.JOIN_WAIT_TIME_MINUTES) : 10,
   // Number of retries for transient errors (not applied to WaitingAtLobbyRetryError)

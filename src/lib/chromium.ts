@@ -68,53 +68,44 @@ async function launchBrowserWithTimeout(launchFn: () => Promise<Browser>, timeou
 async function createBrowserContext(url: string, correlationId: string, botType: BotType = 'google'): Promise<Page> {
   const size = { width: 1280, height: 720 };
 
-  // Base browser args used by all bots
-  const baseBrowserArgs: string[] = [
-    '--enable-usermedia-screen-capturing',
-    '--allow-http-screen-capture',
+  const baseArgs: string[] = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-web-security',
     '--use-gl=angle',
     '--use-angle=swiftshader',
     `--window-size=${size.width},${size.height}`,
-    '--auto-accept-this-tab-capture',
     '--enable-features=MediaRecorder',
     '--enable-audio-service-out-of-process',
     '--autoplay-policy=no-user-gesture-required',
   ];
 
-  // Fake device args - only for Microsoft Teams
-  // Teams needs fake devices to interact with pre-join screen toggles,
-  // but actual recording is done via ffmpeg (X11 + PulseAudio)
   const fakeDeviceArgs: string[] = [
     '--use-fake-ui-for-media-stream',
     '--use-fake-device-for-media-stream',
   ];
 
-  // Google Meet and Zoom use browser-based recording (getDisplayMedia + MediaRecorder)
-  // and don't need fake devices:
-  // - Google Meet: clicks "Continue without microphone and camera"
-  // - Zoom: expects "Cannot detect your camera/microphone" notifications
-  const browserArgs = botType === 'microsoft'
-    ? [...baseBrowserArgs, ...fakeDeviceArgs]
-    : baseBrowserArgs;
+  const getDisplayMediaArgs = botType === 'zoom'
+    ? ['--enable-usermedia-screen-capturing', '--allow-http-screen-capture', '--auto-accept-this-tab-capture']
+    : [];
 
-  // Teams-specific display args: kiosk mode prevents address bar from showing in ffmpeg recording
-  // Google Meet and Zoom don't need this since they use tab capture (getDisplayMedia)
-  const displayArgs = botType === 'microsoft'
+  const ffmpegDisplayArgs = (botType === 'microsoft' || botType === 'google')
     ? ['--kiosk', '--start-maximized']
     : [];
 
-  console.log(`${getCorrelationIdLog(correlationId)} Launching browser for ${botType} bot (fake devices: ${botType === 'microsoft'})`);
+  const browserArgs = [
+    ...baseArgs,
+    ...getDisplayMediaArgs,
+    ...(botType === 'microsoft' ? fakeDeviceArgs : []),
+    ...ffmpegDisplayArgs,
+  ];
+
+  console.log(`${getCorrelationIdLog(correlationId)} Launching browser for ${botType} bot (fake devices: ${botType === 'microsoft'}, ffmpeg recording: ${botType === 'microsoft' || botType === 'google'})`);
 
   const browser = await launchBrowserWithTimeout(
     async () => await chromium.launch({
       headless: false,
-      args: [
-        ...browserArgs,
-        ...displayArgs,
-      ],
+      args: browserArgs,
       ignoreDefaultArgs: ['--mute-audio'],
       executablePath: config.chromeExecutablePath,
     }),
@@ -129,6 +120,13 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     viewport: size,
     ignoreHTTPSErrors: true,
     userAgent: linuxX11UserAgent,
+    // Set PulseAudio environment for Google Meet bot to ensure audio output goes to virtual_output
+    ...(botType === 'google' && process.env.XDG_RUNTIME_DIR && {
+      env: {
+        ...process.env,
+        PULSE_SERVER: `unix:${process.env.XDG_RUNTIME_DIR}/pulse/native`,
+      },
+    }),
     // Record video only in development for debugging
     ...(process.env.NODE_ENV === 'development' && {
       recordVideo: {

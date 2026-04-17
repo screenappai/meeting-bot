@@ -454,8 +454,11 @@ Notes:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `180` |
-| `MEETING_INACTIVITY_MINUTES` | Continuous inactivity duration after which the bot will end meeting recording | `1` |
+| `MEETING_INACTIVITY_MINUTES` | Primary silence threshold in minutes that triggers participant checks | `5` |
+| `MEETING_END_FALLBACK_SILENCE_MINUTES` | Hard fallback end threshold in minutes when participant state is unknown | `15` |
+| `ENABLE_PARTICIPANT_COUNT_END` | If `false`, skip participant-based end and rely on fallback silence + max duration only | `true` |
 | `INACTIVITY_DETECTION_START_DELAY_MINUTES` | Initial grace period at the start of recording before inactivity detection begins | `1` |
+| `AUTH_BASE_URL_V2` | Backend API base URL for bot status updates. Must be reachable from container network. Do NOT use localhost unless backend is in the same container. | `http://localhost:8081/v2` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
@@ -471,6 +474,8 @@ Notes:
 | `S3_BUCKET_NAME` | Target bucket name for uploads | - |
 | `S3_REGION` | AWS region (for AWS S3) | - |
 | `S3_USE_MINIO_COMPATIBILITY` | Enable MinIO compatibility mode | `false` |
+
+> **Note:** If env file is missing, defaults are used; defaults are now safe for long meetings and no-data-loss recording retention. The `.env.example` file shows deployment-recommended values which may differ from code defaults for specific deployment scenarios.
 
 ### Docker Configuration
 
