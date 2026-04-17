@@ -5,7 +5,7 @@ import { AxiosError } from 'axios';
 import { createCorrelationId, loggerFactory } from '../util/logger';
 import DiskUploader from '../middleware/disk-uploader';
 import { getRecordingNamePrefix } from '../util/recordingName';
-import { encodeFileNameSafebase64 } from '../util/strings';
+import { generateTempFileId } from '../util/tempFileId';
 import { MeetingJoinParams } from './common';
 import { globalJobStore } from '../lib/globalJobStore';
 
@@ -46,9 +46,8 @@ const joinZoom = async (req: Request, res: Response) => {
     // Try to add the job to the store
     const jobResult = await globalJobStore.addJob(async () => {
       // Initialize disk uploader
-      const entityId = botId ?? eventId;
-      const tempId = `${userId}${entityId}0`; // Using 0 as retry count
-      const tempFileId = encodeFileNameSafebase64(tempId);
+      const entityId = botId ?? eventId!;
+      const tempFileId = generateTempFileId(userId, entityId);
       const namePrefix = getRecordingNamePrefix('zoom');
 
       const uploader: IUploader = await DiskUploader.initialize(

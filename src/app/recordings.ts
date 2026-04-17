@@ -6,7 +6,11 @@ const router = Router();
 
 const tempFolder = path.join(process.cwd(), 'dist', '_tempvideo');
 
-function isValidSegment(segment: string): boolean {
+export function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export function isValidSegment(segment: string): boolean {
   return segment !== '..' && !segment.includes('/') && !segment.includes('\\') && segment !== '';
 }
 
@@ -56,7 +60,7 @@ router.get('/', async (_req: Request, res: Response) => {
     if (userDirs.length > 0) {
       body += '<div class="section"><h2>User Folders</h2><ul>';
       for (const dir of userDirs.sort((a, b) => a.name.localeCompare(b.name))) {
-        body += `<li><a href="/recordings/${encodeURIComponent(dir.name)}"><span>${dir.name}</span><span class="meta">folder</span></a></li>`;
+        body += `<li><a href="/recordings/${encodeURIComponent(dir.name)}"><span>${escapeHtml(dir.name)}</span><span class="meta">folder</span></a></li>`;
       }
       body += '</ul></div>';
     }
@@ -68,7 +72,7 @@ router.get('/', async (_req: Request, res: Response) => {
         const stats = await fs.promises.stat(filePath);
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
         const modified = stats.mtime.toLocaleString();
-        body += `<li><a href="/recordings/_root/${encodeURIComponent(file.name)}"><span>${file.name}</span><span class="meta">${sizeMB} MB &middot; ${modified}</span></a></li>`;
+        body += `<li><a href="/recordings/_root/${encodeURIComponent(file.name)}"><span>${escapeHtml(file.name)}</span><span class="meta">${sizeMB} MB &middot; ${modified}</span></a></li>`;
       }
       body += '</ul></div>';
     }
@@ -80,48 +84,6 @@ router.get('/', async (_req: Request, res: Response) => {
     res.status(200).send(htmlPage('Recordings', body));
   } catch (err) {
     res.status(500).send(htmlPage('Error', '<h1>Error</h1><p>Failed to read recordings directory.</p>'));
-  }
-});
-
-router.get('/:userId', async (req: Request, res: Response) => {
-  const { userId } = req.params;
-
-  if (!isValidSegment(userId)) {
-    res.status(400).send(htmlPage('Error', '<h1>Error</h1><p>Invalid user ID.</p>'));
-    return;
-  }
-
-  try {
-    const userPath = path.join(tempFolder, userId);
-
-    if (!fs.existsSync(userPath) || !fs.statSync(userPath).isDirectory()) {
-      res.status(404).send(htmlPage('Not Found', '<h1>Not Found</h1><p>User folder not found.</p>'));
-      return;
-    }
-
-    const files = await fs.promises.readdir(userPath, { withFileTypes: true });
-    const fileEntries = files.filter(e => e.isFile());
-
-    let body = `<h1>Recordings &mdash; ${userId}</h1>`;
-    body += '<a href="/recordings" class="back">&larr; Back to all recordings</a>';
-
-    if (fileEntries.length > 0) {
-      body += '<ul style="margin-top:1rem">';
-      for (const file of fileEntries.sort((a, b) => a.name.localeCompare(b.name))) {
-        const filePath = path.join(userPath, file.name);
-        const stats = await fs.promises.stat(filePath);
-        const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
-        const modified = stats.mtime.toLocaleString();
-        body += `<li><a href="/recordings/${encodeURIComponent(userId)}/${encodeURIComponent(file.name)}"><span>${file.name}</span><span class="meta">${sizeMB} MB &middot; ${modified}</span></a></li>`;
-      }
-      body += '</ul>';
-    } else {
-      body += '<p class="empty" style="margin-top:1rem">No recordings found for this user.</p>';
-    }
-
-    res.status(200).send(htmlPage(`Recordings — ${userId}`, body));
-  } catch (err) {
-    res.status(500).send(htmlPage('Error', '<h1>Error</h1><p>Failed to read recordings.</p>'));
   }
 });
 
@@ -144,6 +106,48 @@ router.get('/_root/:filename', async (req: Request, res: Response) => {
     res.download(filePath, filename);
   } catch (err) {
     res.status(500).json({ error: 'Failed to serve file.' });
+  }
+});
+
+router.get('/:userId', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
+  if (!isValidSegment(userId)) {
+    res.status(400).send(htmlPage('Error', '<h1>Error</h1><p>Invalid user ID.</p>'));
+    return;
+  }
+
+  try {
+    const userPath = path.join(tempFolder, userId);
+
+    if (!fs.existsSync(userPath) || !fs.statSync(userPath).isDirectory()) {
+      res.status(404).send(htmlPage('Not Found', '<h1>Not Found</h1><p>User folder not found.</p>'));
+      return;
+    }
+
+    const files = await fs.promises.readdir(userPath, { withFileTypes: true });
+    const fileEntries = files.filter(e => e.isFile());
+
+    let body = `<h1>Recordings &mdash; ${escapeHtml(userId)}</h1>`;
+    body += '<a href="/recordings" class="back">&larr; Back to all recordings</a>';
+
+    if (fileEntries.length > 0) {
+      body += '<ul style="margin-top:1rem">';
+      for (const file of fileEntries.sort((a, b) => a.name.localeCompare(b.name))) {
+        const filePath = path.join(userPath, file.name);
+        const stats = await fs.promises.stat(filePath);
+        const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
+        const modified = stats.mtime.toLocaleString();
+        body += `<li><a href="/recordings/${encodeURIComponent(userId)}/${encodeURIComponent(file.name)}"><span>${escapeHtml(file.name)}</span><span class="meta">${sizeMB} MB &middot; ${modified}</span></a></li>`;
+      }
+      body += '</ul>';
+    } else {
+      body += '<p class="empty" style="margin-top:1rem">No recordings found for this user.</p>';
+    }
+
+    res.status(200).send(htmlPage(`Recordings — ${escapeHtml(userId)}`, body));
+  } catch (err) {
+    res.status(500).send(htmlPage('Error', '<h1>Error</h1><p>Failed to read recordings.</p>'));
   }
 });
 

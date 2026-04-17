@@ -5,7 +5,7 @@ import { loggerFactory, createCorrelationId } from '../util/logger';
 import { GoogleMeetBot } from '../bots/GoogleMeetBot';
 import DiskUploader, { IUploader } from '../middleware/disk-uploader';
 import { getRecordingNamePrefix } from '../util/recordingName';
-import { encodeFileNameSafebase64 } from '../util/strings';
+import { generateTempFileId } from '../util/tempFileId';
 import { JoinParams } from '../bots/AbstractMeetBot';
 import { MicrosoftTeamsBot } from '../bots/MicrosoftTeamsBot';
 import { ZoomBot } from '../bots/ZoomBot';
@@ -129,9 +129,8 @@ export class RedisConsumerService {
 
       const jobAcceptedResult = await globalJobStore.addJob(async () => {
         // Initialize disk uploader
-        const entityId = meetingParams.botId ?? meetingParams.eventId;
-        const tempId = `${meetingParams.userId}${entityId}0`; // Using 0 as retry count
-        const tempFileId = encodeFileNameSafebase64(tempId);
+        const entityId = meetingParams.botId ?? meetingParams.eventId!;
+        const tempFileId = generateTempFileId(meetingParams.userId, entityId);
         const namePrefix = getRecordingNamePrefix(meetingParams.provider);
 
         const uploader: IUploader = await DiskUploader.initialize(
