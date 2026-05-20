@@ -1,3 +1,4 @@
+import { Page } from 'playwright';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus } from '../types';
 import config from '../config';
@@ -77,14 +78,27 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         await handleWaitingAtLobbyError({ token: bearerToken, botId, eventId, provider: 'microsoft', error }, this._logger);
 
       throw error;
+    } finally {
+      // Guarantee chrome subprocess tree is reaped regardless of exit path.
+      // No-op if a deeper code path already closed the browser.
+      try {
+        const browser = this.page?.context().browser();
+        if (browser?.isConnected()) {
+          await browser.close();
+          this._logger.info('Browser closed in join finally');
+        }
+      } catch (cleanupErr) {
+        this._logger.warn('Browser cleanup in join finally failed (non-fatal)', { error: cleanupErr });
+      }
     }
   }
 
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     // First run: Navigate to pre-join screen to trigger Chrome dialogs, then close
     this._logger.info('Pre-warming: Opening browser to trigger first-run dialogs...');
+    let warmupPage: Page | undefined;
     try {
-      const warmupPage = await createBrowserContext(url, this._correlationId, 'microsoft');
+      warmupPage = await createBrowserContext(url, this._correlationId, 'microsoft');
       this._logger.info('Pre-warming: Navigating to Teams meeting...');
       await warmupPage.goto(url, { waitUntil: 'networkidle' });
 
@@ -116,16 +130,28 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       this._logger.info('Pre-warming: Waiting for pre-join screen...');
       await warmupPage.waitForTimeout(5000);
 
-      // Close the warmup browser
-      this._logger.info('Pre-warming: Closing warmup browser...');
-      await warmupPage.context().browser()?.close();
       this._logger.info('Pre-warming complete - dialogs triggered');
-
-      // Wait 10 seconds for Chrome to fully close and save state before opening again
-      this._logger.info('Waiting 10 seconds before opening browser for actual meeting...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
     } catch (error) {
       this._logger.warn('Pre-warming failed (non-fatal):', error);
+    } finally {
+      // Guarantee the warmup chrome tree is reaped even if the block above threw
+      // mid-flight. join()'s outer finally only covers this.page, not warmupPage.
+      try {
+        const browser = warmupPage?.context().browser();
+        if (browser?.isConnected()) {
+          this._logger.info('Pre-warming: Closing warmup browser...');
+          await browser.close();
+        }
+      } catch (cleanupErr) {
+        this._logger.warn('Pre-warming: warmup browser cleanup failed (non-fatal)', { error: cleanupErr });
+      }
+    }
+
+    // Wait 10 seconds for Chrome to fully release the user-data-dir lock before
+    // the actual meeting browser opens. Skip if warmup never launched.
+    if (warmupPage) {
+      this._logger.info('Waiting 10 seconds before opening browser for actual meeting...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
     }
 
     // Second run: Actual meeting join
@@ -184,7 +210,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       await nameInput.fill(name ? name : 'ScreenApp Notetaker');
       await this.page.waitForTimeout(1000);
     } catch (err) {
-      this._logger.info('Name input field not found after 120s, skipping...', err?.message);
+      this._logger.info('Name input field not found after 120s, skipping...', err instanceof Error ? err.message : String(err));
     }
 
     // Toggle off camera and mute microphone before joining
@@ -215,7 +241,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             }
           }
         } catch (err) {
-          this._logger.info('Could not toggle camera', err?.message);
+          this._logger.info('Could not toggle camera', err instanceof Error ? err.message : String(err));
         }
 
         // Mute microphone
@@ -240,12 +266,12 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             }
           }
         } catch (err) {
-          this._logger.info('Could not toggle microphone', err?.message);
+          this._logger.info('Could not toggle microphone', err instanceof Error ? err.message : String(err));
         }
 
         this._logger.info('Finished toggling camera and microphone');
       } catch (error) {
-        this._logger.warn('Error toggling devices', error?.message);
+        this._logger.warn('Error toggling devices', error instanceof Error ? error.message : String(error));
       }
     };
 
@@ -504,7 +530,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         try {
           await browserLogCaptureCallback(this._logger, msg);
         } catch(err) {
-          this._logger.info('Playwright chrome logger: Failed to log browser messages...', err?.message);
+          this._logger.info('Playwright chrome logger: Failed to log browser messages...', err instanceof Error ? err.message : String(err));
         }
       });
 

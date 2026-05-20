@@ -62,6 +62,18 @@ export class GoogleMeetBot extends MeetBotBase {
       }
 
       throw error;
+    } finally {
+      // Guarantee chrome subprocess tree is reaped regardless of exit path.
+      // No-op if a deeper code path already closed the browser.
+      try {
+        const browser = this.page?.context().browser();
+        if (browser?.isConnected()) {
+          await browser.close();
+          this._logger.info('Browser closed in join finally');
+        }
+      } catch (cleanupErr) {
+        this._logger.warn('Browser cleanup in join finally failed (non-fatal)', { error: cleanupErr });
+      }
     }
   }
 
