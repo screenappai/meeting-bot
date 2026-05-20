@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Forward SIGTERM to child processes
-trap 'echo "sending SIGABRT to child"; kill -SIGABRT "$child" 2>/dev/null' SIGTERM SIGINT
+# Forward SIGTERM to the node child so its graceful-shutdown handler runs.
+# We previously used SIGABRT to dodge Playwright auto-closing chrome on SIGTERM,
+# but Node doesn't reliably honor SIGABRT handlers. Playwright is now configured
+# with handleSIGTERM: false (see src/lib/chromium.ts), so SIGTERM is safe.
+trap 'echo "forwarding SIGTERM to child"; kill -SIGTERM "$child" 2>/dev/null' SIGTERM SIGINT
 
 # Set up PulseAudio runtime directory for non-root user
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
