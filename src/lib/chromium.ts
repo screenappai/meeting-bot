@@ -111,6 +111,13 @@ async function createBrowserContext(url: string, correlationId: string, botType:
   const browser = await launchBrowserWithTimeout(
     async () => await chromium.launch({
       headless: false,
+      // Don't let Playwright install its own SIGTERM/SIGINT/SIGHUP handlers — they
+      // close the browser immediately when the node process receives a signal, which
+      // breaks our graceful shutdown (we want the in-flight recording to finish).
+      // The app explicitly calls browser.close() when the recording is done.
+      handleSIGINT: false,
+      handleSIGTERM: false,
+      handleSIGHUP: false,
       args: [
         ...browserArgs,
         ...displayArgs,
