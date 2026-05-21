@@ -548,7 +548,7 @@ export class GoogleMeetBot extends MeetBotBase {
         };
 
         async function startRecording() {
-          console.log('Will activate the inactivity detection after', activateInactivityDetectionAfter);
+          console.log('Will activate inactivity detection (participant + silence checks) after', activateInactivityDetectionAfter);
 
           // Check for the availability of the mediaDevices API
           if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -652,6 +652,23 @@ export class GoogleMeetBot extends MeetBotBase {
             const re = /^[0-9]+$/;
 
             function getContributorsCount(): number | undefined {
+              // Method 0: Global search for [data-avatar-count] anywhere in DOM.
+              // In the current Google Meet UI (no visible "People" button in main controls),
+              // the participant count is shown as a badge next to the user's avatar in the
+              // top-right. The badge is a <span data-avatar-count="N"> not tied to any button.
+              // This is the most reliable signal — try it first before the legacy People-button hunt.
+              try {
+                const avatarBadge = document.querySelector('[data-avatar-count]');
+                if (avatarBadge) {
+                  const count = Number(avatarBadge.getAttribute('data-avatar-count'));
+                  if (!isNaN(count) && count > 0) {
+                    return count;
+                  }
+                }
+              } catch (e) {
+                console.log('Error reading global data-avatar-count:', e);
+              }
+
               function findPeopleButton() {
                 try {
                   // 1. Try to locate using attribute "starts with"
@@ -864,11 +881,18 @@ export class GoogleMeetBot extends MeetBotBase {
                   audioActivitySum += audioActivity;
                   totalChecks++;
 
-                  // Log silence detection status once per minute
+                  // Log silence detection status once per minute, including how close
+                  // we are to the inactivity-limit exit so it's clear when this would fire.
                   const now = Date.now();
                   if (now - lastActivityLogTime > 60000) {
                     const avgActivity = (audioActivitySum / totalChecks).toFixed(2);
-                    console.log('Silence detection check - Avg:', avgActivity, 'Current:', audioActivity.toFixed(2), 'Threshold:', silenceThreshold);
+                    const silentForSec = Math.floor(silenceDuration / 1000);
+                    const limitSec = Math.floor(inactivityLimit / 1000);
+                    const exitInSec = Math.max(0, limitSec - silentForSec);
+                    const status = audioActivity < silenceThreshold
+                      ? `silentFor: ${silentForSec}s of ${limitSec}s, will exit in ${exitInSec}s if silence continues`
+                      : 'audio active (counter reset)';
+                    console.log('Silence detection check - Avg:', avgActivity, 'Current:', audioActivity.toFixed(2), 'Threshold:', silenceThreshold, '|', status);
                     lastActivityLogTime = now;
                   }
 

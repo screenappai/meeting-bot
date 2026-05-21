@@ -17,4 +17,5 @@ debug-videos/
 
 # Local-only docker compose override for signal-handling testing — see compose.override.yml header
 compose.override.yml
+compose.override.yml.bak
 docker-compose.override.yml
