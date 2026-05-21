@@ -49,9 +49,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
-        this._logger.error('Recording completed but upload failed', { botId, userId, teamId });
-        await patchBotStatus({ botId, eventId, provider: 'microsoft', status: _state, token: bearerToken }, this._logger);
-        throw new Error('Recording upload failed');
+        this._logger.error('Recording completed but upload failed; not throwing so JobStore does not rejoin the (now-ended) meeting', { botId, userId, teamId });
+        // Intentionally do NOT throw here — JobStore.executeTaskWithRetry would re-run
+        // the entire join+record+upload task, producing a second (garbage) recording on
+        // an already-ended meeting. The single upload failure is preferable to that.
       } else if (uploadResult) {
         this._logger.info('Recording and upload completed successfully', { botId, userId, teamId });
       }
