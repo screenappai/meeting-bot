@@ -504,6 +504,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     // Track FFmpeg status
     let ffmpegFailed = false;
     let ffmpegError: Error | null = null;
+    // Hoisted out of the try block so the matching finally can set it to signal
+    // the silence detector (declared inside the try) to stop on its next tick.
+    let meetingEnded = false;
 
     try {
       await recorder.start();
@@ -518,8 +521,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         }
       });
 
-      // Set up browser-based inactivity detection
-      let meetingEnded = false;
+      // Set up browser-based inactivity detection (meetingEnded declared outside the try block)
       await this.page.exposeFunction('screenAppMeetEnd', () => {
         this._logger.info('Meeting ended signal received from browser');
         meetingEnded = true;
@@ -549,6 +551,13 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           const checksNeeded = Math.ceil(inactivityLimitMs / 1000 / checkIntervalSeconds); // e.g., 120000ms / 1000 / 5 = 24 checks
 
           const checkInterval = setInterval(async () => {
+            // If the meeting ended via any other path (browser signal, page-state change,
+            // browser close, error), stop polling. Without this, the interval kept running
+            // for minutes after the recording was uploaded and the browser was closed.
+            if (meetingEnded) {
+              clearInterval(checkInterval);
+              return;
+            }
             try {
               // Sample audio from virtual_output.monitor and check if it's silent
               // Use parec to capture 1 second of audio and check the peak level
@@ -676,6 +685,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       // Re-throw to be caught by outer try/catch in joinMeeting
       throw error;
     } finally {
+      // Signal the silence detector to stop on its next tick. Without this, the
+      // detector keeps polling parec every 5s for minutes after the recording is done
+      // (until silence threshold eventually fires or pod exits).
+      meetingEnded = true;
+
       // Always stop ffmpeg
       this._logger.info('Stopping ffmpeg recording...');
       await recorder.stop();
