@@ -5,6 +5,8 @@ import app, { redisConsumerService, setGracefulShutdown } from './app';
 import { globalJobStore } from './lib/globalJobStore';
 import messageBroker from './connect/messageBroker';
 import config from './config';
+import { isPodMarkedForDeletion } from './util/k8sLifecycle';
+import { loggerFactory } from './util/logger';
 
 const port = 3000;
 
@@ -14,6 +16,27 @@ const server = http.createServer(app);
 server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+// Detect the "SIGTERM lost during ContainerCreating" race: if K8s marked us for deletion
+// before the container's PID 1 existed, the SIGTERM was silently dropped. Without this
+// check, the bot would run normally for the full terminationGracePeriodSeconds.
+//
+// 10s delay so kubelet has first chance to deliver SIGTERM via the normal path
+// (when it does work) — this check is the fallback for the broken case. Safe even
+// if SIGTERM also fires: initiateGracefulShutdown is idempotent (guards on shutdownInProgress).
+const startupLogger = loggerFactory('startup', 'system');
+setTimeout(() => {
+  isPodMarkedForDeletion(startupLogger)
+    .then((isDeleted) => {
+      if (isDeleted) {
+        console.log('Pod marked for deletion at startup — initiating graceful shutdown');
+        initiateGracefulShutdown();
+      }
+    })
+    .catch((err) => {
+      console.error('Startup pod-deletion check threw (continuing normal startup):', err);
+    });
+}, 10000);
 
 // Flag to prevent multiple shutdown attempts
 let shutdownInProgress = false;
