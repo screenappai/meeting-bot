@@ -173,7 +173,7 @@ An example JSON payload sent via webhook and pushed to the Redis list:
 
 Notes:
 - The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.). It may be omitted if not available.
-- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration.
+- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration. For Azure Blob Storage, notification URLs are SAS URLs; unsigned Azure public blob URLs are not pushed to Redis as a fallback.
 - If a webhook secret is configured, the request body is signed with HMAC-SHA256 and sent in the X-Webhook-Signature header.
 - The metadata.storage section includes provider-specific path details. For S3-compatible uploads: bucket and key are provided. For the Screenapp uploader, you may see `{ provider: "screenapp", fileId, url, defaultProfile }`.
 
@@ -445,7 +445,7 @@ Notes:
 
 - The default object key layout is: `meeting-bot/{userId}/{fileName}{extension}` (e.g., `meeting-bot/1234/My Meeting - 2025-11-13 14-42.webm`). This same layout is used for both S3 and Azure to ensure parity.
 - When `STORAGE_PROVIDER=azure` is set and Azure environment variables are provided, the upload will go to Azure Blob Storage instead of S3.
-- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`.
+- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`. Redis completion notifications use these SAS URLs for Azure `blobUrl` and `metadata.storage.url`.
 
 ## ⚙️ Configuration
 

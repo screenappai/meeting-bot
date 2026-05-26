@@ -544,22 +544,15 @@ class DiskUploader implements IUploader {
               url: this.lastUploadedBlobUrl,
             };
           } else if (provider.name === 'azure') {
-            // Prefer signed URL if method is available
             let url: string | undefined;
             if (typeof (provider as any).getSignedUrl === 'function') {
               try {
                 url = await (provider as any).getSignedUrl(key, { expiresInSeconds: config.azureBlobStorage.signedUrlTtlSeconds });
               } catch (e) {
-                this._logger.warn('Failed to generate signed URL for Azure blob, falling back to public URL (may be inaccessible without SAS)', e as any);
+                this._logger.error('Failed to generate SAS URL for Azure blob. Notification payload will not include an unsigned Azure URL.', e as any);
               }
-            }
-            // Construct canonical URL if no signed URL available
-            if (!url) {
-              const account = config.azureBlobStorage.accountName;
-              const container = config.azureBlobStorage.container;
-              if (account && container) {
-                url = `https://${account}.blob.core.windows.net/${container}/${encodeURI(key)}`;
-              }
+            } else {
+              this._logger.error('Azure storage provider does not support SAS URL generation. Notification payload will not include an Azure URL.');
             }
             this.lastUploadedBlobUrl = url;
             this.lastStorageDetails = {
