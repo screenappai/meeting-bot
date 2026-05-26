@@ -45,6 +45,11 @@ const constructRedisUri = () => {
   }
 };
 
+const normalizeFileExtension = (extension?: string) => {
+  if (!extension) return '.webm';
+  return extension.startsWith('.') ? extension : `.${extension}`;
+};
+
 export default {
   port: process.env.PORT || 3000,
   db: {
@@ -81,7 +86,7 @@ export default {
   notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
   notifyRedisDb: process.env.NOTIFY_REDIS_DB ? Number(process.env.NOTIFY_REDIS_DB) : 1, // must not default to 0
   notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
-  uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
+  uploaderFileExtension: normalizeFileExtension(process.env.UPLOADER_FILE_EXTENSION),
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {
     endpoint: process.env.S3_ENDPOINT,

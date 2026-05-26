@@ -13,7 +13,7 @@ import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
 import { GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
-import { vp9MimeType, webmMimeType } from '../lib/recording';
+import { getRecordingMimeTypesForExtension } from '../lib/recording';
 
 export class GoogleMeetBot extends MeetBotBase {
   private _logger: Logger;
@@ -524,6 +524,8 @@ export class GoogleMeetBot extends MeetBotBase {
         console.error('Could not process meeting end event', error);
       }
     });
+
+    const { primaryMimeType, secondaryMimeType } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
 
     // Inject the MediaRecorder code into the browser context using page.evaluate
     await this.page.evaluate(
@@ -1058,8 +1060,8 @@ export class GoogleMeetBot extends MeetBotBase {
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
         activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
-        primaryMimeType: webmMimeType,
-        secondaryMimeType: vp9MimeType
+        primaryMimeType,
+        secondaryMimeType
       }
     );
   

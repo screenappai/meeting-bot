@@ -14,3 +14,17 @@ export const webmMimeType = `${webmContentType};codecs="h264,opus"`;
 
 export const vp9ContentType: ContentType = 'video/webm';
 export const vp9MimeType = `${vp9ContentType};codecs="vp9,opus"`;
+
+export const getRecordingMimeTypesForExtension = (extension: string) => {
+  if (extension === '.mp4') {
+    return {
+      primaryMimeType: mp4MimeType,
+      secondaryMimeType: webmMimeType,
+    };
+  }
+
+  return {
+    primaryMimeType: webmMimeType,
+    secondaryMimeType: vp9MimeType,
+  };
+};

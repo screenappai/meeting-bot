@@ -2,7 +2,7 @@ import { Page } from 'playwright';
 import { Task } from '../lib/Task';
 import config from '../config';
 import { Logger } from 'winston';
-import { vp9MimeType, webmMimeType } from '../lib/recording';
+import { getRecordingMimeTypesForExtension } from '../lib/recording';
 
 export class RecordingTask extends Task<null, void> {
   private userId: string;
@@ -30,6 +30,8 @@ export class RecordingTask extends Task<null, void> {
   }
 
   protected async execute(): Promise<void> {
+    const { primaryMimeType, secondaryMimeType } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
+
     await this.page.evaluate(
       async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
         { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
@@ -267,8 +269,8 @@ export class RecordingTask extends Task<null, void> {
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
         activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
-        primaryMimeType: webmMimeType,
-        secondaryMimeType: vp9MimeType
+        primaryMimeType,
+        secondaryMimeType
       }
     );
   }

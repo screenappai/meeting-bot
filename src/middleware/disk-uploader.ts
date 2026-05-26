@@ -9,6 +9,8 @@ import {
 import { ContentType, extensionToContentType, FileType } from '../types';
 import fs, { createWriteStream } from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
 import { getStorageProvider } from '../uploader/providers/factory';
@@ -18,6 +20,7 @@ import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
 const tempFolder = path.join(process.cwd(), 'dist', '_tempvideo');
+const execFileAsync = promisify(execFile);
 
 function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean {
   /**
@@ -75,6 +78,7 @@ class DiskUploader implements IUploader {
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
   private lastStorageDetails?: Record<string, any>;
+  private recordingDuration?: number;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -192,6 +196,7 @@ class DiskUploader implements IUploader {
       timezone: this._timezone,
       namePrefix: this._namePrefix,
       botId: this._botId,
+      duration: this.recordingDuration,
     }, this._logger);
     this._logger.info('Finish recording upload...', file.name, this._userId, this._teamId);
     try {
@@ -212,6 +217,7 @@ class DiskUploader implements IUploader {
           fileId: (file as any)?._id,
           url: fileUrl,
           defaultProfile: file.defaultProfile,
+          duration: this.recordingDuration ?? file.duration,
         };
       } catch {}
     } catch {}
@@ -445,6 +451,70 @@ class DiskUploader implements IUploader {
     this._logger.info('Finish wait on temp file write...', userId);
   }
 
+  private async isMp4File(filePath: string): Promise<boolean> {
+    const file = await fs.promises.open(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(12);
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+      return bytesRead >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp';
+    } finally {
+      await file.close();
+    }
+  }
+
+  private async ensureRequestedContainer(filePath: string): Promise<void> {
+    if (this.fileExtension !== '.mp4') return;
+
+    if (await this.isMp4File(filePath)) {
+      return;
+    }
+
+    const outputPath = `${filePath}.transcoded.mp4`;
+    this._logger.info('Recording temp file is not an MP4 container. Transcoding before upload...', {
+      inputPath: filePath,
+      outputPath,
+    });
+
+    try {
+      await execFileAsync('ffmpeg', [
+        '-y',
+        '-i', filePath,
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
+        outputPath,
+      ], { maxBuffer: 10 * 1024 * 1024 });
+
+      await fs.promises.rename(outputPath, filePath);
+      this._logger.info('Transcoded recording temp file to MP4 container before upload.', { filePath });
+    } catch (err) {
+      try {
+        await fs.promises.unlink(outputPath);
+      } catch {}
+      throw err;
+    }
+  }
+
+  private async getMediaDuration(filePath: string): Promise<number | undefined> {
+    try {
+      const { stdout } = await execFileAsync('ffprobe', [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath,
+      ], { maxBuffer: 1024 * 1024 });
+
+      const duration = Number.parseFloat(stdout.trim());
+      if (!Number.isFinite(duration) || duration <= 0) return undefined;
+      return Math.round(duration);
+    } catch (err) {
+      this._logger.warn('Unable to determine recording duration with ffprobe', { filePath, error: err });
+      return undefined;
+    }
+  }
+
   private async finalizeDiskWriting() {
     try {
       await this.waitForWritingFlag();
@@ -454,6 +524,10 @@ class DiskUploader implements IUploader {
         // Final attempt to finish the disk write
         await this.writeWithRetries();
       }
+
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+      await this.ensureRequestedContainer(filePath);
+      this.recordingDuration = await this.getMediaDuration(filePath);
 
       return true;
     } catch(err) {
@@ -542,6 +616,7 @@ class DiskUploader implements IUploader {
               endpoint: s3cfg.endpoint,
               forcePathStyle: !!s3cfg.forcePathStyle,
               url: this.lastUploadedBlobUrl,
+              duration: this.recordingDuration,
             };
           } else if (provider.name === 'azure') {
             let url: string | undefined;
@@ -563,6 +638,7 @@ class DiskUploader implements IUploader {
               url: this.lastUploadedBlobUrl,
               signedUrlTtlSeconds: config.azureBlobStorage.signedUrlTtlSeconds,
               blobPrefix: config.azureBlobStorage.blobPrefix,
+              duration: this.recordingDuration,
             };
           }
         } catch (metaErr) {
@@ -651,6 +727,7 @@ class DiskUploader implements IUploader {
               botId: this._botId,
               contentType: this.contentType,
               uploaderType: config.uploaderType,
+              duration: this.recordingDuration,
             },
           };
           await notifyRecordingCompleted(payload, this._logger);
