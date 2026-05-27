@@ -138,6 +138,7 @@ Both are disabled by default.
 - NOTIFY_REDIS_URI: Optional Redis URI for notifications; if not set, falls back to REDIS_HOST/REDIS_PORT/etc via redisUri
 - NOTIFY_REDIS_DB: Redis database number to use for notifications (default: 1). Note: By default, DB 1 is used, not DB 0
 - NOTIFY_REDIS_LIST: Redis list key to RPUSH to (default: jobs:meetbot:recordings)
+- NOTIFY_REDIS_FAILURE_LIST: Redis list key to RPUSH failed meeting jobs to (default: jobs:meetbot:failures)
 
 Existing REDIS_* connection envs are used to derive a default redisUri when NOTIFY_REDIS_URI is not specified.
 
@@ -173,13 +174,15 @@ An example JSON payload sent via webhook and pushed to the Redis list:
 
 Notes:
 - The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.). It may be omitted if not available.
-- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration.
+- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration. For Azure Blob Storage, notification URLs are SAS URLs; unsigned Azure public blob URLs are not pushed to Redis as a fallback.
 - If a webhook secret is configured, the request body is signed with HMAC-SHA256 and sent in the X-Webhook-Signature header.
 - The metadata.storage section includes provider-specific path details. For S3-compatible uploads: bucket and key are provided. For the Screenapp uploader, you may see `{ provider: "screenapp", fileId, url, defaultProfile }`.
 
 #### Behavior
 
 - Notifications are triggered only after the recording upload/processing has successfully completed.
+- Failed meeting jobs are pushed to NOTIFY_REDIS_FAILURE_LIST after all join/recording retries are exhausted, or after a non-retryable upload failure.
+- Failure notifications are Redis-only and use the same NOTIFY_REDIS_ENABLED, NOTIFY_REDIS_URI, and NOTIFY_REDIS_DB settings.
 - If both channels are enabled, both will receive the payload.
 - Failures to notify are logged but do not interrupt the main recording flow.
 
@@ -306,7 +309,8 @@ r.rpush('jobs:meetbot:list', json.dumps(message))
 #### Queue Processing
 
 - **FIFO Queue**: Messages are processed in First-In-First-Out order
-- **BLPOP Processing**: The bot uses `BLPOP` to consume messages from the queue
+- **Atomic Processing Move**: The bot uses `BLMOVE` to move messages from the pending queue into the processing queue before recording starts
+- **Processing Acknowledgement**: The bot removes the original message from the processing queue with `LREM` after the recording finishes or permanently fails
 - **Automatic Processing**: Messages are automatically picked up and processed by the Redis consumer service
 - **Single Job Execution**: Only one meeting is processed at a time across the entire system
 
@@ -321,6 +325,7 @@ The following environment variables configure Redis connectivity:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 
 **Note**: When `REDIS_CONSUMER_ENABLED` is set to `false`, the Redis consumer service will not start, and the application will only support REST API endpoints for meeting requests. Redis message queue functionality will be disabled.
@@ -445,7 +450,7 @@ Notes:
 
 - The default object key layout is: `meeting-bot/{userId}/{fileName}{extension}` (e.g., `meeting-bot/1234/My Meeting - 2025-11-13 14-42.webm`). This same layout is used for both S3 and Azure to ensure parity.
 - When `STORAGE_PROVIDER=azure` is set and Azure environment variables are provided, the upload will go to Azure Blob Storage instead of S3.
-- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`.
+- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`. Redis completion notifications use these SAS URLs for Azure `blobUrl` and `metadata.storage.url`.
 
 ## ⚙️ Configuration
 
@@ -456,6 +461,9 @@ Notes:
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `180` |
 | `MEETING_INACTIVITY_MINUTES` | Continuous inactivity duration after which the bot will end meeting recording | `1` |
 | `INACTIVITY_DETECTION_START_DELAY_MINUTES` | Initial grace period at the start of recording before inactivity detection begins | `1` |
+| `LONE_PARTICIPANT_EXIT_DELAY_SECONDS` | Delay before stopping after the bot has seen other participants and then becomes alone | `10` |
+| `TEAMS_PREWARM_ENABLED` | Enable the extra Microsoft Teams warmup browser pass for environments that still show first-run dialogs | `false` |
+| `TEAMS_AUDIO_STABILIZATION_MS` | Delay before starting Microsoft Teams ffmpeg recording after joining | `1000` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
@@ -464,6 +472,7 @@ Notes:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 | `S3_ENDPOINT` | S3-compatible service endpoint URL | - |
 | `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - |
@@ -531,7 +540,7 @@ src/
 - **JobStore**: Manages single job execution across the system
 - **RecordingTask**: Handles meeting recording functionality
 - **ContextBridgeTask**: Manages browser context and automation
-- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLPOP)
+- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLMOVE/LREM)
 - **RedisConsumerService**: Processes messages from Redis queue asynchronously
 
 ## ⚠️ Limitations

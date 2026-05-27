@@ -2,7 +2,7 @@ import { Page } from 'playwright';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus } from '../types';
 import config from '../config';
-import { WaitingAtLobbyRetryError } from '../error';
+import { RecordingUploadFailedError, WaitingAtLobbyRetryError } from '../error';
 import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
 import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
@@ -49,10 +49,8 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
-        this._logger.error('Recording completed but upload failed; not throwing so JobStore does not rejoin the (now-ended) meeting', { botId, userId, teamId });
-        // Intentionally do NOT throw here — JobStore.executeTaskWithRetry would re-run
-        // the entire join+record+upload task, producing a second (garbage) recording on
-        // an already-ended meeting. The single upload failure is preferable to that.
+        this._logger.error('Recording completed but upload failed; raising non-retryable failure so JobStore does not rejoin the ended meeting', { botId, userId, teamId });
+        throw new RecordingUploadFailedError('Microsoft Teams recording completed but upload failed');
       } else if (uploadResult) {
         this._logger.info('Recording and upload completed successfully', { botId, userId, teamId });
       }
@@ -69,7 +67,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         currentState: _state
       });
 
-      if (!_state.includes('finished'))
+      if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
       // Try to update bot status (may fail if API is unreachable, but that's OK)
@@ -95,78 +93,6 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   }
 
   private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
-    // First run: Navigate to pre-join screen to trigger Chrome dialogs, then close
-    this._logger.info('Pre-warming: Opening browser to trigger first-run dialogs...');
-    let warmupPage: Page | undefined;
-    try {
-      warmupPage = await createBrowserContext(url, this._correlationId, 'microsoft');
-      this._logger.info('Pre-warming: Navigating to Teams meeting...');
-      await warmupPage.goto(url, { waitUntil: 'networkidle' });
-
-      await warmupPage.waitForTimeout(2000);
-
-      // Try to click "Join from browser" button
-      this._logger.info('Pre-warming: Looking for Join from browser button...');
-      const joinButtonSelectors = [
-        'button[aria-label="Join meeting from this browser"]',
-        'button[aria-label="Continue on this browser"]',
-        'button[aria-label="Join on this browser"]',
-        'button:has-text("Continue on this browser")',
-        'button:has-text("Join from browser")',
-      ];
-
-      for (const selector of joinButtonSelectors) {
-        try {
-          await warmupPage.waitForSelector(selector, { timeout: 5000 });
-          this._logger.info(`Pre-warming: Found button with selector: ${selector}`);
-          await warmupPage.click(selector, { force: true });
-          this._logger.info('Pre-warming: Clicked join from browser button');
-          break;
-        } catch (err) {
-          continue;
-        }
-      }
-
-      // Wait for pre-join screen to load
-      this._logger.info('Pre-warming: Waiting for pre-join screen...');
-      await warmupPage.waitForTimeout(5000);
-
-      this._logger.info('Pre-warming complete - dialogs triggered');
-    } catch (error) {
-      this._logger.warn('Pre-warming failed (non-fatal):', error);
-    } finally {
-      // Guarantee the warmup chrome tree is reaped even if the block above threw
-      // mid-flight. join()'s outer finally only covers this.page, not warmupPage.
-      try {
-        const browser = warmupPage?.context().browser();
-        if (browser?.isConnected()) {
-          this._logger.info('Pre-warming: Closing warmup browser...');
-          await browser.close();
-        }
-      } catch (cleanupErr) {
-        this._logger.warn('Pre-warming: warmup browser cleanup failed (non-fatal)', { error: cleanupErr });
-      }
-    }
-
-    // Wait 10 seconds for Chrome to fully release the user-data-dir lock before
-    // the actual meeting browser opens. Skip if warmup never launched.
-    if (warmupPage) {
-      this._logger.info('Waiting 10 seconds before opening browser for actual meeting...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
-    }
-
-    // Second run: Actual meeting join
-    this._logger.info('Launching browser for actual meeting...');
-
-    this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
-
-    await this.page.waitForTimeout(1000);
-
-    this._logger.info('Navigating to Microsoft Teams Meeting URL...');
-    await this.page.goto(url, { waitUntil: 'networkidle' });
-
-    // Try to find and click "Join from browser" button
-    this._logger.info('Waiting for Join meeting from browser button...');
     const joinButtonSelectors = [
       'button[aria-label="Join meeting from this browser"]',
       'button[aria-label="Continue on this browser"]',
@@ -175,21 +101,69 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       'button:has-text("Join from browser")',
     ];
 
-    let buttonClicked = false;
-    for (const selector of joinButtonSelectors) {
-      try {
-        this._logger.info(`Trying selector: ${selector}`);
-        await this.page.waitForSelector(selector, { timeout: 60000 });
-        this._logger.info(`Found button, clicking: ${selector}`);
-        await this.page.click(selector, { force: true });
-        buttonClicked = true;
-        this._logger.info('Successfully clicked join from browser button');
-        break;
-      } catch (err) {
-        this._logger.info(`Selector not found: ${selector}`);
-        continue;
+    const clickFirstVisibleSelector = async (page: Page, selectors: string[], timeoutMs: number, logPrefix: string): Promise<boolean> => {
+      const startedAt = Date.now();
+      for (const selector of selectors) {
+        this._logger.info(`${logPrefix}: checking selector`, { selector });
       }
+
+      while ((Date.now() - startedAt) < timeoutMs) {
+        for (const selector of selectors) {
+          const button = page.locator(selector).first();
+          if (await button.isVisible({ timeout: 500 }).catch(() => false)) {
+            this._logger.info(`${logPrefix}: found button`, { selector });
+            await button.click({ force: true });
+            return true;
+          }
+        }
+        await page.waitForTimeout(500);
+      }
+
+      return false;
+    };
+
+    if (config.teamsPrewarmEnabled) {
+      // First run: Navigate to pre-join screen to trigger Chrome dialogs, then close.
+      // Disabled by default because the fake-device flags normally avoid those dialogs.
+      this._logger.info('Pre-warming: Opening browser to trigger first-run dialogs...');
+      let warmupPage: Page | undefined;
+      try {
+        warmupPage = await createBrowserContext(url, this._correlationId, 'microsoft');
+        this._logger.info('Pre-warming: Navigating to Teams meeting...');
+        await warmupPage.goto(url, { waitUntil: 'domcontentloaded' });
+        await clickFirstVisibleSelector(warmupPage, joinButtonSelectors, 8000, 'Pre-warming');
+        await warmupPage.locator('input[data-tid="prejoin-display-name-input"]').waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
+        this._logger.info('Pre-warming complete - dialogs triggered');
+      } catch (error) {
+        this._logger.warn('Pre-warming failed (non-fatal):', error);
+      } finally {
+        // Guarantee the warmup chrome tree is reaped even if the block above threw
+        // mid-flight. join()'s outer finally only covers this.page, not warmupPage.
+        try {
+          const browser = warmupPage?.context().browser();
+          if (browser?.isConnected()) {
+            this._logger.info('Pre-warming: Closing warmup browser...');
+            await browser.close();
+          }
+        } catch (cleanupErr) {
+          this._logger.warn('Pre-warming: warmup browser cleanup failed (non-fatal)', { error: cleanupErr });
+        }
+      }
+    } else {
+      this._logger.info('Teams pre-warming disabled; launching the meeting browser directly');
     }
+
+    // Second run: Actual meeting join
+    this._logger.info('Launching browser for actual meeting...');
+
+    this.page = await createBrowserContext(url, this._correlationId, 'microsoft');
+
+    this._logger.info('Navigating to Microsoft Teams Meeting URL...');
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+
+    // Try to find and click "Join from browser" button
+    this._logger.info('Waiting for Join meeting from browser button...');
+    const buttonClicked = await clickFirstVisibleSelector(this.page, joinButtonSelectors, 60000, 'Join from browser');
 
     if (!buttonClicked) {
       this._logger.info('Join from browser button not found, proceeding anyway...');
@@ -205,20 +179,18 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       const nameInput = this.page.locator('input[data-tid="prejoin-display-name-input"]');
 
       // Wait for the field to be visible
-      await nameInput.waitFor({ state: 'visible', timeout: 120000 });
+      await nameInput.waitFor({ state: 'visible', timeout: 45000 });
 
       this._logger.info('Found name input field, filling with bot name...');
       await nameInput.fill(name ? name : 'ScreenApp Notetaker');
-      await this.page.waitForTimeout(1000);
     } catch (err) {
-      this._logger.info('Name input field not found after 120s, skipping...', err instanceof Error ? err.message : String(err));
+      this._logger.info('Name input field not found after 45s, skipping...', err instanceof Error ? err.message : String(err));
     }
 
     // Toggle off camera and mute microphone before joining
     const toggleDevices = async () => {
       try {
         this._logger.info('Attempting to turn off camera and mute microphone...');
-        await this.page.waitForTimeout(2000);
 
         // Turn off camera
         try {
@@ -232,12 +204,12 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
           for (const selector of cameraSelectors) {
             const cameraButton = this.page.locator(selector).first();
-            const isVisible = await cameraButton.isVisible({ timeout: 2000 }).catch(() => false);
+            const isVisible = await cameraButton.isVisible({ timeout: 1000 }).catch(() => false);
             if (isVisible) {
               const label = await cameraButton.getAttribute('aria-label');
               this._logger.info(`Clicking camera toggle: ${label}`);
               await cameraButton.click();
-              await this.page.waitForTimeout(500);
+              await this.page.waitForTimeout(250);
               break;
             }
           }
@@ -257,12 +229,12 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
           for (const selector of micSelectors) {
             const micButton = this.page.locator(selector).first();
-            const isVisible = await micButton.isVisible({ timeout: 2000 }).catch(() => false);
+            const isVisible = await micButton.isVisible({ timeout: 1000 }).catch(() => false);
             if (isVisible) {
               const label = await micButton.getAttribute('aria-label');
               this._logger.info(`Clicking microphone toggle: ${label}`);
               await micButton.click();
-              await this.page.waitForTimeout(500);
+              await this.page.waitForTimeout(250);
               break;
             }
           }
@@ -295,7 +267,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         for (const text of possibleTexts) {
           try {
             const button = this.page.getByRole('button', { name: new RegExp(text, 'i') });
-            if (await button.isVisible({ timeout: 3000 }).catch(() => false)) {
+            if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
               await button.click();
               buttonClicked = true;
               this._logger.info(`Successfully clicked "${text}" button`);
@@ -341,81 +313,46 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     pushState('joined');
 
     const dismissDeviceChecksAndNotifications = async () => {
-      const notificationCheck = async () => {
-        try {
-          this._logger.info('Waiting for the "Close" button...');
-          await this.page.waitForSelector('button[aria-label=Close]', { timeout: 5000 });
-          this._logger.info('Clicking the "Close" button...');
-          await this.page.click('button[aria-label=Close]', { timeout: 2000 });
-        } catch (error) {
-          // Log and ignore this error
-          this._logger.info('Turn On notification might be missing...', error);
-        }
-      };
+      const closeSelectors = ['button[aria-label=Close]:visible', 'button[title="Close"]:visible'];
+      const startedAt = Date.now();
+      let closeButtonsClicked = 0;
+      let emptyPasses = 0;
 
-      const deviceCheck = async () => {
-        try {
-          this._logger.info('Waiting for the "Close" button...');
-          await this.page.waitForSelector('button[title="Close"]', { timeout: 5000 });
-    
-          this._logger.info('Going to click all visible "Close" buttons...');
-    
-          let closeButtonsClicked = 0;
-          let previousButtonCount = -1;
-          let consecutiveNoChangeCount = 0;
-          const maxConsecutiveNoChange = 2; // Stop if button count doesn't change for 2 consecutive iterations
-    
-          while (true) {
-            const visibleButtons = await this.page.locator('button[title="Close"]:visible').all();
-          
-            const currentButtonCount = visibleButtons.length;
-            
-            if (currentButtonCount === 0) {
-              break;
+      while ((Date.now() - startedAt) < 3000) {
+        let clickedOnPass = false;
+        for (const selector of closeSelectors) {
+          const visibleButtons = await this.page.locator(selector).all();
+          for (const btn of visibleButtons) {
+            try {
+              await btn.click({ timeout: 1000 });
+              closeButtonsClicked++;
+              clickedOnPass = true;
+            } catch (err) {
+              this._logger.warn('Close button click failed, possibly already dismissed', { error: err });
             }
-            
-            // Check if button count hasn't changed (indicating we might be stuck)
-            if (currentButtonCount === previousButtonCount) {
-              consecutiveNoChangeCount++;
-              if (consecutiveNoChangeCount >= maxConsecutiveNoChange) {
-                this._logger.warn(`Button count hasn't changed for ${maxConsecutiveNoChange} iterations, stopping`);
-                break;
-              }
-            } else {
-              consecutiveNoChangeCount = 0;
-            }
-            
-            previousButtonCount = currentButtonCount;
-    
-            for (const btn of visibleButtons) {
-              try {
-                await btn.click({ timeout: 5000 });
-                closeButtonsClicked++;
-                this._logger.info(`Clicked a "Close" button #${closeButtonsClicked}`);
-                
-                await this.page.waitForTimeout(2000);
-              } catch (err) {
-                this._logger.warn('Click failed, possibly already dismissed', { error: err });
-              }
-            }
-          
-            await this.page.waitForTimeout(2000);
           }
-        } catch (error) {
-          // Log and ignore this error
-          this._logger.info('Device permissions modals might be missing...', { error });
         }
-      };
 
-      await notificationCheck();
-      await deviceCheck();
-      this._logger.info('Finished dismissing device checks and notifications...');
+        if (!clickedOnPass) {
+          emptyPasses++;
+          if (emptyPasses >= 2) {
+            break;
+          }
+          await this.page.waitForTimeout(250);
+        } else {
+          emptyPasses = 0;
+        }
+      }
+
+      this._logger.info('Finished dismissing device checks and notifications', { closeButtonsClicked });
     };
     await dismissDeviceChecksAndNotifications();
 
     // Wait for mic to be fully muted and any initial beeps to stop
-    this._logger.info('Waiting 5 seconds for audio to stabilize before recording...');
-    await this.page.waitForTimeout(5000);
+    if (config.teamsAudioStabilizationMs > 0) {
+      this._logger.info('Waiting briefly for audio to stabilize before recording...', { ms: config.teamsAudioStabilizationMs });
+      await this.page.waitForTimeout(config.teamsAudioStabilizationMs);
+    }
 
     // Recording the meeting page with ffmpeg
     this._logger.info('Begin recording with ffmpeg...');
@@ -441,33 +378,6 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     // Verify PulseAudio is ready before starting FFmpeg
     this._logger.info('Verifying PulseAudio status before starting FFmpeg...');
     try {
-      const execAsync = promisify(exec);
-
-      // Check if PulseAudio process is running
-      try {
-        const { stdout: psOutput } = await execAsync('ps aux | grep pulseaudio | grep -v grep');
-        this._logger.info('PulseAudio process status:', psOutput.trim());
-      } catch (err) {
-        this._logger.error('PulseAudio process not found!', err);
-      }
-
-      // Check XDG_RUNTIME_DIR
-      this._logger.info('Environment check:', {
-        XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR,
-        USER: process.env.USER,
-        HOME: process.env.HOME
-      });
-
-      // Check if PulseAudio socket exists
-      try {
-        const socketPath = `${process.env.XDG_RUNTIME_DIR}/pulse/native`;
-        const { stdout: socketCheck } = await execAsync(`ls -la ${socketPath}`);
-        this._logger.info('PulseAudio socket exists:', socketCheck.trim());
-      } catch (err) {
-        this._logger.error('PulseAudio socket not found!', err);
-      }
-
-      // Try to list sources
       const { stdout: paStatus } = await execAsync('pactl list sources short');
       this._logger.info('PulseAudio sources available:', paStatus.trim() || '(empty - no sources found)');
 
@@ -478,9 +388,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         // Try to restart PulseAudio
         try {
           await execAsync('pulseaudio --kill || true');
-          await execAsync('sleep 1');
+          await new Promise(resolve => setTimeout(resolve, 1000));
           await execAsync('pulseaudio -D --exit-idle-time=-1 --log-level=info');
-          await execAsync('sleep 2');
+          await new Promise(resolve => setTimeout(resolve, 1000));
           this._logger.info('Restarted PulseAudio');
 
           // Recreate the null sink
@@ -617,7 +527,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       // Inject inactivity detection script
       await this.page.evaluate(
-        ({ activateAfterMinutes, maxDuration }: { activateAfterMinutes: number, maxDuration: number }) => {
+        ({ activateAfterMinutes, loneParticipantExitDelayMs, maxDuration }: { activateAfterMinutes: number, loneParticipantExitDelayMs: number, maxDuration: number }) => {
           // Max duration timeout - safety limit (3 hours default in production)
           setTimeout(() => {
             console.log(`Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`);
@@ -625,38 +535,195 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           }, maxDuration);
           console.log(`Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`);
 
-          // Activate participant detection after delay
-          setTimeout(() => {
-            console.log('Activating participant count detection...');
+          console.log('Activating participant count detection...');
 
-            // Participant count detection
-            const detectLoneParticipant = () => {
-              const interval = setInterval(() => {
-                try {
-                  const regex = /\d+/;
-                  const contributors = Array.from(document.querySelectorAll('button[aria-label=People]') ?? [])
-                    .filter(x => regex.test(x?.textContent ?? ''))[0]?.textContent;
-                  const match = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
+          const recordingStartedAt = Date.now();
+          const initialAloneGraceMs = activateAfterMinutes * 60 * 1000;
+          let hasSeenOtherParticipant = false;
+          let aloneSince: number | null = null;
+          let lastParticipantDetectionLogAt = 0;
 
-                  if (match && Number(match[0]) >= 2) {
-                    return; // Still has participants
-                  }
+          const shouldStopForParticipantCount = (participants: number) => {
+            const now = Date.now();
+            if (participants >= 2) {
+              hasSeenOtherParticipant = true;
+              aloneSince = null;
+              return false;
+            }
 
-                  console.log('Bot is alone, ending meeting');
-                  clearInterval(interval);
-                  (window as any).screenAppMeetEnd();
-                } catch (error) {
-                  console.error('Participant detection error:', error);
+            if (hasSeenOtherParticipant) {
+              if (aloneSince === null) {
+                aloneSince = now;
+                console.log('Bot is alone after previously seeing participants; waiting before ending recording.');
+              }
+              return now - aloneSince >= loneParticipantExitDelayMs;
+            }
+
+            return now - recordingStartedAt >= initialAloneGraceMs;
+          };
+
+          const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+          const parseParticipantCount = (text: string): number | undefined => {
+            const normalized = normalizeText(text);
+            const patterns = [
+              /\b(?:people|participants?|teilnehm(?:er|ende)?|personen)\D{0,30}(\d{1,3})\b/i,
+              /\b(\d{1,3})\D{0,30}(?:people|participants?|teilnehm(?:er|ende)?|personen)\b/i,
+            ];
+
+            for (const pattern of patterns) {
+              const match = normalized.match(pattern);
+              if (match) {
+                const value = Number(match[1]);
+                if (Number.isFinite(value)) {
+                  return value;
                 }
-              }, 5000);
-            };
+              }
+            }
 
-            // Start participant detection
-            detectLoneParticipant();
-          }, activateAfterMinutes * 60 * 1000);
+            if (/^\D*\d{1,3}\D*$/.test(normalized) && normalized.length <= 16) {
+              const match = normalized.match(/\d{1,3}/);
+              const value = match ? Number(match[0]) : NaN;
+              if (Number.isFinite(value)) {
+                return value;
+              }
+            }
+
+            return undefined;
+          };
+
+          const getTeamsMeetingState = (): 'active' | 'alone' | 'ended' => {
+            const bodyText = normalizeText(document.body.innerText || '');
+
+            const endedPhrases = [
+              'the meeting has ended',
+              'this meeting has ended',
+              'meeting has been ended',
+              'call ended',
+              'you have been removed',
+              'you’ve been removed',
+              'removed from the meeting',
+              'besprechung wurde beendet',
+              'anruf beendet',
+              'sie wurden entfernt',
+              'du wurdest entfernt',
+            ];
+
+            if (endedPhrases.some(phrase => bodyText.toLowerCase().includes(phrase))) {
+              return 'ended';
+            }
+
+            const alonePhrases = [
+              "you're the only one here",
+              "you’re the only one here",
+              'you are the only one here',
+              "you're the only one in this meeting",
+              "you’re the only one in this meeting",
+              'you are the only one in this meeting',
+              'only one in this meeting',
+              'only you are here',
+              'no one else is here',
+              'waiting for others to join',
+              'sie sind der einzige',
+              'du bist der einzige',
+              'sie sind die einzige person',
+              'du bist die einzige person',
+              'warten auf andere',
+            ];
+
+            return alonePhrases.some(phrase => bodyText.toLowerCase().includes(phrase)) ? 'alone' : 'active';
+          };
+
+          const getParticipantCount = (): { count?: number; samples: string[] } => {
+            const selectors = [
+              'button[data-tid*="roster" i]',
+              '[data-tid*="roster" i]',
+              'button[id*="roster" i]',
+              '[id*="roster" i]',
+              'button[aria-label*="people" i]',
+              '[aria-label*="people" i]',
+              'button[aria-label*="participant" i]',
+              '[aria-label*="participant" i]',
+              'button[aria-label*="teilnehm" i]',
+              '[aria-label*="teilnehm" i]',
+              'button[aria-label*="personen" i]',
+              '[aria-label*="personen" i]',
+            ];
+
+            const candidates = Array.from(document.querySelectorAll(selectors.join(',')));
+            const samples: string[] = [];
+
+            for (const element of candidates) {
+              const searchRoots = [
+                element,
+                element.parentElement,
+                element.parentElement?.parentElement,
+              ].filter(Boolean) as Element[];
+
+              for (const root of searchRoots) {
+                const text = normalizeText([
+                  root.getAttribute('aria-label') ?? '',
+                  root.getAttribute('title') ?? '',
+                  root.getAttribute('data-tid') ?? '',
+                  root.textContent ?? '',
+                ].join(' '));
+
+                if (!text) continue;
+                if (samples.length < 6) {
+                  samples.push(text.slice(0, 140));
+                }
+
+                const count = parseParticipantCount(text);
+                if (typeof count === 'number') {
+                  return { count, samples };
+                }
+              }
+            }
+
+            return { samples };
+          };
+
+          const interval = setInterval(() => {
+            try {
+              const meetingState = getTeamsMeetingState();
+              if (meetingState === 'ended') {
+                console.log('Teams meeting ended page state detected, ending recording.');
+                clearInterval(interval);
+                (window as any).screenAppMeetEnd();
+                return;
+              }
+
+              const { count, samples } = getParticipantCount();
+              const inferredCount = typeof count === 'number'
+                ? count
+                : meetingState === 'alone'
+                  ? 1
+                  : undefined;
+
+              if (typeof inferredCount !== 'number') {
+                const now = Date.now();
+                if (now - lastParticipantDetectionLogAt > 30000) {
+                  console.log('Teams participant count not detected yet', { samples });
+                  lastParticipantDetectionLogAt = now;
+                }
+                return;
+              }
+
+              if (!shouldStopForParticipantCount(inferredCount)) {
+                return;
+              }
+
+              console.log('Bot is alone, ending Teams recording', { inferredCount, meetingState });
+              clearInterval(interval);
+              (window as any).screenAppMeetEnd();
+            } catch (error) {
+              console.error('Participant detection error:', error);
+            }
+          }, 2000);
         },
         {
           activateAfterMinutes: config.activateInactivityDetectionAfter,
+          loneParticipantExitDelayMs: config.loneParticipantExitDelaySeconds * 1000,
           maxDuration: duration,
         }
       );

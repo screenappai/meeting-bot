@@ -75,6 +75,7 @@ type FinalizeUploadOptions = {
   timezone: string;
   namePrefix: string;
   botId: string;
+  duration?: number;
 };
 interface FinalizeUploadResponseBody {
   file: FileType;
@@ -90,6 +91,7 @@ export const finalizeUpload = async ({
   timezone,
   namePrefix,
   botId,
+  duration,
 }: FinalizeUploadOptions, logger: Logger) => {
   const apiV2 = createApiV2(token);
   const time = getTimeString(timezone, logger);
@@ -101,6 +103,7 @@ export const finalizeUpload = async ({
         contentType,
         name: fileNameTemplate(namePrefix, time),
         botId: botId,
+        ...(typeof duration === 'number' ? { duration } : {}),
       },
     }
   );

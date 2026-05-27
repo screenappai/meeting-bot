@@ -17,18 +17,30 @@ echo "Using XDG_RUNTIME_DIR: $XDG_RUNTIME_DIR"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
+wait_for_pulseaudio() {
+    for _ in {1..25}; do
+        if pactl info >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.2
+    done
+    return 1
+}
+
 # Kill any existing PulseAudio processes
 pulseaudio --kill 2>/dev/null || true
-sleep 1
+for _ in {1..10}; do
+    if ! pgrep -x "pulseaudio" >/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
 
 # Start PulseAudio in user mode (simpler and more reliable)
 pulseaudio -D --exit-idle-time=-1 --log-level=info 2>&1
 
-# Wait for PulseAudio to fully initialize
-sleep 5
-
 # Verify PulseAudio is running
-if pgrep -x "pulseaudio" > /dev/null; then
+if wait_for_pulseaudio && pgrep -x "pulseaudio" > /dev/null; then
     echo "✓ PulseAudio is running (PID: $(pgrep -x pulseaudio))"
 
     # Load null sink module (virtual audio output device)

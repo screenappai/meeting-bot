@@ -108,6 +108,9 @@ export const getErrorType = (error: unknown): string => {
     if (error.constructor.name === 'UnsupportedMeetingError') {
       return 'UnsupportedMeetingError';
     }
+    if (error.constructor.name === 'RecordingUploadFailedError') {
+      return 'RecordingUploadFailedError';
+    }
     if (error.constructor.name === 'KnownError') {
       return 'KnownError';
     }

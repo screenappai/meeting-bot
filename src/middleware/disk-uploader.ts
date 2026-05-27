@@ -9,15 +9,19 @@ import {
 import { ContentType, extensionToContentType, FileType } from '../types';
 import fs, { createWriteStream } from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { LogAggregator } from '../util/logger';
 import config from '../config';
 import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
+import { writeWebmDurationMetadata } from '../lib/webmDuration';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
 const tempFolder = path.join(process.cwd(), 'dist', '_tempvideo');
+const execFileAsync = promisify(execFile);
 
 function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean {
   /**
@@ -45,6 +49,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 export interface IUploader {
   uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
+  setRecordingDuration(durationSeconds: number): void;
 }
 
 // Save to disk and upload in one session
@@ -75,6 +80,8 @@ class DiskUploader implements IUploader {
   private lastUploadedBlobUrl?: string;
   private lastRecordingId?: string;
   private lastStorageDetails?: Record<string, any>;
+  private recordingDuration?: number;
+  private firstChunkReceivedAt?: number;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -192,6 +199,7 @@ class DiskUploader implements IUploader {
       timezone: this._timezone,
       namePrefix: this._namePrefix,
       botId: this._botId,
+      duration: this.recordingDuration,
     }, this._logger);
     this._logger.info('Finish recording upload...', file.name, this._userId, this._teamId);
     try {
@@ -212,6 +220,7 @@ class DiskUploader implements IUploader {
           fileId: (file as any)?._id,
           url: fileUrl,
           defaultProfile: file.defaultProfile,
+          duration: this.recordingDuration ?? file.duration,
         };
       } catch {}
     } catch {}
@@ -304,12 +313,30 @@ class DiskUploader implements IUploader {
         this._logger.info('Force upload is enabled. Stopping disk writes...', this._userId, this._teamId);
         return false;
       }
+      if (!this.firstChunkReceivedAt) {
+        this.firstChunkReceivedAt = Date.now();
+      }
       this.enqueue(data);
       return true;
     } catch(err) {
       this._logger.info('Error: Unable to save the chunk to disk...', this._userId, this._teamId, err);
       return false;
     }
+  }
+
+  public setRecordingDuration(durationSeconds: number): void {
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      this._logger.warn('Ignoring invalid recording duration from recorder', { durationSeconds });
+      return;
+    }
+
+    const roundedDuration = Math.round(durationSeconds);
+    this.recordingDuration = roundedDuration;
+    this._logger.info('Recording duration captured from recorder', {
+      duration: roundedDuration,
+      userId: this._userId,
+      teamId: this._teamId,
+    });
   }
 
   private static getFolderPath(userId: string) {
@@ -445,6 +472,94 @@ class DiskUploader implements IUploader {
     this._logger.info('Finish wait on temp file write...', userId);
   }
 
+  private async isMp4File(filePath: string): Promise<boolean> {
+    const file = await fs.promises.open(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(12);
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+      return bytesRead >= 12 && buffer.toString('ascii', 4, 8) === 'ftyp';
+    } finally {
+      await file.close();
+    }
+  }
+
+  private async ensureRequestedContainer(filePath: string): Promise<void> {
+    if (this.fileExtension !== '.mp4') return;
+
+    if (await this.isMp4File(filePath)) {
+      return;
+    }
+
+    const outputPath = `${filePath}.transcoded.mp4`;
+    this._logger.info('Recording temp file is not an MP4 container. Transcoding before upload...', {
+      inputPath: filePath,
+      outputPath,
+    });
+
+    try {
+      await execFileAsync('ffmpeg', [
+        '-y',
+        '-i', filePath,
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-movflags', '+faststart',
+        outputPath,
+      ], { maxBuffer: 10 * 1024 * 1024 });
+
+      await fs.promises.rename(outputPath, filePath);
+      this._logger.info('Transcoded recording temp file to MP4 container before upload.', { filePath });
+    } catch (err) {
+      try {
+        await fs.promises.unlink(outputPath);
+      } catch {}
+      throw err;
+    }
+  }
+
+  private async ensureWebmDurationMetadata(filePath: string): Promise<void> {
+    if (this.fileExtension !== '.webm') return;
+
+    if (!this.recordingDuration) {
+      this._logger.warn('Skipping WebM duration metadata patch because recording duration is unknown.', { filePath });
+      return;
+    }
+
+    this._logger.info('Patching WebM recording duration metadata...', {
+      filePath,
+      duration: this.recordingDuration,
+    });
+
+    try {
+      await writeWebmDurationMetadata(filePath, this.recordingDuration);
+      this._logger.info('Patched WebM recording duration metadata.', { filePath });
+    } catch (err) {
+      this._logger.warn('Unable to patch WebM recording duration metadata; continuing with duration field only.', {
+        filePath,
+        error: err,
+      });
+    }
+  }
+
+  private async getMediaDuration(filePath: string): Promise<number | undefined> {
+    try {
+      const { stdout } = await execFileAsync('ffprobe', [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath,
+      ], { maxBuffer: 1024 * 1024 });
+
+      const duration = Number.parseFloat(stdout.trim());
+      if (!Number.isFinite(duration) || duration <= 0) return undefined;
+      return Math.round(duration);
+    } catch (err) {
+      this._logger.warn('Unable to determine recording duration with ffprobe', { filePath, error: err });
+      return undefined;
+    }
+  }
+
   private async finalizeDiskWriting() {
     try {
       await this.waitForWritingFlag();
@@ -453,6 +568,28 @@ class DiskUploader implements IUploader {
       if (this.queue.length > 0) {
         // Final attempt to finish the disk write
         await this.writeWithRetries();
+      }
+
+      const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
+      await this.ensureRequestedContainer(filePath);
+
+      if (!this.recordingDuration && this.firstChunkReceivedAt) {
+        const elapsedSeconds = Math.round((Date.now() - this.firstChunkReceivedAt) / 1000);
+        if (elapsedSeconds > 0) {
+          this.recordingDuration = elapsedSeconds;
+          this._logger.info('Recording duration estimated from chunk receive time', {
+            duration: this.recordingDuration,
+            userId: this._userId,
+            teamId: this._teamId,
+          });
+        }
+      }
+
+      await this.ensureWebmDurationMetadata(filePath);
+
+      const probedDuration = await this.getMediaDuration(filePath);
+      if (typeof probedDuration === 'number') {
+        this.recordingDuration = probedDuration;
       }
 
       return true;
@@ -542,24 +679,18 @@ class DiskUploader implements IUploader {
               endpoint: s3cfg.endpoint,
               forcePathStyle: !!s3cfg.forcePathStyle,
               url: this.lastUploadedBlobUrl,
+              duration: this.recordingDuration,
             };
           } else if (provider.name === 'azure') {
-            // Prefer signed URL if method is available
             let url: string | undefined;
             if (typeof (provider as any).getSignedUrl === 'function') {
               try {
                 url = await (provider as any).getSignedUrl(key, { expiresInSeconds: config.azureBlobStorage.signedUrlTtlSeconds });
               } catch (e) {
-                this._logger.warn('Failed to generate signed URL for Azure blob, falling back to public URL (may be inaccessible without SAS)', e as any);
+                this._logger.error('Failed to generate SAS URL for Azure blob. Notification payload will not include an unsigned Azure URL.', e as any);
               }
-            }
-            // Construct canonical URL if no signed URL available
-            if (!url) {
-              const account = config.azureBlobStorage.accountName;
-              const container = config.azureBlobStorage.container;
-              if (account && container) {
-                url = `https://${account}.blob.core.windows.net/${container}/${encodeURI(key)}`;
-              }
+            } else {
+              this._logger.error('Azure storage provider does not support SAS URL generation. Notification payload will not include an Azure URL.');
             }
             this.lastUploadedBlobUrl = url;
             this.lastStorageDetails = {
@@ -570,6 +701,7 @@ class DiskUploader implements IUploader {
               url: this.lastUploadedBlobUrl,
               signedUrlTtlSeconds: config.azureBlobStorage.signedUrlTtlSeconds,
               blobPrefix: config.azureBlobStorage.blobPrefix,
+              duration: this.recordingDuration,
             };
           }
         } catch (metaErr) {
@@ -658,6 +790,7 @@ class DiskUploader implements IUploader {
               botId: this._botId,
               contentType: this.contentType,
               uploaderType: config.uploaderType,
+              duration: this.recordingDuration,
             },
           };
           await notifyRecordingCompleted(payload, this._logger);
