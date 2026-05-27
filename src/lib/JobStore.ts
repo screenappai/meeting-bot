@@ -13,7 +13,8 @@ export class JobStore {
     task: () => Promise<T>, 
     logger: Logger,
     retryCount: number = 0,
-    onPermanentFailure?: (error: unknown) => Promise<void> | void
+    onPermanentFailure?: (error: unknown) => Promise<void> | void,
+    onCompleted?: () => Promise<void> | void
   ): Promise<{ accepted: boolean }> {
     if (this.isRunning || this.shutdownRequested) {
       return { accepted: false };
@@ -22,8 +23,15 @@ export class JobStore {
     this.isRunning = true;
     
     // Execute the task asynchronously without waiting for completion
-    this.executeTaskWithRetry(task, logger, retryCount).then(() => {
+    this.executeTaskWithRetry(task, logger, retryCount).then(async () => {
       logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
+      if (onCompleted) {
+        try {
+          await onCompleted();
+        } catch (completionCallbackError) {
+          logger.warn('Meeting completion callback failed', completionCallbackError as any);
+        }
+      }
     }).catch(async (error) => {
       const errorType = getErrorType(error);
       if (error instanceof KnownError) {

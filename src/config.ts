@@ -77,6 +77,7 @@ export default {
   accessKey: process.env.GCP_ACCESS_KEY_ID ?? '',
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
+  redisProcessingQueueName: process.env.REDIS_PROCESSING_QUEUE_NAME ?? 'jobs:meetbot:processing',
   redisUri: constructRedisUri(),
   // Notification: Webhook (disabled by default)
   notifyWebhookEnabled: process.env.NOTIFY_WEBHOOK_ENABLED === 'true',

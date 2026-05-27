@@ -4,7 +4,7 @@ import config from '../config';
 
 /**
  * This class must not have any instance/local state, and should only be used as a singleton.
- * Uses FIFO queue (RPUSH + BLPOP)
+ * Uses FIFO queue (RPUSH + BLMOVE) with a processing list for active jobs.
  */
 export class RedisMessageBroker extends EventEmitter {
   private meetbot: ReturnType<typeof createClient> | null = null;
@@ -50,17 +50,60 @@ export class RedisMessageBroker extends EventEmitter {
   }
 
   /**
-   * Get a job from meetbot Redis queue with custom timeout.
-   * **Client needs to actively pull items.**
+   * Return a job from the processing queue to the head of the pending queue.
+   *
+   * This is used if a job was atomically moved into processing but could not be
+   * accepted by the local JobStore.
+   *
+   * @param {message} message - The original job message.
+   */
+  async returnProcessingMeetingbotJob(message: string) {
+    return await this.meetbot?.sendCommand([
+      'EVAL',
+      'local removed = redis.call("LREM", KEYS[1], 1, ARGV[1]); if removed > 0 then return redis.call("LPUSH", KEYS[2], ARGV[1]); end; return 0;',
+      '2',
+      config.redisProcessingQueueName,
+      config.redisQueueName,
+      message,
+    ]);
+  }
+
+  /**
+   * Remove a finished or permanently failed job from the processing queue.
+   *
+   * @param {message} message - The original job message.
+   */
+  async acknowledgeProcessingMeetingbotJob(message: string): Promise<number> {
+    const removed = await this.meetbot?.sendCommand([
+      'LREM',
+      config.redisProcessingQueueName,
+      '1',
+      message,
+    ]);
+
+    return Number(removed ?? 0);
+  }
+
+  /**
+   * Move a job from the pending queue into the processing queue with a custom timeout.
+   * **Client needs to actively acknowledge items after completion.**
    *
    * @param timeout - Timeout in seconds for blocking operation
    * @return The message acquired from meetbot Redis queue
    */
   async getMeetingbotJobsWithTimeout(timeout: number) {
-    return await this.meetbot?.blPop(
+    const message = await this.meetbot?.sendCommand([
+      'BLMOVE',
       config.redisQueueName,
-      timeout
-    );
+      config.redisProcessingQueueName,
+      'LEFT',
+      'RIGHT',
+      String(timeout),
+    ]);
+
+    return typeof message === 'string'
+      ? { key: config.redisQueueName, element: message }
+      : null;
   }
 
   /**

@@ -16,7 +16,7 @@ export class RedisConsumerService {
   private _isShutdownRequested: boolean = false;
   private reconnectInterval: NodeJS.Timeout | null = null;
   private readonly RECONNECT_DELAY = 5000; // 5 seconds
-  private readonly BLPOP_TIMEOUT = 10; // 10 seconds
+  private readonly QUEUE_BLOCK_TIMEOUT_SECONDS = 10;
 
   async start(): Promise<void> {
     if (this._isRunning) {
@@ -77,12 +77,12 @@ export class RedisConsumerService {
         // Check JobStore availability BEFORE attempting to get messages
         if (globalJobStore.isBusy()) {
           // JobStore is busy, wait a bit before checking again
-          await new Promise(resolve => setTimeout(resolve, this.BLPOP_TIMEOUT)); // BLPOP_TIMEOUT second delay
+          await new Promise(resolve => setTimeout(resolve, this.QUEUE_BLOCK_TIMEOUT_SECONDS * 1000));
           continue; // Skip to next iteration
         }
 
         // JobStore is available, now we can safely get a message
-        const result = await messageBroker.getMeetingbotJobsWithTimeout(this.BLPOP_TIMEOUT);
+        const result = await messageBroker.getMeetingbotJobsWithTimeout(this.QUEUE_BLOCK_TIMEOUT_SECONDS);
 
         if (result && result.element) {
           await this.processMessage(result.element);
@@ -104,7 +104,16 @@ export class RedisConsumerService {
   }
 
   private async processMessage(message: string): Promise<void> {
-    const meetingParams: MeetingJoinRedisParams = JSON.parse(message);
+    let meetingParams: MeetingJoinRedisParams;
+
+    try {
+      meetingParams = JSON.parse(message);
+    } catch (error) {
+      console.error('Invalid Redis meeting job JSON, removing from processing queue:', error);
+      await messageBroker.acknowledgeProcessingMeetingbotJob(message);
+      return;
+    }
+
     // Create correlation ID and logger
     const correlationId = createCorrelationId({
       teamId: meetingParams.teamId,
@@ -114,6 +123,7 @@ export class RedisConsumerService {
       url: meetingParams.url
     });
     const logger = loggerFactory(correlationId, meetingParams.provider);
+    let jobAccepted = false;
 
     try {
       logger.info('Processing Redis message:', {
@@ -179,18 +189,28 @@ export class RedisConsumerService {
             throw new Error(`Unsupported provider: ${meetingParams.provider}`);
         }
 
-      }, logger, 0, (error) => notifyMeetingJoinFailure(meetingParams, error, logger));
+      }, logger, 0, async (error) => {
+        await notifyMeetingJoinFailure(meetingParams, error, logger);
+        await messageBroker.acknowledgeProcessingMeetingbotJob(message);
+      }, async () => {
+        await messageBroker.acknowledgeProcessingMeetingbotJob(message);
+      });
+
+      jobAccepted = jobAcceptedResult.accepted;
 
       if (jobAcceptedResult.accepted) {
         logger.info('Message successfully added to JobStore');
       } else {
         logger.warn('Message rejected by JobStore - race condition detected, returning to queue');
-        // Race condition: external API request got through, put message back at head of queue
-        await messageBroker.returnMeetingbotJobs(message);
+        // Race condition: external API request got through, put message back at head of pending queue.
+        await messageBroker.returnProcessingMeetingbotJob(message);
       }
 
     } catch (error) {
       logger.error('Error processing Redis message:', error);
+      if (!jobAccepted) {
+        await messageBroker.returnProcessingMeetingbotJob(message);
+      }
     }
   }
 

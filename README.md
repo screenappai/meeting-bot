@@ -309,7 +309,8 @@ r.rpush('jobs:meetbot:list', json.dumps(message))
 #### Queue Processing
 
 - **FIFO Queue**: Messages are processed in First-In-First-Out order
-- **BLPOP Processing**: The bot uses `BLPOP` to consume messages from the queue
+- **Atomic Processing Move**: The bot uses `BLMOVE` to move messages from the pending queue into the processing queue before recording starts
+- **Processing Acknowledgement**: The bot removes the original message from the processing queue with `LREM` after the recording finishes or permanently fails
 - **Automatic Processing**: Messages are automatically picked up and processed by the Redis consumer service
 - **Single Job Execution**: Only one meeting is processed at a time across the entire system
 
@@ -324,6 +325,7 @@ The following environment variables configure Redis connectivity:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 
 **Note**: When `REDIS_CONSUMER_ENABLED` is set to `false`, the Redis consumer service will not start, and the application will only support REST API endpoints for meeting requests. Redis message queue functionality will be disabled.
@@ -470,6 +472,7 @@ Notes:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 | `S3_ENDPOINT` | S3-compatible service endpoint URL | - |
 | `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - |
@@ -537,7 +540,7 @@ src/
 - **JobStore**: Manages single job execution across the system
 - **RecordingTask**: Handles meeting recording functionality
 - **ContextBridgeTask**: Manages browser context and automation
-- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLPOP)
+- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLMOVE/LREM)
 - **RedisConsumerService**: Processes messages from Redis queue asynchronously
 
 ## ⚠️ Limitations
