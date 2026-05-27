@@ -138,6 +138,7 @@ Both are disabled by default.
 - NOTIFY_REDIS_URI: Optional Redis URI for notifications; if not set, falls back to REDIS_HOST/REDIS_PORT/etc via redisUri
 - NOTIFY_REDIS_DB: Redis database number to use for notifications (default: 1). Note: By default, DB 1 is used, not DB 0
 - NOTIFY_REDIS_LIST: Redis list key to RPUSH to (default: jobs:meetbot:recordings)
+- NOTIFY_REDIS_FAILURE_LIST: Redis list key to RPUSH failed meeting jobs to (default: jobs:meetbot:failures)
 
 Existing REDIS_* connection envs are used to derive a default redisUri when NOTIFY_REDIS_URI is not specified.
 
@@ -180,6 +181,8 @@ Notes:
 #### Behavior
 
 - Notifications are triggered only after the recording upload/processing has successfully completed.
+- Failed meeting jobs are pushed to NOTIFY_REDIS_FAILURE_LIST after all join/recording retries are exhausted, or after a non-retryable upload failure.
+- Failure notifications are Redis-only and use the same NOTIFY_REDIS_ENABLED, NOTIFY_REDIS_URI, and NOTIFY_REDIS_DB settings.
 - If both channels are enabled, both will receive the payload.
 - Failures to notify are logged but do not interrupt the main recording flow.
 

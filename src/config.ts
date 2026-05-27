@@ -89,6 +89,7 @@ export default {
   notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
   notifyRedisDb: process.env.NOTIFY_REDIS_DB ? Number(process.env.NOTIFY_REDIS_DB) : 1, // must not default to 0
   notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
+  notifyRedisFailureList: process.env.NOTIFY_REDIS_FAILURE_LIST ?? 'jobs:meetbot:failures',
   uploaderFileExtension: normalizeFileExtension(process.env.UPLOADER_FILE_EXTENSION),
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {

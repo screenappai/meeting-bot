@@ -12,7 +12,8 @@ export class JobStore {
   async addJob<T>(
     task: () => Promise<T>, 
     logger: Logger,
-    retryCount: number = 0
+    retryCount: number = 0,
+    onPermanentFailure?: (error: unknown) => Promise<void> | void
   ): Promise<{ accepted: boolean }> {
     if (this.isRunning || this.shutdownRequested) {
       return { accepted: false };
@@ -23,7 +24,7 @@ export class JobStore {
     // Execute the task asynchronously without waiting for completion
     this.executeTaskWithRetry(task, logger, retryCount).then(() => {
       logger.info('LogBasedMetric Bot has finished recording meeting successfully.');
-    }).catch((error) => {
+    }).catch(async (error) => {
       const errorType = getErrorType(error);
       if (error instanceof KnownError) {
         logger.error('KnownError JobStore is permanently exiting:', { error });
@@ -31,6 +32,13 @@ export class JobStore {
         logger.error('Error executing task after multiple retries:', { error });
       }
       logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
+      if (onPermanentFailure) {
+        try {
+          await onPermanentFailure(error);
+        } catch (failureNotificationError) {
+          logger.warn('Meeting failure notification failed', failureNotificationError as any);
+        }
+      }
     }).finally(() => {
       this.isRunning = false;
     });

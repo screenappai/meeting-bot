@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import { Logger } from 'winston';
 import config from '../config';
 import { createClient, RedisClientType } from 'redis';
+import { KnownError } from '../error';
+import { getErrorType } from '../util/logger';
 
 export interface RecordingCompletedPayload {
   recordingId: string;
@@ -12,6 +14,42 @@ export interface RecordingCompletedPayload {
   timestamp: string; // ISO string
   metadata?: Record<string, any>;
 }
+
+export interface MeetingFailedPayload {
+  recordingId: string;
+  meetingLink?: string;
+  status: 'failed';
+  timestamp: string;
+  error: {
+    type: string;
+    message: string;
+    name?: string;
+    retryable?: boolean;
+    maxRetries?: number;
+  };
+  metadata: {
+    userId: string;
+    teamId: string;
+    botId?: string;
+    eventId?: string;
+    provider?: string;
+    meetingName?: string;
+    timezone?: string;
+  };
+}
+
+export interface MeetingFailureContext {
+  url: string;
+  name?: string;
+  teamId: string;
+  timezone?: string;
+  userId: string;
+  botId?: string;
+  eventId?: string;
+  provider?: string;
+}
+
+type RedisNotificationPayload = RecordingCompletedPayload | MeetingFailedPayload;
 
 function signPayload(body: string, secret?: string): string | undefined {
   if (!secret) return undefined;
@@ -42,12 +80,16 @@ async function sendWebhook(payload: RecordingCompletedPayload, logger: Logger) {
   }
 }
 
-async function rpushToRedisList(payload: RecordingCompletedPayload, logger: Logger) {
+async function rpushToRedisList(
+  payload: RedisNotificationPayload,
+  logger: Logger,
+  list: string,
+  logLabel: string
+) {
   if (!config.notifyRedisEnabled) return;
 
   const uri = config.notifyRedisUri || config.redisUri;
   let db = config.notifyRedisDb;
-  const list = config.notifyRedisList;
 
   if (!uri) {
     logger.warn('Redis notification enabled but no URI available. Skipping.');
@@ -70,9 +112,9 @@ async function rpushToRedisList(payload: RecordingCompletedPayload, logger: Logg
     await client.connect();
     const body = JSON.stringify(payload);
     await client.rPush(list, body);
-    logger.info(`Recording completed payload pushed to Redis list ${list} on DB ${db}.`);
+    logger.info(`${logLabel} payload pushed to Redis list ${list} on DB ${db}.`);
   } catch (err) {
-    logger.error('Failed to push recording notification to Redis', err as any);
+    logger.error(`Failed to push ${logLabel.toLowerCase()} notification to Redis`, err as any);
   } finally {
     try {
       if (client) await client.quit();
@@ -84,6 +126,41 @@ export async function notifyRecordingCompleted(payload: RecordingCompletedPayloa
   // both notification channels are optional; do both if enabled
   await Promise.allSettled([
     sendWebhook(payload, logger),
-    rpushToRedisList(payload, logger),
+    rpushToRedisList(payload, logger, config.notifyRedisList, 'Recording completed'),
   ]);
+}
+
+export function createMeetingFailedPayload(context: MeetingFailureContext, error: unknown): MeetingFailedPayload {
+  const entityId = context.botId ?? context.eventId ?? context.userId;
+  const errorType = getErrorType(error);
+  const message = error instanceof Error ? error.message : String(error ?? 'Unknown error');
+
+  return {
+    recordingId: entityId,
+    meetingLink: context.url,
+    status: 'failed',
+    timestamp: new Date().toISOString(),
+    error: {
+      type: errorType,
+      message,
+      ...(error instanceof Error ? { name: error.name } : {}),
+      ...(error instanceof KnownError ? {
+        retryable: error.retryable,
+        maxRetries: error.maxRetries,
+      } : {}),
+    },
+    metadata: {
+      userId: context.userId,
+      teamId: context.teamId,
+      botId: context.botId,
+      eventId: context.eventId,
+      provider: context.provider,
+      meetingName: context.name,
+      timezone: context.timezone,
+    },
+  };
+}
+
+export async function notifyMeetingFailed(payload: MeetingFailedPayload, logger: Logger) {
+  await rpushToRedisList(payload, logger, config.notifyRedisFailureList, 'Meeting failed');
 }

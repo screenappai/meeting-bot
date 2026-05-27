@@ -2,7 +2,7 @@ import { Frame, Page } from 'playwright';
 import { JoinParams, AbstractMeetBot } from './AbstractMeetBot';
 import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
-import { WaitingAtLobbyRetryError } from '../error';
+import { RecordingUploadFailedError, WaitingAtLobbyRetryError } from '../error';
 import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
 import { RecordingTask } from '../tasks/RecordingTask';
@@ -44,6 +44,7 @@ export class ZoomBot extends BotBase {
       this._logger.info('Begin recording upload to server', { userId, teamId });
       const uploadResult = await uploader.uploadRecordingToRemoteStorage();
       this._logger.info('Recording upload result', { uploadResult, userId, teamId });
+      return uploadResult;
     };
     
     try {
@@ -52,9 +53,14 @@ export class ZoomBot extends BotBase {
       await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);
 
       // Finish the upload from the temp video
-      await handleUpload();
+      const uploadResult = await handleUpload();
+
+      if (_state.includes('finished') && !uploadResult) {
+        _state.splice(_state.indexOf('finished'), 1, 'failed');
+        throw new RecordingUploadFailedError('Zoom recording completed but upload failed');
+      }
     } catch(error) {
-      if (!_state.includes('finished')) 
+      if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
       await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);

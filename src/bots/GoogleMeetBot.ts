@@ -1,7 +1,7 @@
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
-import { UnsupportedMeetingError, WaitingAtLobbyRetryError } from '../error';
+import { RecordingUploadFailedError, UnsupportedMeetingError, WaitingAtLobbyRetryError } from '../error';
 import { patchBotStatus } from '../services/botService';
 import { handleUnsupportedMeetingError, handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
 import { v4 } from 'uuid';
@@ -44,11 +44,12 @@ export class GoogleMeetBot extends MeetBotBase {
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
+        throw new RecordingUploadFailedError('Google Meet recording completed but upload failed');
       }
 
       await patchBotStatus({ botId, eventId, provider: 'google', status: _state, token: bearerToken }, this._logger);
     } catch(error) {
-      if (!_state.includes('finished')) 
+      if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
       await patchBotStatus({ botId, eventId, provider: 'google', status: _state, token: bearerToken }, this._logger);

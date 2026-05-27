@@ -2,7 +2,7 @@ import { Page } from 'playwright';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus } from '../types';
 import config from '../config';
-import { WaitingAtLobbyRetryError } from '../error';
+import { RecordingUploadFailedError, WaitingAtLobbyRetryError } from '../error';
 import { handleWaitingAtLobbyError, MeetBotBase } from './MeetBotBase';
 import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
@@ -49,10 +49,8 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
-        this._logger.error('Recording completed but upload failed; not throwing so JobStore does not rejoin the (now-ended) meeting', { botId, userId, teamId });
-        // Intentionally do NOT throw here — JobStore.executeTaskWithRetry would re-run
-        // the entire join+record+upload task, producing a second (garbage) recording on
-        // an already-ended meeting. The single upload failure is preferable to that.
+        this._logger.error('Recording completed but upload failed; raising non-retryable failure so JobStore does not rejoin the ended meeting', { botId, userId, teamId });
+        throw new RecordingUploadFailedError('Microsoft Teams recording completed but upload failed');
       } else if (uploadResult) {
         this._logger.info('Recording and upload completed successfully', { botId, userId, teamId });
       }
@@ -69,7 +67,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         currentState: _state
       });
 
-      if (!_state.includes('finished'))
+      if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
       // Try to update bot status (may fail if API is unreachable, but that's OK)

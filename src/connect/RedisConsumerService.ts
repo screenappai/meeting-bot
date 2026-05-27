@@ -1,5 +1,5 @@
 import { globalJobStore } from '../lib/globalJobStore';
-import { MeetingJoinRedisParams } from '../app/common';
+import { MeetingJoinRedisParams, notifyMeetingJoinFailure } from '../app/common';
 import messageBroker from './messageBroker';
 import { loggerFactory, createCorrelationId } from '../util/logger';
 import { GoogleMeetBot } from '../bots/GoogleMeetBot';
@@ -179,7 +179,7 @@ export class RedisConsumerService {
             throw new Error(`Unsupported provider: ${meetingParams.provider}`);
         }
 
-      }, logger);
+      }, logger, 0, (error) => notifyMeetingJoinFailure(meetingParams, error, logger));
 
       if (jobAcceptedResult.accepted) {
         logger.info('Message successfully added to JobStore');
