@@ -16,6 +16,7 @@ import config from '../config';
 import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
+import { writeWebmDurationMetadata } from '../lib/webmDuration';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
@@ -520,35 +521,21 @@ class DiskUploader implements IUploader {
   private async ensureWebmDurationMetadata(filePath: string): Promise<void> {
     if (this.fileExtension !== '.webm') return;
 
-    const outputPath = `${filePath}.duration.webm`;
-    this._logger.info('Remuxing WebM recording to write duration metadata...', {
-      inputPath: filePath,
-      outputPath,
+    if (!this.recordingDuration) {
+      this._logger.warn('Skipping WebM duration metadata patch because recording duration is unknown.', { filePath });
+      return;
+    }
+
+    this._logger.info('Patching WebM recording duration metadata...', {
+      filePath,
+      duration: this.recordingDuration,
     });
 
     try {
-      await execFileAsync('ffmpeg', [
-        '-y',
-        '-fflags', '+genpts',
-        '-i', filePath,
-        '-map', '0',
-        '-c', 'copy',
-        '-avoid_negative_ts', 'make_zero',
-        outputPath,
-      ], { maxBuffer: 10 * 1024 * 1024 });
-
-      const stats = await fs.promises.stat(outputPath);
-      if (stats.size <= 0) {
-        throw new Error('Remuxed WebM output is empty');
-      }
-
-      await fs.promises.rename(outputPath, filePath);
-      this._logger.info('Remuxed WebM recording with duration metadata.', { filePath });
+      await writeWebmDurationMetadata(filePath, this.recordingDuration);
+      this._logger.info('Patched WebM recording duration metadata.', { filePath });
     } catch (err) {
-      try {
-        await fs.promises.unlink(outputPath);
-      } catch {}
-      this._logger.warn('Unable to remux WebM recording with duration metadata; continuing with duration field only.', {
+      this._logger.warn('Unable to patch WebM recording duration metadata; continuing with duration field only.', {
         filePath,
         error: err,
       });

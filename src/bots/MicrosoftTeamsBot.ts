@@ -543,6 +543,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           const initialAloneGraceMs = activateAfterMinutes * 60 * 1000;
           let hasSeenOtherParticipant = false;
           let aloneSince: number | null = null;
+          let lastParticipantDetectionLogAt = 0;
 
           const shouldStopForParticipantCount = (participants: number) => {
             const now = Date.now();
@@ -563,24 +564,158 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             return now - recordingStartedAt >= initialAloneGraceMs;
           };
 
-          // Participant count detection
+          const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+          const parseParticipantCount = (text: string): number | undefined => {
+            const normalized = normalizeText(text);
+            const patterns = [
+              /\b(?:people|participants?|teilnehm(?:er|ende)?|personen)\D{0,30}(\d{1,3})\b/i,
+              /\b(\d{1,3})\D{0,30}(?:people|participants?|teilnehm(?:er|ende)?|personen)\b/i,
+            ];
+
+            for (const pattern of patterns) {
+              const match = normalized.match(pattern);
+              if (match) {
+                const value = Number(match[1]);
+                if (Number.isFinite(value)) {
+                  return value;
+                }
+              }
+            }
+
+            if (/^\D*\d{1,3}\D*$/.test(normalized) && normalized.length <= 16) {
+              const match = normalized.match(/\d{1,3}/);
+              const value = match ? Number(match[0]) : NaN;
+              if (Number.isFinite(value)) {
+                return value;
+              }
+            }
+
+            return undefined;
+          };
+
+          const getTeamsMeetingState = (): 'active' | 'alone' | 'ended' => {
+            const bodyText = normalizeText(document.body.innerText || '');
+
+            const endedPhrases = [
+              'the meeting has ended',
+              'this meeting has ended',
+              'meeting has been ended',
+              'call ended',
+              'you have been removed',
+              'you’ve been removed',
+              'removed from the meeting',
+              'besprechung wurde beendet',
+              'anruf beendet',
+              'sie wurden entfernt',
+              'du wurdest entfernt',
+            ];
+
+            if (endedPhrases.some(phrase => bodyText.toLowerCase().includes(phrase))) {
+              return 'ended';
+            }
+
+            const alonePhrases = [
+              "you're the only one here",
+              "you’re the only one here",
+              'you are the only one here',
+              "you're the only one in this meeting",
+              "you’re the only one in this meeting",
+              'you are the only one in this meeting',
+              'only one in this meeting',
+              'only you are here',
+              'no one else is here',
+              'waiting for others to join',
+              'sie sind der einzige',
+              'du bist der einzige',
+              'sie sind die einzige person',
+              'du bist die einzige person',
+              'warten auf andere',
+            ];
+
+            return alonePhrases.some(phrase => bodyText.toLowerCase().includes(phrase)) ? 'alone' : 'active';
+          };
+
+          const getParticipantCount = (): { count?: number; samples: string[] } => {
+            const selectors = [
+              'button[data-tid*="roster" i]',
+              '[data-tid*="roster" i]',
+              'button[id*="roster" i]',
+              '[id*="roster" i]',
+              'button[aria-label*="people" i]',
+              '[aria-label*="people" i]',
+              'button[aria-label*="participant" i]',
+              '[aria-label*="participant" i]',
+              'button[aria-label*="teilnehm" i]',
+              '[aria-label*="teilnehm" i]',
+              'button[aria-label*="personen" i]',
+              '[aria-label*="personen" i]',
+            ];
+
+            const candidates = Array.from(document.querySelectorAll(selectors.join(',')));
+            const samples: string[] = [];
+
+            for (const element of candidates) {
+              const searchRoots = [
+                element,
+                element.parentElement,
+                element.parentElement?.parentElement,
+              ].filter(Boolean) as Element[];
+
+              for (const root of searchRoots) {
+                const text = normalizeText([
+                  root.getAttribute('aria-label') ?? '',
+                  root.getAttribute('title') ?? '',
+                  root.getAttribute('data-tid') ?? '',
+                  root.textContent ?? '',
+                ].join(' '));
+
+                if (!text) continue;
+                if (samples.length < 6) {
+                  samples.push(text.slice(0, 140));
+                }
+
+                const count = parseParticipantCount(text);
+                if (typeof count === 'number') {
+                  return { count, samples };
+                }
+              }
+            }
+
+            return { samples };
+          };
+
           const interval = setInterval(() => {
             try {
-              const regex = /\d+/;
-              const contributors = Array.from(document.querySelectorAll('button[aria-label=People], button[aria-label^="People"]') ?? [])
-                .map(x => `${x.getAttribute('aria-label') ?? ''} ${x?.textContent ?? ''}`)
-                .filter(text => regex.test(text))[0];
-              const match = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
-
-              if (!match) {
+              const meetingState = getTeamsMeetingState();
+              if (meetingState === 'ended') {
+                console.log('Teams meeting ended page state detected, ending recording.');
+                clearInterval(interval);
+                (window as any).screenAppMeetEnd();
                 return;
               }
 
-              if (!shouldStopForParticipantCount(Number(match[0]))) {
+              const { count, samples } = getParticipantCount();
+              const inferredCount = typeof count === 'number'
+                ? count
+                : meetingState === 'alone'
+                  ? 1
+                  : undefined;
+
+              if (typeof inferredCount !== 'number') {
+                const now = Date.now();
+                if (now - lastParticipantDetectionLogAt > 30000) {
+                  console.log('Teams participant count not detected yet', { samples });
+                  lastParticipantDetectionLogAt = now;
+                }
                 return;
               }
 
-              console.log('Bot is alone, ending meeting');
+              if (!shouldStopForParticipantCount(inferredCount)) {
+                return;
+              }
+
+              console.log('Bot is alone, ending Teams recording', { inferredCount, meetingState });
               clearInterval(interval);
               (window as any).screenAppMeetEnd();
             } catch (error) {
