@@ -89,23 +89,19 @@ export class ZoomBot extends BotBase {
       this._logger.info(`Detected .exe download: ${route.request().url()?.split('download')[0]}`);
     });
 
-    await this.page.waitForTimeout(1000);
-
     this._logger.info('Navigating to Zoom Meeting URL...');
-    await this.page.goto(url, { waitUntil: 'networkidle' });
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
 
     // Accept cookies
     try {
       this._logger.info('Waiting for the "Accept Cookies" button...');
-      await this.page.waitForTimeout(3000);
-      const acceptCookies = await this.page.locator('button', { hasText: 'Accept Cookies' });
-      await acceptCookies.waitFor({ timeout: 5000 });
+      const acceptCookies = this.page.locator('button', { hasText: 'Accept Cookies' }).first();
+      await acceptCookies.waitFor({ timeout: 2500 });
 
       this._logger.info('Clicking the "Accept Cookies" button...', await acceptCookies.count());
       await acceptCookies.click({ force: true });
       
     } catch (error) {
-      await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'accept-cookie', params.userId, this._logger, params.botId);
       this._logger.info('Unable to accept cookies...', error);
     }
 
@@ -120,22 +116,22 @@ export class ZoomBot extends BotBase {
           return false;
         }
 
-        this._logger.info('Waiting for 5 seconds...');
-        await this.page.waitForTimeout(5000);
-
         const launchMeetingGetByRole = this.page.getByRole('button', { name: /Launch Meeting/i }).first();
-        this._logger.info('Does Launch Meeting exist', await launchMeetingGetByRole.isVisible());
+        this._logger.info('Does Launch Meeting exist', await launchMeetingGetByRole.isVisible({ timeout: 1000 }).catch(() => false));
 
         const launchDownloadGetByRole = this.page.getByRole('button', { name: /Download Now/i }).first();
-        this._logger.info('Does Download Now exist', await launchDownloadGetByRole.isVisible());
+        const launchDownloadVisible = await launchDownloadGetByRole.isVisible({ timeout: 1000 }).catch(() => false);
+        this._logger.info('Does Download Now exist', launchDownloadVisible);
 
-        this._logger.info('Click on Download Now...');
-        await launchDownloadGetByRole.click({ force: true });
+        if (launchDownloadVisible) {
+          this._logger.info('Click on Download Now...');
+          await launchDownloadGetByRole.click({ force: true });
+        }
 
-        const joinFromBrowser = await this.page.locator('a', { hasText: 'Join from your browser' }).first();
-        await joinFromBrowser.waitFor({ timeout: 5000 });
+        const joinFromBrowser = this.page.locator('a', { hasText: 'Join from your browser' }).first();
+        await joinFromBrowser.waitFor({ timeout: 4000 });
 
-        if ((await joinFromBrowser.count()) > 0) {
+        if (await joinFromBrowser.isVisible({ timeout: 500 }).catch(() => false)) {
           await joinFromBrowser.click({ force: true });
           return true;
         }
@@ -158,9 +154,10 @@ export class ZoomBot extends BotBase {
         const wcUrl = new URL(url);
         wcUrl.pathname = wcUrl.pathname.replace('/j/', '/wc/join/');
         this._logger.info('Navigating to Zoom Web Client URL...', { wcUrl: wcUrl.toString(), botId: params.botId, userId: params.userId });
-        await this.page.goto(wcUrl.toString(), { waitUntil: 'networkidle' });
+        await this.page.goto(wcUrl.toString(), { waitUntil: 'domcontentloaded' });
         return true;
       } catch(err) {
+        usingDirectWebClient = false;
         this._logger.info('Failed to access ZOOM web client by URL', { botId: params.botId, userId: params.userId });
         return false;
       }
@@ -168,7 +165,7 @@ export class ZoomBot extends BotBase {
 
     const waitForJoinFromBrowserNav = async (): Promise<boolean> => {
       try {
-        const maxAttempts = 3;
+        const maxAttempts = 10;
         let attempt = 0;
 
         const navPromise = new Promise<boolean>((foundResolver) => {
@@ -180,9 +177,8 @@ export class ZoomBot extends BotBase {
             }
 
             try {
-              const joinFromBrowser = await this.page.locator('a', { hasText: 'Join from your browser' }).first();
-              await joinFromBrowser.waitFor({ timeout: 4000 }).catch();
-              if (await joinFromBrowser.count() > 0) {
+              const joinFromBrowser = this.page.locator('a', { hasText: 'Join from your browser' }).first();
+              if (await joinFromBrowser.isVisible({ timeout: 500 }).catch(() => false)) {
                 this._logger.info('Waiting for zoom navigation to meeting page...', params.userId);
               }
               else {
@@ -205,7 +201,7 @@ export class ZoomBot extends BotBase {
               }
             }
             attempt += 1;
-          }, 6000);
+          }, 1000);
         });
         const success = await navPromise;
         return success;
@@ -239,9 +235,6 @@ export class ZoomBot extends BotBase {
 
     this._logger.info('Heading to the web client...', { usingDirectWebClient });
 
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
-
     let iframe: Frame | Page = this.page;
     const apps: ('app' | 'iframe')[] = [];
     const detectAppContainer = async (startWith: 'app' | 'iframe'): Promise<boolean> => {
@@ -253,8 +246,8 @@ export class ZoomBot extends BotBase {
         apps.push(startWith);
         if (startWith === 'app') {
           const input = await this.page.waitForSelector('input[type="text"]', { timeout: 30000 });
-          const join = await this.page.locator('button', { hasText: /Join/i });
-          join.waitFor({ timeout: 15000 });
+          const join = this.page.locator('button', { hasText: /Join/i }).first();
+          await join.waitFor({ timeout: 15000 });
           this._logger.info('App container...', { input: input !== null, join: join !== null });
           if (input && join) {
             iframe = this.page;
@@ -290,16 +283,13 @@ export class ZoomBot extends BotBase {
 
     this._logger.info('Waiting for the input field to be visible...');
     await iframe.waitForSelector('input[type="text"]', { timeout: 60000 });
-    
-    this._logger.info('Waiting for 5 seconds...');
-    await this.page.waitForTimeout(5000);
+
     this._logger.info('Filling the input field with the name...');
     await iframe.fill('input[type="text"]', name ? name : 'ScreenApp Notetaker');
 
-    await this.page.waitForTimeout(3000);
-
     this._logger.info('Clicking the "Join" button...');
-    const joinButton = await iframe.locator('button', { hasText: 'Join' });
+    const joinButton = iframe.locator('button', { hasText: 'Join' }).first();
+    await joinButton.waitFor({ timeout: 15000 });
     await joinButton.click();
 
     // Wait in waiting room
@@ -385,7 +375,8 @@ export class ZoomBot extends BotBase {
     try {
       const cameraNotifications: ('found' | 'dismissed')[] = [];
       const micNotifications: ('found' | 'dismissed')[] = [];
-      const stopWaiting = 30 * 1000;
+      const stopWaiting = 6 * 1000;
+      let sawNotification = false;
       
       const notifyPromise = new Promise<boolean>((res) => {
         notifyTimeout = setTimeout(() => {
@@ -394,10 +385,20 @@ export class ZoomBot extends BotBase {
         }, stopWaiting);
         notifyInternval = setInterval(async () => {
           try {
-            const cameraDiv = await iframe.locator('div', { hasText: /^Cannot detect your camera/i }).first();
-            const micDiv = await iframe.locator('div', { hasText: /^Cannot detect your microphone/i }).first();
+            const cameraDiv = iframe.locator('div', { hasText: /^Cannot detect your camera/i }).first();
+            const micDiv = iframe.locator('div', { hasText: /^Cannot detect your microphone/i }).first();
+            const cameraVisible = await cameraDiv.isVisible({ timeout: 500 }).catch(() => false);
+            const micVisible = await micDiv.isVisible({ timeout: 500 }).catch(() => false);
 
-            if (await cameraDiv.isVisible()) {
+            if (!cameraVisible && !micVisible && !sawNotification) {
+              clearInterval(notifyInternval);
+              clearTimeout(notifyTimeout);
+              res(false);
+              return;
+            }
+
+            if (cameraVisible) {
+              sawNotification = true;
               if (!cameraNotifications.includes('found'))
                 cameraNotifications.push('found');
             }
@@ -406,7 +407,8 @@ export class ZoomBot extends BotBase {
                 cameraNotifications.push('dismissed');
             }
 
-            if (await micDiv.isVisible()) {
+            if (micVisible) {
+              sawNotification = true;
               if (!micNotifications.includes('found'))
                 micNotifications.push('found');
             }
@@ -428,8 +430,8 @@ export class ZoomBot extends BotBase {
             let counter = 0;
             try {
               for await (const close of closeButtons) {
-                if (await close.isVisible()) {
-                  await close.click({ timeout: 5000 });
+                if (await close.isVisible({ timeout: 500 }).catch(() => false)) {
+                  await close.click({ timeout: 1000 });
                   counter += 1;
                 }
               }
@@ -443,7 +445,7 @@ export class ZoomBot extends BotBase {
             clearTimeout(notifyTimeout);
             res(false);
           }
-        }, 2000);
+        }, 1000);
       });
 
       await notifyPromise.catch(() => {
@@ -457,9 +459,9 @@ export class ZoomBot extends BotBase {
 
     // Dismiss annoucements OK button if present
     try {
-      const okButton = await iframe.locator('button', { hasText: 'OK' }).first();
-      if (await okButton.isVisible()) {
-        await okButton.click({ timeout: 5000 });
+      const okButton = iframe.locator('button', { hasText: 'OK' }).first();
+      if (await okButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await okButton.click({ timeout: 1000 });
         this._logger.info('Dismissed the OK button...');
       }
     } catch (error) {

@@ -83,30 +83,27 @@ export class GoogleMeetBot extends MeetBotBase {
     this.page = await createBrowserContext(url, this._correlationId, 'google');
 
     this._logger.info('Navigating to Google Meet URL...');
-    await this.page.goto(url, { waitUntil: 'networkidle' });
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
 
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
+    const nameInputSelector = 'input[type="text"][aria-label="Your name"]';
+    const waitForPreJoinReady = async () => {
+      const continueWithoutDevicesButton = this.page.getByRole('button', { name: 'Continue without microphone and camera' });
+      const preJoinReady = await Promise.race([
+        continueWithoutDevicesButton.waitFor({ timeout: 15000 }).then(() => 'device-check' as const).catch(() => null),
+        this.page.locator(nameInputSelector).first().waitFor({ state: 'visible', timeout: 15000 }).then(() => 'name-input' as const).catch(() => null),
+      ]);
 
-    const dismissDeviceCheck = async () => {
-      try {
+      if (preJoinReady === 'device-check') {
         this._logger.info('Clicking Continue without microphone and camera button...');
-        await retryActionWithWait(
-          'Clicking the "Continue without microphone and camera" button',
-          async () => {
-            await this.page.getByRole('button', { name: 'Continue without microphone and camera' }).waitFor({ timeout: 30000 });
-            await this.page.getByRole('button', { name: 'Continue without microphone and camera' }).click();
-          },
-          this._logger,
-          1,
-          15000,
-        );
-      } catch (dismissError) {
-        this._logger.info('Continue without microphone and camera button is probably missing!...');
+        await continueWithoutDevicesButton.click();
       }
     };
 
-    await dismissDeviceCheck();
+    try {
+      await waitForPreJoinReady();
+    } catch (dismissError) {
+      this._logger.info('Continue without microphone and camera button is probably missing!...');
+    }
 
     const verifyItIsOnGoogleMeetPage = async (): Promise<'SIGN_IN_PAGE' | 'GOOGLE_MEET_PAGE' | 'UNSUPPORTED_PAGE' | null> => {
       try {
@@ -149,7 +146,7 @@ export class GoogleMeetBot extends MeetBotBase {
     this._logger.info('Waiting for the input field to be visible...');
     await retryActionWithWait(
       'Waiting for the input field',
-      async () => await this.page.waitForSelector('input[type="text"][aria-label="Your name"]', { timeout: 10000 }),
+      async () => await this.page.waitForSelector(nameInputSelector, { timeout: 10000 }),
       this._logger,
       3,
       15000,
@@ -157,15 +154,9 @@ export class GoogleMeetBot extends MeetBotBase {
         await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'text-input-field-wait', userId, this._logger, botId);
       }
     );
-    
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
 
     this._logger.info('Filling the input field with the name...');
-    await this.page.fill('input[type="text"][aria-label="Your name"]', name ? name : 'ScreenApp Notetaker');
-
-    this._logger.info('Waiting for 10 seconds...');
-    await this.page.waitForTimeout(10000);
+    await this.page.fill(nameInputSelector, name ? name : 'ScreenApp Notetaker');
     
     await retryActionWithWait(
       'Clicking the "Ask to join" button',
@@ -181,8 +172,8 @@ export class GoogleMeetBot extends MeetBotBase {
 
         for (const text of possibleTexts) {
           try {
-            const button = await this.page.locator('button', { hasText: new RegExp(text.toLocaleLowerCase(), 'i') }).first();
-            if (await button.count() > 0) {
+            const button = this.page.locator('button', { hasText: new RegExp(text, 'i') }).first();
+            if (await button.isVisible({ timeout: 3000 }).catch(() => false)) {
               await button.click({ timeout: 5000 });
               buttonClicked = true;
               this._logger.info(`Success clicked using "${text}" action...`);
@@ -247,7 +238,7 @@ export class GoogleMeetBot extends MeetBotBase {
             let botWasDeniedAccess = false;
 
             try {
-              peopleElement = await this.page.waitForSelector('button[aria-label="People"]', { timeout: 5000 });
+              peopleElement = await this.page.locator('button[aria-label^="People"]').first().isVisible({ timeout: 500 }).catch(() => false);
             } catch(e) {
               this._logger.error(
                 'wait error', { error: e }
@@ -256,7 +247,7 @@ export class GoogleMeetBot extends MeetBotBase {
             }
 
             try {
-              callButtonElement = await this.page.waitForSelector('button[aria-label="Leave call"]', { timeout: 5000 });
+              callButtonElement = await this.page.locator('button[aria-label="Leave call"]').first().isVisible({ timeout: 500 }).catch(() => false);
             } catch(e) {
               this._logger.error(
                 'wait error', { error: e }
@@ -364,7 +355,7 @@ export class GoogleMeetBot extends MeetBotBase {
             );
             // Do nothing
           }
-        }, 20000);
+        }, 2000);
       });
 
       const waitingAtLobbySuccess = await waitAtLobbyPromise;
@@ -389,7 +380,7 @@ export class GoogleMeetBot extends MeetBotBase {
 
     try {
       this._logger.info('Waiting for the "Got it" button...');
-      await this.page.waitForSelector('button:has-text("Got it")', { timeout: 15000 });
+      await this.page.waitForSelector('button:has-text("Got it")', { timeout: 3000 });
 
       this._logger.info('Going to click all visible "Got it" buttons...');
 
@@ -428,13 +419,13 @@ export class GoogleMeetBot extends MeetBotBase {
             gotItButtonsClicked++;
             this._logger.info(`Clicked a "Got it" button #${gotItButtonsClicked}`);
             
-            await this.page.waitForTimeout(2000);
+            await this.page.waitForTimeout(500);
           } catch (err) {
             this._logger.warn('Click failed, possibly already dismissed', { error: err });
           }
         }
       
-        await this.page.waitForTimeout(2000);
+        await this.page.waitForTimeout(500);
       }
     } catch (error) {
       // Log and ignore this error

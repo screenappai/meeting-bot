@@ -157,7 +157,7 @@ export class FFmpegRecorder {
           }
         });
 
-        // Wait a bit to ensure ffmpeg starts successfully
+        // Wait briefly to catch immediate startup failures without delaying recording.
         setTimeout(() => {
           if (settled) {
             // Already rejected due to early exit/error
@@ -173,7 +173,7 @@ export class FFmpegRecorder {
             settled = true;
             reject(new Error('ffmpeg failed to start'));
           }
-        }, 2000);
+        }, 1000);
 
       } catch (error) {
         this.logger.error('Error starting ffmpeg:', error);
