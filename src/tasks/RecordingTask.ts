@@ -31,12 +31,13 @@ export class RecordingTask extends Task<null, void> {
 
   protected async execute(): Promise<void> {
     const { primaryMimeType, secondaryMimeType } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
+    const loneParticipantExitDelayMs = config.loneParticipantExitDelaySeconds * 1000;
 
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
-        { teamId: string, duration: number, inactivityLimit: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
+      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
+        { teamId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
         let timeoutId: NodeJS.Timeout;
-        let inactivityDetectionTimeout: NodeJS.Timeout;
+        let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
 
         /**
          * @summary A simple method to reliably send chunks over exposeFunction
@@ -57,7 +58,7 @@ export class RecordingTask extends Task<null, void> {
         };
 
         async function startRecording() {
-          console.log('Will activate the inactivity detection after', activateInactivityDetectionAfter);
+          console.log('Participant detection is active immediately; silence detection activates after', activateInactivityDetectionAfter);
 
           // Check for the availability of the mediaDevices API
           if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -88,43 +89,90 @@ export class RecordingTask extends Task<null, void> {
           }
 
           const mediaRecorder = new MediaRecorder(stream, { ...options });
+          let chunkUploadChain: Promise<void> = Promise.resolve();
+          let isStoppingRecording = false;
 
-          mediaRecorder.ondataavailable = async (event: BlobEvent) => {
+          mediaRecorder.ondataavailable = (event: BlobEvent) => {
             if (!event.data.size) {
               console.warn('Received empty chunk...');
               return;
             }
-            try {
-              const arrayBuffer = await event.data.arrayBuffer();
-              await sendChunkToServer(arrayBuffer);
-            } catch (error) {
-              console.error('Error uploading chunk:', error.message, error);
-            }
+
+            const chunk = event.data;
+            chunkUploadChain = chunkUploadChain.then(async () => {
+              try {
+                const arrayBuffer = await chunk.arrayBuffer();
+                await sendChunkToServer(arrayBuffer);
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Error uploading chunk:', message, error);
+              }
+            });
           };
 
           // Start recording with 2-second intervals
           const chunkDuration = 2000;
           mediaRecorder.start(chunkDuration);
+          const recordingStartedAt = Date.now();
+          const initialAloneGraceMs = activateInactivityDetectionAfterMinutes * 60 * 1000;
 
           const stopTheRecording = async () => {
+            if (isStoppingRecording) return;
+            isStoppingRecording = true;
             console.log('-------- TRIGGER stop the recording');
-            mediaRecorder.stop();
-            stream.getTracks().forEach((track) => track.stop());
+            const recordedDurationSeconds = Math.max(1, Math.round((Date.now() - recordingStartedAt) / 1000));
 
-            // Cleanup recording timer
-            clearTimeout(timeoutId);
+            try {
+              await new Promise<void>((resolve) => {
+                if (mediaRecorder.state === 'inactive') {
+                  resolve();
+                  return;
+                }
+                mediaRecorder.addEventListener('stop', () => resolve(), { once: true });
+                mediaRecorder.stop();
+              });
+              await chunkUploadChain;
+            } catch (error) {
+              console.error('Error stopping recorder or flushing final chunks:', error);
+            } finally {
+              stream.getTracks().forEach((track) => track.stop());
 
-            // Cancel the perpetural checks
-            if (inactivityDetectionTimeout) {
-              clearTimeout(inactivityDetectionTimeout);
+              // Cleanup recording timer
+              clearTimeout(timeoutId);
+
+              // Cancel the perpetural checks
+              if (inactivitySilenceDetectionTimeout) {
+                clearTimeout(inactivitySilenceDetectionTimeout);
+              }
+
+              // Begin browser cleanup
+              (window as any).screenAppMeetEnd(slightlySecretId, recordedDurationSeconds);
             }
-
-            // Begin browser cleanup
-            (window as any).screenAppMeetEnd(slightlySecretId);
           };
 
           let loneTest: NodeJS.Timeout;
           let monitor = true;
+          let hasSeenOtherParticipant = false;
+          let aloneSince: number | null = null;
+
+          const shouldStopForParticipantCount = (participants: number) => {
+            const now = Date.now();
+            if (participants > 1) {
+              hasSeenOtherParticipant = true;
+              aloneSince = null;
+              return false;
+            }
+
+            if (hasSeenOtherParticipant) {
+              if (aloneSince === null) {
+                aloneSince = now;
+                console.log('Bot is alone after previously seeing participants; waiting before ending recording.');
+              }
+              return now - aloneSince >= loneParticipantExitDelayMs;
+            }
+
+            return now - recordingStartedAt >= initialAloneGraceMs;
+          };
 
           // TODO Create standard detection lib
           const detectLoneParticipant = () => {
@@ -181,7 +229,8 @@ export class RecordingTask extends Task<null, void> {
                   console.error('Zoom participants detection is probably not working on user:', { userId, teamId });
                   return;
                 }
-                if (Number(participants[0]) > 1) {
+                const participantCount = Number(participants[0]);
+                if (!shouldStopForParticipantCount(participantCount)) {
                   return;
                 }
 
@@ -246,8 +295,9 @@ export class RecordingTask extends Task<null, void> {
           /**
            * Perpetual checks for inactivity detection
            */
-          inactivityDetectionTimeout = setTimeout(() => {
-            detectLoneParticipant();
+          detectLoneParticipant();
+
+          inactivitySilenceDetectionTimeout = setTimeout(() => {
             detectIncrediblySilentMeeting();
           }, activateInactivityDetectionAfterMinutes * 60 * 1000);
 
@@ -265,6 +315,7 @@ export class RecordingTask extends Task<null, void> {
         teamId: this.teamId,
         duration: this.duration,
         inactivityLimit: this.inactivityLimit, 
+        loneParticipantExitDelayMs,
         userId: this.userId, 
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,

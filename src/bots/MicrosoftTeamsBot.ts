@@ -529,7 +529,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       // Inject inactivity detection script
       await this.page.evaluate(
-        ({ activateAfterMinutes, maxDuration }: { activateAfterMinutes: number, maxDuration: number }) => {
+        ({ activateAfterMinutes, loneParticipantExitDelayMs, maxDuration }: { activateAfterMinutes: number, loneParticipantExitDelayMs: number, maxDuration: number }) => {
           // Max duration timeout - safety limit (3 hours default in production)
           setTimeout(() => {
             console.log(`Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`);
@@ -537,38 +537,60 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           }, maxDuration);
           console.log(`Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`);
 
-          // Activate participant detection after delay
-          setTimeout(() => {
-            console.log('Activating participant count detection...');
+          console.log('Activating participant count detection...');
 
-            // Participant count detection
-            const detectLoneParticipant = () => {
-              const interval = setInterval(() => {
-                try {
-                  const regex = /\d+/;
-                  const contributors = Array.from(document.querySelectorAll('button[aria-label=People]') ?? [])
-                    .filter(x => regex.test(x?.textContent ?? ''))[0]?.textContent;
-                  const match = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
+          const recordingStartedAt = Date.now();
+          const initialAloneGraceMs = activateAfterMinutes * 60 * 1000;
+          let hasSeenOtherParticipant = false;
+          let aloneSince: number | null = null;
 
-                  if (match && Number(match[0]) >= 2) {
-                    return; // Still has participants
-                  }
+          const shouldStopForParticipantCount = (participants: number) => {
+            const now = Date.now();
+            if (participants >= 2) {
+              hasSeenOtherParticipant = true;
+              aloneSince = null;
+              return false;
+            }
 
-                  console.log('Bot is alone, ending meeting');
-                  clearInterval(interval);
-                  (window as any).screenAppMeetEnd();
-                } catch (error) {
-                  console.error('Participant detection error:', error);
-                }
-              }, 5000);
-            };
+            if (hasSeenOtherParticipant) {
+              if (aloneSince === null) {
+                aloneSince = now;
+                console.log('Bot is alone after previously seeing participants; waiting before ending recording.');
+              }
+              return now - aloneSince >= loneParticipantExitDelayMs;
+            }
 
-            // Start participant detection
-            detectLoneParticipant();
-          }, activateAfterMinutes * 60 * 1000);
+            return now - recordingStartedAt >= initialAloneGraceMs;
+          };
+
+          // Participant count detection
+          const interval = setInterval(() => {
+            try {
+              const regex = /\d+/;
+              const contributors = Array.from(document.querySelectorAll('button[aria-label=People], button[aria-label^="People"]') ?? [])
+                .map(x => `${x.getAttribute('aria-label') ?? ''} ${x?.textContent ?? ''}`)
+                .filter(text => regex.test(text))[0];
+              const match = (typeof contributors === 'undefined' || !contributors) ? null : contributors.match(regex);
+
+              if (!match) {
+                return;
+              }
+
+              if (!shouldStopForParticipantCount(Number(match[0]))) {
+                return;
+              }
+
+              console.log('Bot is alone, ending meeting');
+              clearInterval(interval);
+              (window as any).screenAppMeetEnd();
+            } catch (error) {
+              console.error('Participant detection error:', error);
+            }
+          }, 2000);
         },
         {
           activateAfterMinutes: config.activateInactivityDetectionAfter,
+          loneParticipantExitDelayMs: config.loneParticipantExitDelaySeconds * 1000,
           maxDuration: duration,
         }
       );

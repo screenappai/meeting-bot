@@ -48,6 +48,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 export interface IUploader {
   uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
+  setRecordingDuration(durationSeconds: number): void;
 }
 
 // Save to disk and upload in one session
@@ -79,6 +80,7 @@ class DiskUploader implements IUploader {
   private lastRecordingId?: string;
   private lastStorageDetails?: Record<string, any>;
   private recordingDuration?: number;
+  private firstChunkReceivedAt?: number;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -310,12 +312,30 @@ class DiskUploader implements IUploader {
         this._logger.info('Force upload is enabled. Stopping disk writes...', this._userId, this._teamId);
         return false;
       }
+      if (!this.firstChunkReceivedAt) {
+        this.firstChunkReceivedAt = Date.now();
+      }
       this.enqueue(data);
       return true;
     } catch(err) {
       this._logger.info('Error: Unable to save the chunk to disk...', this._userId, this._teamId, err);
       return false;
     }
+  }
+
+  public setRecordingDuration(durationSeconds: number): void {
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      this._logger.warn('Ignoring invalid recording duration from recorder', { durationSeconds });
+      return;
+    }
+
+    const roundedDuration = Math.round(durationSeconds);
+    this.recordingDuration = roundedDuration;
+    this._logger.info('Recording duration captured from recorder', {
+      duration: roundedDuration,
+      userId: this._userId,
+      teamId: this._teamId,
+    });
   }
 
   private static getFolderPath(userId: string) {
@@ -497,6 +517,44 @@ class DiskUploader implements IUploader {
     }
   }
 
+  private async ensureWebmDurationMetadata(filePath: string): Promise<void> {
+    if (this.fileExtension !== '.webm') return;
+
+    const outputPath = `${filePath}.duration.webm`;
+    this._logger.info('Remuxing WebM recording to write duration metadata...', {
+      inputPath: filePath,
+      outputPath,
+    });
+
+    try {
+      await execFileAsync('ffmpeg', [
+        '-y',
+        '-fflags', '+genpts',
+        '-i', filePath,
+        '-map', '0',
+        '-c', 'copy',
+        '-avoid_negative_ts', 'make_zero',
+        outputPath,
+      ], { maxBuffer: 10 * 1024 * 1024 });
+
+      const stats = await fs.promises.stat(outputPath);
+      if (stats.size <= 0) {
+        throw new Error('Remuxed WebM output is empty');
+      }
+
+      await fs.promises.rename(outputPath, filePath);
+      this._logger.info('Remuxed WebM recording with duration metadata.', { filePath });
+    } catch (err) {
+      try {
+        await fs.promises.unlink(outputPath);
+      } catch {}
+      this._logger.warn('Unable to remux WebM recording with duration metadata; continuing with duration field only.', {
+        filePath,
+        error: err,
+      });
+    }
+  }
+
   private async getMediaDuration(filePath: string): Promise<number | undefined> {
     try {
       const { stdout } = await execFileAsync('ffprobe', [
@@ -527,7 +585,25 @@ class DiskUploader implements IUploader {
 
       const filePath = DiskUploader.getFilePath(this._userId, this._tempFileId, this.fileExtension);
       await this.ensureRequestedContainer(filePath);
-      this.recordingDuration = await this.getMediaDuration(filePath);
+
+      if (!this.recordingDuration && this.firstChunkReceivedAt) {
+        const elapsedSeconds = Math.round((Date.now() - this.firstChunkReceivedAt) / 1000);
+        if (elapsedSeconds > 0) {
+          this.recordingDuration = elapsedSeconds;
+          this._logger.info('Recording duration estimated from chunk receive time', {
+            duration: this.recordingDuration,
+            userId: this._userId,
+            teamId: this._teamId,
+          });
+        }
+      }
+
+      await this.ensureWebmDurationMetadata(filePath);
+
+      const probedDuration = await this.getMediaDuration(filePath);
+      if (typeof probedDuration === 'number') {
+        this.recordingDuration = probedDuration;
+      }
 
       return true;
     } catch(err) {

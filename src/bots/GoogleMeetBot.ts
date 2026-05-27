@@ -489,6 +489,7 @@ export class GoogleMeetBot extends MeetBotBase {
   ): Promise<void> {
     const duration = config.maxRecordingDuration * 60 * 1000;
     const inactivityLimit = config.inactivityLimit * 60 * 1000;
+    const loneParticipantExitDelayMs = config.loneParticipantExitDelaySeconds * 1000;
 
     // Capture and send the browser console logs to Node.js context
     this.page?.on('console', async msg => {
@@ -506,9 +507,12 @@ export class GoogleMeetBot extends MeetBotBase {
       await uploader.saveDataToTempFile(buffer);
     });
 
-    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string) => {
+    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string, recordedDurationSeconds?: number) => {
       if (slightlySecretId !== this.slightlySecretId) return;
       try {
+        if (typeof recordedDurationSeconds === 'number') {
+          uploader.setRecordingDuration(recordedDurationSeconds);
+        }
         this._logger.info('Attempt to end meeting early...');
         waitingPromise.resolveEarly();
       } catch (error) {
@@ -520,10 +524,9 @@ export class GoogleMeetBot extends MeetBotBase {
 
     // Inject the MediaRecorder code into the browser context using page.evaluate
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }: 
-      { teamId:string, userId: string, duration: number, inactivityLimit: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
+      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, primaryMimeType, secondaryMimeType }:
+      { teamId:string, userId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, primaryMimeType: string, secondaryMimeType: string }) => {
         let timeoutId: NodeJS.Timeout;
-        let inactivityParticipantDetectionTimeout: NodeJS.Timeout;
         let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
         let isOnValidGoogleMeetPageInterval: NodeJS.Timeout;
 
@@ -541,7 +544,7 @@ export class GoogleMeetBot extends MeetBotBase {
         };
 
         async function startRecording() {
-          console.log('Will activate inactivity detection (participant + silence checks) after', activateInactivityDetectionAfter);
+          console.log('Participant detection is active immediately; silence detection activates after', activateInactivityDetectionAfter);
 
           // Check for the availability of the mediaDevices API
           if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
@@ -580,59 +583,81 @@ export class GoogleMeetBot extends MeetBotBase {
           }
 
           const mediaRecorder = new MediaRecorder(stream, { ...options });
+          let chunkUploadChain: Promise<void> = Promise.resolve();
+          let isStoppingRecording = false;
 
-          mediaRecorder.ondataavailable = async (event: BlobEvent) => {
+          mediaRecorder.ondataavailable = (event: BlobEvent) => {
             if (!event.data.size) {
               console.warn('Received empty chunk...');
               return;
             }
-            try {
-              const arrayBuffer = await event.data.arrayBuffer();
-              sendChunkToServer(arrayBuffer);
-            } catch (error) {
-              console.error('Error uploading chunk:', error);
-            }
+
+            const chunk = event.data;
+            chunkUploadChain = chunkUploadChain.then(async () => {
+              try {
+                const arrayBuffer = await chunk.arrayBuffer();
+                await sendChunkToServer(arrayBuffer);
+              } catch (error) {
+                console.error('Error uploading chunk:', error);
+              }
+            });
           };
 
           // Start recording with 2-second intervals
           const chunkDuration = 2000;
           mediaRecorder.start(chunkDuration);
+          const recordingStartedAt = Date.now();
+          const initialAloneGraceMs = activateInactivityDetectionAfterMinutes * 60 * 1000;
 
           let dismissModalsInterval: NodeJS.Timeout;
           let lastDimissError: Error | null = null;
 
           const stopTheRecording = async () => {
-            mediaRecorder.stop();
-            stream.getTracks().forEach((track) => track.stop());
+            if (isStoppingRecording) return;
+            isStoppingRecording = true;
+            const recordedDurationSeconds = Math.max(1, Math.round((Date.now() - recordingStartedAt) / 1000));
 
-            // Cleanup recording timer
-            clearTimeout(timeoutId);
+            try {
+              await new Promise<void>((resolve) => {
+                if (mediaRecorder.state === 'inactive') {
+                  resolve();
+                  return;
+                }
+                mediaRecorder.addEventListener('stop', () => resolve(), { once: true });
+                mediaRecorder.stop();
+              });
+              await chunkUploadChain;
+            } catch (error) {
+              console.error('Error stopping recorder or flushing final chunks:', error);
+            } finally {
+              stream.getTracks().forEach((track) => track.stop());
 
-            // Cancel the perpetural checks
-            if (inactivityParticipantDetectionTimeout) {
-              clearTimeout(inactivityParticipantDetectionTimeout);
-            }
-            if (inactivitySilenceDetectionTimeout) {
-              clearTimeout(inactivitySilenceDetectionTimeout);
-            }
+              // Cleanup recording timer
+              clearTimeout(timeoutId);
 
-            if (loneTest) {
-              clearTimeout(loneTest);
-            }
-
-            if (isOnValidGoogleMeetPageInterval) {
-              clearInterval(isOnValidGoogleMeetPageInterval);
-            }
-
-            if (dismissModalsInterval) {
-              clearInterval(dismissModalsInterval);
-              if (lastDimissError && lastDimissError instanceof Error) {
-                console.error('Error dismissing modals:', { lastDimissError, message: lastDimissError?.message });
+              // Cancel the perpetural checks
+              if (inactivitySilenceDetectionTimeout) {
+                clearTimeout(inactivitySilenceDetectionTimeout);
               }
-            }
 
-            // Begin browser cleanup
-            (window as any).screenAppMeetEnd(slightlySecretId);
+              if (loneTest) {
+                clearTimeout(loneTest);
+              }
+
+              if (isOnValidGoogleMeetPageInterval) {
+                clearInterval(isOnValidGoogleMeetPageInterval);
+              }
+
+              if (dismissModalsInterval) {
+                clearInterval(dismissModalsInterval);
+                if (lastDimissError && lastDimissError instanceof Error) {
+                  console.error('Error dismissing modals:', { lastDimissError, message: lastDimissError?.message });
+                }
+              }
+
+              // Begin browser cleanup
+              (window as any).screenAppMeetEnd(slightlySecretId, recordedDurationSeconds);
+            }
           };
 
           let loneTest: NodeJS.Timeout;
@@ -640,6 +665,27 @@ export class GoogleMeetBot extends MeetBotBase {
           let loneTestDetectionActive = true;
           const maxDetectionFailures = 10; // Track up to 10 consecutive failures
           let lastBadgeLogTime = 0; // Track last time we logged badge count
+          let hasSeenOtherParticipant = false;
+          let aloneSince: number | null = null;
+
+          const shouldStopForParticipantCount = (contributors: number) => {
+            const now = Date.now();
+            if (contributors >= 2) {
+              hasSeenOtherParticipant = true;
+              aloneSince = null;
+              return false;
+            }
+
+            if (hasSeenOtherParticipant) {
+              if (aloneSince === null) {
+                aloneSince = now;
+                console.log('Bot is alone after previously seeing participants; waiting before ending recording.');
+              }
+              return now - aloneSince >= loneParticipantExitDelayMs;
+            }
+
+            return now - recordingStartedAt >= initialAloneGraceMs;
+          };
 
           function detectLoneParticipantResilient(): void {
             const re = /^[0-9]+$/;
@@ -813,7 +859,7 @@ export class GoogleMeetBot extends MeetBotBase {
                     return;
                   }
                   detectionFailures = 0;
-                  if (contributors < 2) {
+                  if (shouldStopForParticipantCount(contributors)) {
                     console.log('Bot is alone, ending meeting.');
                     loneTestDetectionActive = false;
                     stopTheRecording();
@@ -826,7 +872,7 @@ export class GoogleMeetBot extends MeetBotBase {
                   return;
                 }
                 retryWithBackoff();
-              }, 5000);
+              }, 2000);
             }
           
             retryWithBackoff();
@@ -924,9 +970,7 @@ export class GoogleMeetBot extends MeetBotBase {
           /**
            * Perpetual checks for inactivity detection
            */
-          inactivityParticipantDetectionTimeout = setTimeout(() => {
-            detectLoneParticipantResilient();
-          }, activateInactivityDetectionAfterMinutes * 60 * 1000);
+          detectLoneParticipantResilient();
 
           inactivitySilenceDetectionTimeout = setTimeout(() => {
             detectIncrediblySilentMeeting();
@@ -1047,6 +1091,7 @@ export class GoogleMeetBot extends MeetBotBase {
         teamId,
         duration,
         inactivityLimit,
+        loneParticipantExitDelayMs,
         userId,
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
