@@ -227,14 +227,15 @@ export class GoogleMeetBot extends MeetBotBase {
                 teamId
               });
 
+              clearInterval(waitInterval);
+              clearTimeout(waitTimeout);
+
               try {
                 await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'google-meet-redirected-away', userId, this._logger, botId);
               } catch (debugImageError) {
                 this._logger.warn('Unable to upload Google Meet redirect debug image...', { error: debugImageError });
               }
 
-              clearInterval(waitInterval);
-              clearTimeout(waitTimeout);
               resolveWaiting(false);
               return;
             }
