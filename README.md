@@ -126,7 +126,7 @@ You can configure Meeting Bot to notify external systems when a recording has fi
 - Webhook HTTP POST
 - Redis list push (RPUSH) to a configurable DB and list
 
-Both are disabled by default.
+Webhook notifications are disabled by default. Redis completion notifications are enabled automatically for Redis-worker mode (`REDIS_CONSUMER_ENABLED=true`) and can also be enabled explicitly with `NOTIFY_REDIS_ENABLED=true`.
 
 #### Environment Variables
 
@@ -134,9 +134,9 @@ Both are disabled by default.
 - NOTIFY_WEBHOOK_URL: Webhook endpoint URL
 - NOTIFY_WEBHOOK_SECRET: Optional secret to HMAC-SHA256 sign payloads. Signature header: X-Webhook-Signature
 
-- NOTIFY_REDIS_ENABLED: Enable Redis notifications (default: false)
+- NOTIFY_REDIS_ENABLED: Enable Redis notifications. Completion notifications are also enabled automatically when REDIS_CONSUMER_ENABLED=true so Redis jobs produce result-list entries.
 - NOTIFY_REDIS_URI: Optional Redis URI for notifications; if not set, falls back to REDIS_HOST/REDIS_PORT/etc via redisUri
-- NOTIFY_REDIS_DB: Redis database number to use for notifications (default: 1). Note: By default, DB 1 is used, not DB 0
+- NOTIFY_REDIS_DB: Optional Redis database number to use for notifications. If not set, the Redis client's default DB is used. DB 0 is allowed when explicitly configured.
 - NOTIFY_REDIS_LIST: Redis list key to RPUSH to (default: jobs:meetbot:recordings)
 - NOTIFY_REDIS_FAILURE_LIST: Redis list key to RPUSH failed meeting jobs to (default: jobs:meetbot:failures)
 
