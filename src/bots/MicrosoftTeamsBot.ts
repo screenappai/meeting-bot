@@ -592,7 +592,17 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             return undefined;
           };
 
-          const getTeamsMeetingState = (): 'active' | 'alone' | 'ended' => {
+          const isExplicitEmptyMeetingText = (text: string): boolean => {
+            const emptyMeetingPatterns = [
+              /\b0\D{0,30}(?:people|participants?|teilnehm(?:er|ende)?|personen)\D{0,80}(?:in|inside|joined|here|meeting|call|besprechung|anruf)\b/i,
+              /\b(?:no|zero)\D{0,30}(?:one|one else|people|participants?)\D{0,80}(?:in|inside|joined|here|meeting|call)\b/i,
+              /\b(?:keine|niemand)\D{0,80}(?:teilnehm(?:er|ende)?|personen|hier|besprechung|anruf)\b/i,
+            ];
+
+            return emptyMeetingPatterns.some(pattern => pattern.test(text));
+          };
+
+          const getTeamsMeetingState = (): 'active' | 'alone' | 'empty' | 'ended' => {
             const bodyText = normalizeText(document.body.innerText || '');
 
             const endedPhrases = [
@@ -611,6 +621,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
             if (endedPhrases.some(phrase => bodyText.toLowerCase().includes(phrase))) {
               return 'ended';
+            }
+
+            if (isExplicitEmptyMeetingText(bodyText)) {
+              return 'empty';
             }
 
             const alonePhrases = [
@@ -680,6 +694,31 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               }
             }
 
+            const bodyLines = (document.body.innerText || '')
+              .split(/\n+/)
+              .map(normalizeText)
+              .filter(text => (
+                text.length > 0 &&
+                /(?:people|participants?|teilnehm|personen|meeting|call|besprechung|anruf)/i.test(text)
+              ));
+
+            for (const text of bodyLines) {
+              if (samples.length < 6) {
+                samples.push(text.slice(0, 140));
+              }
+
+              if (isExplicitEmptyMeetingText(text)) {
+                return { count: 0, samples };
+              }
+
+              if (/(?:people|participants?|teilnehm|personen)/i.test(text)) {
+                const count = parseParticipantCount(text);
+                if (typeof count === 'number') {
+                  return { count, samples };
+                }
+              }
+            }
+
             return { samples };
           };
 
@@ -694,11 +733,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               }
 
               const { count, samples } = getParticipantCount();
-              const inferredCount = typeof count === 'number'
-                ? count
-                : meetingState === 'alone'
-                  ? 1
-                  : undefined;
+              let inferredCount = count;
+              if (typeof inferredCount !== 'number') {
+                if (meetingState === 'empty') {
+                  inferredCount = 0;
+                } else if (meetingState === 'alone') {
+                  inferredCount = 1;
+                }
+              }
 
               if (typeof inferredCount !== 'number') {
                 const now = Date.now();
