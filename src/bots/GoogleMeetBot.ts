@@ -205,6 +205,8 @@ export class GoogleMeetBot extends MeetBotBase {
 
       let waitTimeout: NodeJS.Timeout;
       let waitInterval: NodeJS.Timeout;
+      let redirectedFromMeetUrl: string | undefined;
+      let redirectedFromMeetBodyText: string | undefined;
 
       const waitAtLobbyPromise = new Promise<boolean>((resolveWaiting) => {
         waitTimeout = setTimeout(() => {
@@ -214,6 +216,29 @@ export class GoogleMeetBot extends MeetBotBase {
 
         waitInterval = setInterval(async () => {
           try {
+            const currentUrl = this.page.url();
+            if (!currentUrl.includes('meet.google.com')) {
+              redirectedFromMeetUrl = currentUrl;
+              redirectedFromMeetBodyText = await this.page.evaluate(() => document.body.innerText).catch(() => '');
+              this._logger.error('Google Meet Bot was redirected away from the meeting while waiting for admission...', {
+                currentUrl,
+                bodyText: redirectedFromMeetBodyText,
+                userId,
+                teamId
+              });
+
+              try {
+                await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'google-meet-redirected-away', userId, this._logger, botId);
+              } catch (debugImageError) {
+                this._logger.warn('Unable to upload Google Meet redirect debug image...', { error: debugImageError });
+              }
+
+              clearInterval(waitInterval);
+              clearTimeout(waitTimeout);
+              resolveWaiting(false);
+              return;
+            }
+
             const detectLobbyModeHostWaitingText = async (): Promise<'WAITING_FOR_HOST_TO_ADMIT_BOT' | 'WAITING_REQUEST_TIMEOUT' | 'LOBBY_MODE_NOT_ACTIVE' | 'UNABLE_TO_DETECT_LOBBY_MODE'> => {
               try {
                 const lobbyModeHostWaitingText = await this.page.getByText(GOOGLE_LOBBY_MODE_HOST_TEXT);
@@ -361,14 +386,17 @@ export class GoogleMeetBot extends MeetBotBase {
 
       const waitingAtLobbySuccess = await waitAtLobbyPromise;
       if (!waitingAtLobbySuccess) {
-        const bodyText = await this.page.evaluate(() => document.body.innerText);
+        const bodyText = redirectedFromMeetBodyText ?? await this.page.evaluate(() => document.body.innerText);
 
         const userDenied = (bodyText || '')?.includes(GOOGLE_REQUEST_DENIED);
 
-        this._logger.error('Cant finish wait at the lobby check', { userDenied, waitingAtLobbySuccess, bodyText });
+        this._logger.error('Cant finish wait at the lobby check', { userDenied, waitingAtLobbySuccess, redirectedFromMeetUrl, bodyText });
 
         // Don't retry lobby errors - if user doesn't admit bot, retrying won't help
-        throw new WaitingAtLobbyRetryError('Google Meet bot could not enter the meeting...', bodyText ?? '', false, 0);
+        const errorMessage = redirectedFromMeetUrl ?
+          `Google Meet bot was redirected away from the meeting while waiting for admission: ${redirectedFromMeetUrl}` :
+          'Google Meet bot could not enter the meeting...';
+        throw new WaitingAtLobbyRetryError(errorMessage, bodyText ?? '', false, 0);
       }
     } catch(lobbyError) {
       this._logger.info('Closing the browser on error...', lobbyError);
