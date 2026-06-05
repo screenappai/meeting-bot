@@ -19,11 +19,34 @@ fi
 Xvfb "$DISPLAY" -screen 0 "${CHROME_WINDOW_SIZE}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
 xvfb_pid="$!"
 
-socat "TCP-LISTEN:${CHROME_CDP_PROXY_PORT},fork,reuseaddr,bind=${CHROME_CDP_PROXY_ADDRESS}" "TCP:127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT}" &
-socat_pid="$!"
+cat >/tmp/chrome-cdp-nginx.conf <<EOF
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {}
+
+http {
+  access_log off;
+
+  server {
+    listen ${CHROME_CDP_PROXY_ADDRESS}:${CHROME_CDP_PROXY_PORT};
+
+    location / {
+      proxy_http_version 1.1;
+      proxy_set_header Host 127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT};
+      proxy_set_header Upgrade \$http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_pass http://127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT};
+    }
+  }
+}
+EOF
+
+nginx -c /tmp/chrome-cdp-nginx.conf -g 'daemon off;' &
+nginx_pid="$!"
 
 cleanup() {
-  kill "$socat_pid" >/dev/null 2>&1 || true
+  kill "$nginx_pid" >/dev/null 2>&1 || true
   kill "$xvfb_pid" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
