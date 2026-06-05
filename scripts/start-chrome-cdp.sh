@@ -47,11 +47,14 @@ nginx_pid="$!"
 
 cleanup() {
   kill "$nginx_pid" >/dev/null 2>&1 || true
+  if [ -n "${chrome_pid:-}" ]; then
+    kill "$chrome_pid" >/dev/null 2>&1 || true
+  fi
   kill "$xvfb_pid" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
-exec google-chrome-stable \
+google-chrome-stable \
   --remote-debugging-address="$CHROME_REMOTE_DEBUGGING_ADDRESS" \
   --remote-debugging-port="$CHROME_REMOTE_DEBUGGING_PORT" \
   --remote-allow-origins='*' \
@@ -66,4 +69,7 @@ exec google-chrome-stable \
   --disable-backgrounding-occluded-windows \
   --disable-renderer-backgrounding \
   --no-sandbox \
-  "$CHROME_URL"
+  "$CHROME_URL" &
+chrome_pid="$!"
+
+wait -n "$nginx_pid" "$chrome_pid"
