@@ -32,6 +32,7 @@ RUN apt-get update && \
     libxss1 \
     libxtst6 \
     pulseaudio \
+    socat \
     wget \
     xdg-utils \
     xvfb && \
@@ -53,7 +54,7 @@ RUN chmod +x /usr/local/bin/start-chrome-cdp
 
 USER chrome
 ENV XDG_RUNTIME_DIR=/run/user/1001
-EXPOSE 9222
+EXPOSE 9222 9223
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["start-chrome-cdp"]
