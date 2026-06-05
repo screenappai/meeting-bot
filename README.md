@@ -87,6 +87,10 @@ Content-Type: application/json
 }
 ```
 
+For Google Meet, you can optionally connect to an already-running Chrome via `GOOGLE_CHROME_CDP_URL`, or run the browser with a dedicated signed-in Google profile by setting `GOOGLE_CHROME_USER_DATA_DIR` or `GOOGLE_CHROME_STORAGE_STATE_PATH`. The CDP option is useful when the Docker browser is treated differently from a normal Chrome. If you use CDP, launch that Chrome with `--auto-accept-this-tab-capture` so recording can select the current Meet tab without a manual browser prompt.
+
+For Kubernetes, run Chrome as a sidecar container in the same pod and point `GOOGLE_CHROME_CDP_URL` at `http://127.0.0.1:9222`. The included `Dockerfile.chrome-cdp` builds a minimal Google Chrome + Xvfb CDP backend for that setup.
+
 #### Join a Microsoft Teams Meeting
 ```bash
 POST /microsoft/join
@@ -464,6 +468,10 @@ Notes:
 | `LONE_PARTICIPANT_EXIT_DELAY_SECONDS` | Delay before stopping after the bot has seen other participants and then becomes alone | `10` |
 | `TEAMS_PREWARM_ENABLED` | Enable the extra Microsoft Teams warmup browser pass for environments that still show first-run dialogs | `false` |
 | `TEAMS_AUDIO_STABILIZATION_MS` | Delay before starting Microsoft Teams ffmpeg recording after joining | `1000` |
+| `GOOGLE_CHROME_CDP_URL` | Optional CDP endpoint for Google Meet joins, e.g. `http://host.docker.internal:9222`, to use an external Chrome instead of Docker Chrome. | - |
+| `GOOGLE_CHROME_USER_DATA_DIR` | Optional persistent Chrome profile directory for Google Meet joins. Use a dedicated signed-in Google account profile. | - |
+| `GOOGLE_CHROME_STORAGE_STATE_PATH` | Optional Playwright storage state JSON for Google Meet joins when not using a persistent profile. | - |
+| `GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS` | Number of times to re-submit an anonymous Google Meet guest request if Meet redirects while waiting for host admission. | `10` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
@@ -485,9 +493,45 @@ Notes:
 
 The project includes Docker support with separate configurations for development and production:
 
-- `Dockerfile` - Development build with hot reload
+- `Dockerfile.development` - Development build
 - `Dockerfile.production` - Optimized production build
+- `Dockerfile.chrome-cdp` - Google Chrome CDP backend for Kubernetes sidecar deployments
 - `docker-compose.yml` - Complete development environment
+
+#### Google Meet Chrome CDP Sidecar
+
+Build and publish the Chrome backend image separately from the bot image:
+
+```bash
+docker build -f Dockerfile.chrome-cdp -t ghcr.io/your-org/meeting-bot-chrome-cdp:latest .
+docker push ghcr.io/your-org/meeting-bot-chrome-cdp:latest
+```
+
+Then run it as a sidecar in the same Kubernetes pod as the bot:
+
+```yaml
+containers:
+  - name: meeting-bot
+    image: ghcr.io/your-org/meeting-bot:latest
+    env:
+      - name: GOOGLE_CHROME_CDP_URL
+        value: http://127.0.0.1:9222
+
+  - name: chrome-cdp
+    image: ghcr.io/your-org/meeting-bot-chrome-cdp:latest
+    ports:
+      - name: cdp
+        containerPort: 9222
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 3Gi
+```
+
+Do not expose the CDP port through a Kubernetes Service or Ingress. Keep it local to the pod so only the bot container can control the browser.
 
 #### Using Docker Image from GitHub Packages
 

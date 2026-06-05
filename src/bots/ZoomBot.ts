@@ -78,6 +78,9 @@ export class ZoomBot extends BotBase {
         if (browser?.isConnected()) {
           await browser.close();
           this._logger.info('Browser closed in join finally');
+        } else if (this.page?.context()) {
+          await this.page.context().close();
+          this._logger.info('Persistent browser context closed in join finally');
         }
       } catch (cleanupErr) {
         this._logger.warn('Browser cleanup in join finally failed (non-fatal)', { error: cleanupErr });

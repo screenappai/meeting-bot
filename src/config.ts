@@ -67,6 +67,12 @@ export default {
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
     180, // There's an upper limit on meeting duration 3 hours
   chromeExecutablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
+  googleChromeCdpUrl: process.env.GOOGLE_CHROME_CDP_URL,
+  googleChromeUserDataDir: process.env.GOOGLE_CHROME_USER_DATA_DIR,
+  googleChromeStorageStatePath: process.env.GOOGLE_CHROME_STORAGE_STATE_PATH,
+  googleAnonymousJoinRequestAttempts: process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS ?
+    Number(process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS) :
+    10,
   inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
   activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
   loneParticipantExitDelaySeconds: process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS ? Number(process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS) : 10,

@@ -9,6 +9,7 @@ assets/videos
 *.wav
 __pycache__/
 .env
+.chrome/
 gcp-key
 assets/screenshots
 /data
