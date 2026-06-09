@@ -649,6 +649,7 @@ class DiskUploader implements IUploader {
           filePath,
           key,
           contentType: this.contentType,
+          metadata: this.getObjectStorageMetadata(),
           logger: this._logger,
           partSize: chunkSize,
           concurrency: 4,
@@ -741,6 +742,22 @@ class DiskUploader implements IUploader {
     } catch {
       return undefined;
     }
+  }
+
+  private getObjectStorageMetadata(): Record<string, string> | undefined {
+    const metadata: Record<string, string> = {
+      contentType: this.contentType,
+      uploaderType: config.uploaderType,
+    };
+
+    if (typeof this.recordingDuration === 'number' && Number.isFinite(this.recordingDuration) && this.recordingDuration > 0) {
+      const duration = String(Math.round(this.recordingDuration));
+      metadata.duration = duration;
+      metadata.durationSeconds = duration;
+      metadata.recordingDurationSeconds = duration;
+    }
+
+    return metadata;
   }
 
   public async uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }) {

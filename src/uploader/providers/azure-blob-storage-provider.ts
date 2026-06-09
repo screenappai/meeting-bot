@@ -76,6 +76,7 @@ export class AzureBlobStorageProvider implements StorageProvider {
       options.logger.info(`Starting Azure Blob upload for ${blobName}`);
       await blob.uploadFile(options.filePath, {
         blobHTTPHeaders: { blobContentType: options.contentType },
+        metadata: options.metadata,
         concurrency: options.concurrency ?? config.azureBlobStorage.uploadConcurrency ?? 4,
         onProgress: (p: { loadedBytes?: number }) => {
           if (p.loadedBytes) {

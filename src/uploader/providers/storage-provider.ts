@@ -5,6 +5,7 @@ export interface UploadOptions {
   filePath: string;
   key: string;
   contentType: ContentType;
+  metadata?: Record<string, string>;
   logger: Logger;
   partSize?: number;
   concurrency?: number;
