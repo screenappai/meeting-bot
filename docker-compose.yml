@@ -1,18 +1,54 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - cache:/data
+
   meeting-bot:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.development
     environment:
       - NODE_ENV=development
+      # Use object storage upload path with pluggable providers
+      - UPLOADER_TYPE=s3
+      # Enable Azure Blob Storage as the storage provider for testing
+      - STORAGE_PROVIDER=azure
+      # Azure configuration for local testing. Set this in your shell or .env file.
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING:-}
+      # Choose an existing container in the meetingbottest account
+      - AZURE_STORAGE_CONTAINER=meeting-recordings
+      # Redis base connection (used by notifications if NOTIFY_REDIS_URI not set)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # Enable Redis-based recording completion notifications (optional)
+      - NOTIFY_REDIS_ENABLED=true
+      - NOTIFY_REDIS_DB=1 # DB 0 not allowed; code will auto-switch to 1 if set to 0
+      - NOTIFY_REDIS_LIST=jobs:meetbot:recordings
+      - GOOGLE_CHROME_CDP_URL=${GOOGLE_CHROME_CDP_URL:-}
+      - GOOGLE_CHROME_USER_DATA_DIR=${GOOGLE_CHROME_USER_DATA_DIR:-}
+      - GOOGLE_CHROME_STORAGE_STATE_PATH=${GOOGLE_CHROME_STORAGE_STATE_PATH:-}
     ports:
       - "3000:3000"
     volumes:
       - .:/usr/src/app
+      - ./.chrome:/usr/src/app/.chrome
       - ./assets/screenshots:/usr/src/app/assets/screenshots
       - ./debug-videos:/usr/src/app/debug-videos
       - /usr/src/app/node_modules  # Persist node_modules
     command: ["/bin/bash", "./start.sh"]
+    depends_on:
+      redis:
+        condition: service_healthy
 
 
 volumes:
