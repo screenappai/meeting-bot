@@ -17,6 +17,29 @@ export function isExternalBrowserContext(context?: BrowserContext | null): boole
   return Boolean(context && externalBrowserContexts.has(context));
 }
 
+async function resizePageForRecording(page: Page, size: { width: number; height: number }, correlationId: string) {
+  const log = getCorrelationIdLog(correlationId);
+
+  try {
+    const client = await page.context().newCDPSession(page);
+    const { windowId } = await client.send('Browser.getWindowForTarget');
+    await client.send('Browser.setWindowBounds', {
+      windowId,
+      bounds: {
+        windowState: 'normal',
+        left: 0,
+        top: 0,
+        width: size.width,
+        height: size.height,
+      },
+    });
+  } catch (err: any) {
+    console.warn(`${log} Unable to resize Chrome window through CDP`, err?.message ?? err);
+  }
+
+  await page.setViewportSize(size);
+}
+
 function attachBrowserErrorHandlers(browser: Browser | null, context: BrowserContext, page: Page, correlationId: string) {
   const log = getCorrelationIdLog(correlationId);
 
@@ -197,7 +220,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     externalBrowserContexts.add(context);
 
     const page = await context.newPage();
-    await page.setViewportSize(size);
+    await resizePageForRecording(page, size, correlationId);
     attachBrowserErrorHandlers(browser, context, page, correlationId);
 
     console.log(`${getCorrelationIdLog(correlationId)} External Chrome connected successfully!`);
@@ -229,6 +252,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     );
 
     const page = context.pages()[0] ?? await context.newPage();
+    await resizePageForRecording(page, size, correlationId);
     attachBrowserErrorHandlers(context.browser(), context, page, correlationId);
 
     console.log(`${getCorrelationIdLog(correlationId)} Persistent browser launched successfully!`);

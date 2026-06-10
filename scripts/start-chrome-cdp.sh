@@ -7,8 +7,10 @@ export CHROME_REMOTE_DEBUGGING_ADDRESS="${CHROME_REMOTE_DEBUGGING_ADDRESS:-127.0
 export CHROME_REMOTE_DEBUGGING_PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9222}"
 export CHROME_CDP_PROXY_ADDRESS="${CHROME_CDP_PROXY_ADDRESS:-0.0.0.0}"
 export CHROME_CDP_PROXY_PORT="${CHROME_CDP_PROXY_PORT:-9223}"
-export CHROME_WINDOW_SIZE="${CHROME_WINDOW_SIZE:-1920,1080}"
+export CHROME_WINDOW_SIZE="${CHROME_WINDOW_SIZE:-1280,720}"
 export CHROME_URL="${CHROME_URL:-about:blank}"
+CHROME_WINDOW_SIZE_FOR_CHROME="${CHROME_WINDOW_SIZE/x/,}"
+XVFB_SCREEN_SIZE="${CHROME_WINDOW_SIZE/,/x}"
 
 mkdir -p "$CHROME_USER_DATA_DIR" /tmp/.X11-unix
 
@@ -16,7 +18,7 @@ if command -v pulseaudio >/dev/null 2>&1; then
   pulseaudio --start --exit-idle-time=-1 || true
 fi
 
-Xvfb "$DISPLAY" -screen 0 "${CHROME_WINDOW_SIZE}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
+Xvfb "$DISPLAY" -screen 0 "${XVFB_SCREEN_SIZE}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
 xvfb_pid="$!"
 
 cat >/tmp/chrome-cdp-nginx.conf <<EOF
@@ -64,7 +66,9 @@ google-chrome-stable \
   --remote-debugging-port="$CHROME_REMOTE_DEBUGGING_PORT" \
   --remote-allow-origins='*' \
   --user-data-dir="$CHROME_USER_DATA_DIR" \
-  --window-size="$CHROME_WINDOW_SIZE" \
+  --window-size="$CHROME_WINDOW_SIZE_FOR_CHROME" \
+  --window-position=0,0 \
+  --force-device-scale-factor=1 \
   --auto-accept-this-tab-capture \
   --autoplay-policy=no-user-gesture-required \
   --no-first-run \
