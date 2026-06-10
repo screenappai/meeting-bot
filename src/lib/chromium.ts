@@ -17,7 +17,7 @@ export function isExternalBrowserContext(context?: BrowserContext | null): boole
   return Boolean(context && externalBrowserContexts.has(context));
 }
 
-async function resizePageForRecording(page: Page, size: { width: number; height: number }, correlationId: string) {
+async function resizeBrowserWindow(page: Page, size: { width: number; height: number }, correlationId: string) {
   const log = getCorrelationIdLog(correlationId);
 
   try {
@@ -36,8 +36,6 @@ async function resizePageForRecording(page: Page, size: { width: number; height:
   } catch (err: any) {
     console.warn(`${log} Unable to resize Chrome window through CDP`, err?.message ?? err);
   }
-
-  await page.setViewportSize(size);
 }
 
 function attachBrowserErrorHandlers(browser: Browser | null, context: BrowserContext, page: Page, correlationId: string) {
@@ -128,6 +126,7 @@ async function launchPersistentContextWithTimeout(launchFn: () => Promise<Browse
 
 async function createBrowserContext(url: string, correlationId: string, botType: BotType = 'google'): Promise<Page> {
   const size = { width: 1280, height: 720 };
+  const browserWindowSize = { width: size.width, height: size.height + 80 };
 
   // Google Meet is sensitive to browser fingerprinting before admission. Keep
   // its launch close to normal Chrome and reserve recording-heavy flags for
@@ -135,7 +134,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
   const googleBrowserArgs: string[] = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
-    `--window-size=${size.width},${size.height}`,
+    `--window-size=${browserWindowSize.width},${browserWindowSize.height}`,
     '--auto-accept-this-tab-capture',
     '--autoplay-policy=no-user-gesture-required',
   ];
@@ -148,7 +147,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     '--disable-web-security',
     '--use-gl=angle',
     '--use-angle=swiftshader',
-    `--window-size=${size.width},${size.height}`,
+    `--window-size=${browserWindowSize.width},${browserWindowSize.height}`,
     '--auto-accept-this-tab-capture',
     '--enable-features=MediaRecorder',
     '--enable-audio-service-out-of-process',
@@ -220,7 +219,8 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     externalBrowserContexts.add(context);
 
     const page = await context.newPage();
-    await resizePageForRecording(page, size, correlationId);
+    await resizeBrowserWindow(page, browserWindowSize, correlationId);
+    await page.setViewportSize(size);
     attachBrowserErrorHandlers(browser, context, page, correlationId);
 
     console.log(`${getCorrelationIdLog(correlationId)} External Chrome connected successfully!`);
@@ -252,7 +252,8 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     );
 
     const page = context.pages()[0] ?? await context.newPage();
-    await resizePageForRecording(page, size, correlationId);
+    await resizeBrowserWindow(page, browserWindowSize, correlationId);
+    await page.setViewportSize(size);
     attachBrowserErrorHandlers(context.browser(), context, page, correlationId);
 
     console.log(`${getCorrelationIdLog(correlationId)} Persistent browser launched successfully!`);
