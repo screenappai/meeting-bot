@@ -418,12 +418,15 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     // Track FFmpeg status
     let ffmpegFailed = false;
     let ffmpegError: Error | null = null;
+    let recordingStartedAt: number | undefined;
     // Hoisted out of the try block so the matching finally can set it to signal
     // the silence detector (declared inside the try) to stop on its next tick.
     let meetingEnded = false;
 
     try {
       await recorder.start();
+      recordingStartedAt = Date.now();
+      const startedAt = recordingStartedAt;
       this._logger.info('FFmpeg recording started successfully');
 
       // Monitor FFmpeg process - if it dies, stop recording immediately
@@ -774,15 +777,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       );
 
       // Wait for either timeout, meeting end, or FFmpeg failure
-      const startTime = Date.now();
-      while (!meetingEnded && !ffmpegFailed && (Date.now() - startTime) < duration) {
+      while (!meetingEnded && !ffmpegFailed && (Date.now() - startedAt) < duration) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       this._logger.info('Recording period ended', {
         meetingEnded,
         ffmpegFailed,
-        recordedDuration: Math.floor((Date.now() - startTime) / 1000) + 's'
+        recordedDuration: Math.floor((Date.now() - startedAt) / 1000) + 's'
       });
 
       // If FFmpeg failed during recording, throw the error
@@ -812,6 +814,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       let uploadSuccess = false;
       if (fs.existsSync(outputPath)) {
+        if (recordingStartedAt) {
+          const recordedDurationSeconds = Math.max(1, Math.round((Date.now() - recordingStartedAt) / 1000));
+          uploader.setRecordingDuration(recordedDurationSeconds);
+        }
+
         const fileBuffer = fs.readFileSync(outputPath);
         await uploader.saveDataToTempFile(fileBuffer);
 
