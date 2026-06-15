@@ -131,7 +131,16 @@ async function createBrowserContext(url: string, correlationId: string, botType:
   // Google Meet is sensitive to browser fingerprinting before admission. Keep
   // its launch close to normal Chrome and reserve recording-heavy flags for
   // platforms that need them.
+  const firstRunSuppressionArgs: string[] = [
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-first-run-ui',
+    '--disable-default-browser-promo',
+    '--disable-default-apps',
+  ];
+
   const googleBrowserArgs: string[] = [
+    ...firstRunSuppressionArgs,
     '--no-sandbox',
     '--disable-setuid-sandbox',
     `--window-size=${browserWindowSize.width},${browserWindowSize.height}`,
@@ -140,6 +149,7 @@ async function createBrowserContext(url: string, correlationId: string, botType:
   ];
 
   const recordingBrowserArgs: string[] = [
+    ...firstRunSuppressionArgs,
     '--enable-usermedia-screen-capturing',
     '--allow-http-screen-capture',
     '--no-sandbox',
