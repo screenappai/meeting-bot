@@ -43,6 +43,16 @@ http {
       proxy_set_header Host 127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT};
       proxy_set_header Upgrade \$http_upgrade;
       proxy_set_header Connection "upgrade";
+      # Chrome reports its DevTools socket using the (rewritten) Host header, so
+      # /json* responses contain ws://127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT}/...
+      # which a remote client (e.g. the bot in another container) can't reach.
+      # Rewrite it back to the address the client used so connectOverCDP's second
+      # hop comes through this proxy. Disable upstream compression so sub_filter
+      # can see the body.
+      proxy_set_header Accept-Encoding "";
+      sub_filter_types application/json;
+      sub_filter_once off;
+      sub_filter "127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT}" "\$http_host";
       proxy_pass http://127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT};
     }
   }

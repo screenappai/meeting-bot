@@ -91,6 +91,8 @@ For Google Meet, you can optionally connect to an already-running Chrome via `GO
 
 For Kubernetes, run Chrome as a sidecar container in the same pod and point `GOOGLE_CHROME_CDP_URL` at `http://127.0.0.1:9222`. The included `Dockerfile.chrome-cdp` builds a minimal Google Chrome + Xvfb CDP backend for that setup.
 
+For **local testing**, `docker compose up --build` starts the `chrome-cdp` sidecar alongside the bot and wires `GOOGLE_CHROME_CDP_URL` to it automatically (via the sidecar's nginx proxy on `9223`, which rewrites the `Host` header so cross-container CDP works). If host port `6379` is already taken by another local Redis, start with `REDIS_PORT_HOST=6380 docker compose up --build`. Join a Meet that allows guests, make sure a second participant is present (the bot leaves if it's alone), then `POST /google/join` (see above) and follow `docker compose logs -f meeting-bot`. The recording **upload will fail** without configured storage credentials — that's expected; the join and recording are what this exercises. Set `GOOGLE_CHROME_CDP_URL=` (empty) to fall back to the bot's in-container Chromium. This sidecar joins as an anonymous guest; meetings that require sign-in need a signed-in profile (`GOOGLE_CHROME_USER_DATA_DIR`/`GOOGLE_CHROME_STORAGE_STATE_PATH`), not yet wired into the local compose.
+
 #### Join a Microsoft Teams Meeting
 ```bash
 POST /microsoft/join
