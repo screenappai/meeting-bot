@@ -4,11 +4,15 @@ on:
   push:
     branches:
       - '**'  # Build and push on all branches
+  pull_request:
+    branches:
+      - main  # Build-only (no push) so the required "build" check reports on PRs,
+              # including PRs from forks (no registry secrets needed since we don't push)
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  CHROME_CDP_IMAGE_NAME: jakobstadlhuber/meeting-bot-chrome-cdp
+  CHROME_CDP_IMAGE_NAME: ${{ github.repository }}-chrome-cdp
 
 jobs:
   build:
@@ -92,7 +96,9 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.production
-          platforms: linux/amd64,linux/arm64
+          # Multi-arch on push; amd64-only on PRs to keep the build check fast
+          # (arm64 builds under QEMU emulation are very slow for this image).
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
