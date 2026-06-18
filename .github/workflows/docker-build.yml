@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - '**'  # Build and push on all branches
+  pull_request:
+    branches:
+      - main  # Build-only (no push) so the required "build" check reports on PRs,
+              # including PRs from forks (no registry secrets needed since we don't push)
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  CHROME_CDP_IMAGE_NAME: ${{ github.repository }}-chrome-cdp
 
 jobs:
   build:
@@ -74,15 +79,40 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Extract Chrome CDP metadata
+        id: chrome-cdp-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.CHROME_CDP_IMAGE_NAME }}
+          tags: |
+            ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('type=raw,value={0}', env.TAG) || '' }}
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
       # Build and push on all branches
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.production
-          platforms: linux/amd64,linux/arm64
+          # Multi-arch on push; amd64-only on PRs to keep the build check fast
+          # (arm64 builds under QEMU emulation are very slow for this image).
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push Chrome CDP Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.chrome-cdp
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.chrome-cdp-meta.outputs.tags }}
+          labels: ${{ steps.chrome-cdp-meta.outputs.labels }}
+          cache-from: type=gha,scope=chrome-cdp
+          cache-to: type=gha,mode=max,scope=chrome-cdp

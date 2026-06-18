@@ -51,6 +51,7 @@ export class S3StorageProvider implements StorageProvider {
           Key: options.key,
           Body: createReadStream(options.filePath),
           ContentType: options.contentType,
+          Metadata: options.metadata,
         },
         queueSize: options.concurrency || 4,
         partSize: options.partSize || 50 * 1024 * 1024,

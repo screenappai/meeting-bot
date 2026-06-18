@@ -1,0 +1,60 @@
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    dumb-init \
+    ffmpeg \
+    fonts-liberation \
+    gnupg \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnss3 \
+    libu2f-udev \
+    libvulkan1 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxshmfence1 \
+    libxss1 \
+    libxtst6 \
+    nginx \
+    pulseaudio \
+    wget \
+    xdg-utils \
+    xvfb && \
+  wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-signing-key.gpg && \
+  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
+  apt-get update && \
+  apt-get install -y --no-install-recommends google-chrome-stable && \
+  rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 1001 chrome && \
+  useradd -m -d /home/chrome -u 1001 -g chrome chrome && \
+  mkdir -p /tmp/.X11-unix /tmp/chrome-profile /run/user/1001 && \
+  chown -R chrome:chrome /tmp/chrome-profile /run/user/1001 && \
+  chmod 1777 /tmp/.X11-unix && \
+  chmod 700 /run/user/1001
+
+COPY --chown=chrome:chrome scripts/start-chrome-cdp.sh /usr/local/bin/start-chrome-cdp
+RUN chmod +x /usr/local/bin/start-chrome-cdp
+
+USER chrome
+ENV XDG_RUNTIME_DIR=/run/user/1001
+EXPOSE 9222 9223
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["start-chrome-cdp"]

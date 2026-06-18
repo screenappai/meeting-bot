@@ -22,6 +22,43 @@ export class FFmpegRecorder {
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        const isWebmOutput = this.outputPath.toLowerCase().endsWith('.webm');
+        const encodingArgs = isWebmOutput ? [
+          // WebM should use VP9 video and Opus audio.
+          '-c:v', 'libvpx-vp9',
+          '-deadline', 'realtime',
+          '-cpu-used', '4',
+          '-pix_fmt', 'yuv420p',
+          '-crf', '33',
+          '-b:v', '0',
+          '-g', '50', // Keyframe interval
+          '-threads', '0',
+
+          // Audio encoding
+          '-c:a', 'libopus',
+          '-b:a', '128k',
+          '-ar', '48000',
+          '-ac', '2',
+        ] : [
+          // MP4-compatible video encoding
+          '-c:v', 'libx264',
+          '-preset', 'faster',
+          '-pix_fmt', 'yuv420p',
+          '-crf', '23',
+          '-g', '50', // Keyframe interval
+          '-threads', '0',
+
+          // Audio encoding
+          '-c:a', 'aac',
+          '-b:a', '128k',
+          '-ar', '44100',
+          '-ac', '2',
+          '-strict', 'experimental',
+
+          // MP4 optimization
+          '-movflags', '+faststart',
+        ];
+
         // FFmpeg command to capture X11 display and PulseAudio monitor
         const ffmpegArgs = [
           '-y', // Overwrite output file
@@ -40,27 +77,11 @@ export class FFmpegRecorder {
           '-ar', '44100',
           '-i', 'virtual_output.monitor',
 
-          // Video encoding with better compatibility
-          '-c:v', 'libx264',
-          '-preset', 'faster',
-          '-pix_fmt', 'yuv420p',
-          '-crf', '23',
-          '-g', '50', // Keyframe interval
-          '-threads', '0',
-
-          // Audio encoding
-          '-c:a', 'aac',
-          '-b:a', '128k',
-          '-ar', '44100',
-          '-ac', '2',
-          '-strict', 'experimental',
+          ...encodingArgs,
 
           // Sync and timing
           '-vsync', 'cfr',
           '-async', '1',
-
-          // MP4 optimization
-          '-movflags', '+faststart',
 
           // Output
           this.outputPath
@@ -157,7 +178,7 @@ export class FFmpegRecorder {
           }
         });
 
-        // Wait a bit to ensure ffmpeg starts successfully
+        // Wait briefly to catch immediate startup failures without delaying recording.
         setTimeout(() => {
           if (settled) {
             // Already rejected due to early exit/error
@@ -173,7 +194,7 @@ export class FFmpegRecorder {
             settled = true;
             reject(new Error('ffmpeg failed to start'));
           }
-        }, 2000);
+        }, 1000);
 
       } catch (error) {
         this.logger.error('Error starting ffmpeg:', error);

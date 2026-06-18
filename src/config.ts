@@ -45,6 +45,16 @@ const constructRedisUri = () => {
   }
 };
 
+const normalizeFileExtension = (extension?: string) => {
+  if (!extension) return '.webm';
+  return extension.startsWith('.') ? extension : `.${extension}`;
+};
+
+const parseOptionalNumber = (value?: string) => {
+  if (typeof value === 'undefined' || value.trim() === '') return undefined;
+  return Number(value);
+};
+
 export default {
   port: process.env.PORT || 3000,
   db: {
@@ -57,31 +67,43 @@ export default {
     Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
     180, // There's an upper limit on meeting duration 3 hours
   chromeExecutablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
+  googleChromeCdpUrl: process.env.GOOGLE_CHROME_CDP_URL,
+  googleChromeUserDataDir: process.env.GOOGLE_CHROME_USER_DATA_DIR,
+  googleChromeStorageStatePath: process.env.GOOGLE_CHROME_STORAGE_STATE_PATH,
+  googleAnonymousJoinRequestAttempts: process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS ?
+    Number(process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS) :
+    10,
   inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
   activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
+  loneParticipantExitDelaySeconds: process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS ? Number(process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS) : 10,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
   joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES ? Number(process.env.JOIN_WAIT_TIME_MINUTES) : 10,
   // Number of retries for transient errors (not applied to WaitingAtLobbyRetryError)
   retryCount: process.env.RETRY_COUNT ? Number(process.env.RETRY_COUNT) : 2,
+  teamsPrewarmEnabled: process.env.TEAMS_PREWARM_ENABLED === 'true',
+  teamsAudioStabilizationMs: process.env.TEAMS_AUDIO_STABILIZATION_MS ? Number(process.env.TEAMS_AUDIO_STABILIZATION_MS) : 1000,
   miscStorageBucket: process.env.GCP_MISC_BUCKET,
   miscStorageFolder: process.env.GCP_MISC_BUCKET_FOLDER ? process.env.GCP_MISC_BUCKET_FOLDER : 'meeting-bot',
   region: process.env.GCP_DEFAULT_REGION,
   accessKey: process.env.GCP_ACCESS_KEY_ID ?? '',
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
+  redisProcessingQueueName: process.env.REDIS_PROCESSING_QUEUE_NAME ?? 'jobs:meetbot:processing',
   redisUri: constructRedisUri(),
   // Notification: Webhook (disabled by default)
   notifyWebhookEnabled: process.env.NOTIFY_WEBHOOK_ENABLED === 'true',
   notifyWebhookUrl: process.env.NOTIFY_WEBHOOK_URL,
   // Optional secret to sign payloads (HMAC-SHA256). If set, signature will be sent in X-Webhook-Signature header
   notifyWebhookSecret: process.env.NOTIFY_WEBHOOK_SECRET,
-  // Notification: Redis (disabled by default). Uses same REDIS connection but selectable DB and list
-  notifyRedisEnabled: process.env.NOTIFY_REDIS_ENABLED === 'true',
+  // Notification: Redis. Explicitly enabled via NOTIFY_REDIS_ENABLED, and enabled
+  // automatically for Redis-worker mode so completed jobs are written to result list.
+  notifyRedisEnabled: process.env.NOTIFY_REDIS_ENABLED === 'true' || process.env.REDIS_CONSUMER_ENABLED === 'true',
   // If not provided, uses redisUri with specified database selection
   notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
-  notifyRedisDb: process.env.NOTIFY_REDIS_DB ? Number(process.env.NOTIFY_REDIS_DB) : 1, // must not default to 0
+  notifyRedisDb: parseOptionalNumber(process.env.NOTIFY_REDIS_DB),
   notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
-  uploaderFileExtension: process.env.UPLOADER_FILE_EXTENSION ? process.env.UPLOADER_FILE_EXTENSION : '.webm',
+  notifyRedisFailureList: process.env.NOTIFY_REDIS_FAILURE_LIST ?? 'jobs:meetbot:failures',
+  uploaderFileExtension: normalizeFileExtension(process.env.UPLOADER_FILE_EXTENSION),
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {
     endpoint: process.env.S3_ENDPOINT,

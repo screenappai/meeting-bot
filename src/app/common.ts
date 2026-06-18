@@ -2,6 +2,7 @@ import { Logger } from 'winston';
 import { KnownError, WaitingAtLobbyRetryError } from '../error';
 import { getErrorType } from '../util/logger';
 import config from '../config';
+import { createMeetingFailedPayload, notifyMeetingFailed } from '../services/notificationService';
 
 export interface MeetingJoinParams {
   url: string;
@@ -15,8 +16,10 @@ export interface MeetingJoinParams {
 }
 
 export interface MeetingJoinRedisParams extends MeetingJoinParams {
-  provider: 'google' | 'microsoft' | 'zoom';
+  provider: MeetingProvider;
 }
+
+export type MeetingProvider = 'google' | 'microsoft' | 'zoom';
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((r) => setTimeout(r, ms));
@@ -100,4 +103,13 @@ export const processMeetingJoin = async (
     }
     logger.error(`LogBasedMetric Bot has permanently failed. [errorType: ${errorType}]`);
   }
+};
+
+export const notifyMeetingJoinFailure = async (
+  params: MeetingJoinParams & { provider: MeetingProvider },
+  error: unknown,
+  logger: Logger
+) => {
+  const payload = createMeetingFailedPayload(params, error);
+  await notifyMeetingFailed(payload, logger);
 };

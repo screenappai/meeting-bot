@@ -44,9 +44,12 @@ export class ContextBridgeTask extends Task<null, void> {
       await this.uploader.saveDataToTempFile(buffer);
     });
 
-    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string) => {
+    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string, recordedDurationSeconds?: number) => {
       if (slightlySecretId !== this.slightlySecretId) return;
       try {
+        if (typeof recordedDurationSeconds === 'number') {
+          this.uploader.setRecordingDuration(recordedDurationSeconds);
+        }
         this._logger.info('Early signal resolve recording');
         this.waitingPromise.resolveEarly();
       } catch (error) {

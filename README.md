@@ -87,6 +87,12 @@ Content-Type: application/json
 }
 ```
 
+For Google Meet, you can optionally connect to an already-running Chrome via `GOOGLE_CHROME_CDP_URL`, or run the browser with a dedicated signed-in Google profile by setting `GOOGLE_CHROME_USER_DATA_DIR` or `GOOGLE_CHROME_STORAGE_STATE_PATH`. The CDP option is useful when the Docker browser is treated differently from a normal Chrome. If you use CDP, launch that Chrome with `--auto-accept-this-tab-capture` so recording can select the current Meet tab without a manual browser prompt. The Chrome window and virtual display should normally use `1280,800`; the bot then sets the page viewport to `1280x720`, leaving room for Chrome's top UI without clipping the Meet controls.
+
+For Kubernetes, run Chrome as a sidecar container in the same pod and point `GOOGLE_CHROME_CDP_URL` at `http://127.0.0.1:9222`. The included `Dockerfile.chrome-cdp` builds a minimal Google Chrome + Xvfb CDP backend for that setup.
+
+For **local testing**, `docker compose up --build` starts the `chrome-cdp` sidecar alongside the bot and wires `GOOGLE_CHROME_CDP_URL` to it automatically (via the sidecar's nginx proxy on `9223`, which rewrites the `Host` header so cross-container CDP works). If host port `6379` is already taken by another local Redis, start with `REDIS_PORT_HOST=6380 docker compose up --build`. Join a Meet that allows guests, make sure a second participant is present (the bot leaves if it's alone), then `POST /google/join` (see above) and follow `docker compose logs -f meeting-bot`. The recording **upload will fail** without configured storage credentials — that's expected; the join and recording are what this exercises. Set `GOOGLE_CHROME_CDP_URL=` (empty) to fall back to the bot's in-container Chromium. This sidecar joins as an anonymous guest; meetings that require sign-in need a signed-in profile (`GOOGLE_CHROME_USER_DATA_DIR`/`GOOGLE_CHROME_STORAGE_STATE_PATH`), not yet wired into the local compose.
+
 #### Join a Microsoft Teams Meeting
 ```bash
 POST /microsoft/join
@@ -126,7 +132,7 @@ You can configure Meeting Bot to notify external systems when a recording has fi
 - Webhook HTTP POST
 - Redis list push (RPUSH) to a configurable DB and list
 
-Both are disabled by default.
+Webhook notifications are disabled by default. Redis completion notifications are enabled automatically for Redis-worker mode (`REDIS_CONSUMER_ENABLED=true`) and can also be enabled explicitly with `NOTIFY_REDIS_ENABLED=true`.
 
 #### Environment Variables
 
@@ -134,10 +140,11 @@ Both are disabled by default.
 - NOTIFY_WEBHOOK_URL: Webhook endpoint URL
 - NOTIFY_WEBHOOK_SECRET: Optional secret to HMAC-SHA256 sign payloads. Signature header: X-Webhook-Signature
 
-- NOTIFY_REDIS_ENABLED: Enable Redis notifications (default: false)
+- NOTIFY_REDIS_ENABLED: Enable Redis notifications. Completion notifications are also enabled automatically when REDIS_CONSUMER_ENABLED=true so Redis jobs produce result-list entries.
 - NOTIFY_REDIS_URI: Optional Redis URI for notifications; if not set, falls back to REDIS_HOST/REDIS_PORT/etc via redisUri
-- NOTIFY_REDIS_DB: Redis database number to use for notifications (default: 1). Note: By default, DB 1 is used, not DB 0
+- NOTIFY_REDIS_DB: Optional Redis database number to use for notifications. If not set, the Redis client's default DB is used. DB 0 is allowed when explicitly configured.
 - NOTIFY_REDIS_LIST: Redis list key to RPUSH to (default: jobs:meetbot:recordings)
+- NOTIFY_REDIS_FAILURE_LIST: Redis list key to RPUSH failed meeting jobs to (default: jobs:meetbot:failures)
 
 Existing REDIS_* connection envs are used to derive a default redisUri when NOTIFY_REDIS_URI is not specified.
 
@@ -173,13 +180,15 @@ An example JSON payload sent via webhook and pushed to the Redis list:
 
 Notes:
 - The storage URL is provided as blobUrl to be storage-provider agnostic (works for S3, Azure Blob, etc.). It may be omitted if not available.
-- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration.
+- If available from internal APIs (screenapp uploader), a direct file URL is used. For S3-compatible uploads, the URL is constructed based on S3 configuration. For Azure Blob Storage, notification URLs are SAS URLs; unsigned Azure public blob URLs are not pushed to Redis as a fallback.
 - If a webhook secret is configured, the request body is signed with HMAC-SHA256 and sent in the X-Webhook-Signature header.
 - The metadata.storage section includes provider-specific path details. For S3-compatible uploads: bucket and key are provided. For the Screenapp uploader, you may see `{ provider: "screenapp", fileId, url, defaultProfile }`.
 
 #### Behavior
 
 - Notifications are triggered only after the recording upload/processing has successfully completed.
+- Failed meeting jobs are pushed to NOTIFY_REDIS_FAILURE_LIST after all join/recording retries are exhausted, or after a non-retryable upload failure.
+- Failure notifications are Redis-only and use the same NOTIFY_REDIS_ENABLED, NOTIFY_REDIS_URI, and NOTIFY_REDIS_DB settings.
 - If both channels are enabled, both will receive the payload.
 - Failures to notify are logged but do not interrupt the main recording flow.
 
@@ -306,7 +315,8 @@ r.rpush('jobs:meetbot:list', json.dumps(message))
 #### Queue Processing
 
 - **FIFO Queue**: Messages are processed in First-In-First-Out order
-- **BLPOP Processing**: The bot uses `BLPOP` to consume messages from the queue
+- **Atomic Processing Move**: The bot uses `BLMOVE` to move messages from the pending queue into the processing queue before recording starts
+- **Processing Acknowledgement**: The bot removes the original message from the processing queue with `LREM` after the recording finishes or permanently fails
 - **Automatic Processing**: Messages are automatically picked up and processed by the Redis consumer service
 - **Single Job Execution**: Only one meeting is processed at a time across the entire system
 
@@ -321,6 +331,7 @@ The following environment variables configure Redis connectivity:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 
 **Note**: When `REDIS_CONSUMER_ENABLED` is set to `false`, the Redis consumer service will not start, and the application will only support REST API endpoints for meeting requests. Redis message queue functionality will be disabled.
@@ -445,7 +456,7 @@ Notes:
 
 - The default object key layout is: `meeting-bot/{userId}/{fileName}{extension}` (e.g., `meeting-bot/1234/My Meeting - 2025-11-13 14-42.webm`). This same layout is used for both S3 and Azure to ensure parity.
 - When `STORAGE_PROVIDER=azure` is set and Azure environment variables are provided, the upload will go to Azure Blob Storage instead of S3.
-- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`.
+- Signed URL generation for Azure uses SAS tokens with a configurable TTL via `AZURE_SIGNED_URL_TTL_SECONDS`. Redis completion notifications use these SAS URLs for Azure `blobUrl` and `metadata.storage.url`.
 
 ## ⚙️ Configuration
 
@@ -456,6 +467,13 @@ Notes:
 | `MAX_RECORDING_DURATION_MINUTES` | Maximum recording duration in minutes | `180` |
 | `MEETING_INACTIVITY_MINUTES` | Continuous inactivity duration after which the bot will end meeting recording | `1` |
 | `INACTIVITY_DETECTION_START_DELAY_MINUTES` | Initial grace period at the start of recording before inactivity detection begins | `1` |
+| `LONE_PARTICIPANT_EXIT_DELAY_SECONDS` | Delay before stopping after the bot has seen other participants and then becomes alone | `10` |
+| `TEAMS_PREWARM_ENABLED` | Enable the extra Microsoft Teams warmup browser pass for environments that still show first-run dialogs | `false` |
+| `TEAMS_AUDIO_STABILIZATION_MS` | Delay before starting Microsoft Teams ffmpeg recording after joining | `1000` |
+| `GOOGLE_CHROME_CDP_URL` | Optional CDP endpoint for Google Meet joins, e.g. `http://host.docker.internal:9222`, to use an external Chrome instead of Docker Chrome. | - |
+| `GOOGLE_CHROME_USER_DATA_DIR` | Optional persistent Chrome profile directory for Google Meet joins. Use a dedicated signed-in Google account profile. | - |
+| `GOOGLE_CHROME_STORAGE_STATE_PATH` | Optional Playwright storage state JSON for Google Meet joins when not using a persistent profile. | - |
+| `GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS` | Number of times to re-submit an anonymous Google Meet guest request if Meet redirects while waiting for host admission. | `10` |
 | `PORT` | Server port | `3000` |
 | `NODE_ENV` | Environment mode | `development` |
 | `UPLOADER_FILE_EXTENSION` | Final recording file extension (e.g., .mkv, .webm) | `.webm` |
@@ -464,6 +482,7 @@ Notes:
 | `REDIS_USERNAME` | Redis username (optional) | - |
 | `REDIS_PASSWORD` | Redis password (optional) | - |
 | `REDIS_QUEUE_NAME` | Queue name for meeting jobs | `jobs:meetbot:list` |
+| `REDIS_PROCESSING_QUEUE_NAME` | Queue name for active Redis meeting jobs | `jobs:meetbot:processing` |
 | `REDIS_CONSUMER_ENABLED` | Enable/disable Redis consumer service | `false` |
 | `S3_ENDPOINT` | S3-compatible service endpoint URL | - |
 | `S3_ACCESS_KEY_ID` | Access key for bucket authentication | - |
@@ -476,9 +495,45 @@ Notes:
 
 The project includes Docker support with separate configurations for development and production:
 
-- `Dockerfile` - Development build with hot reload
+- `Dockerfile.development` - Development build
 - `Dockerfile.production` - Optimized production build
+- `Dockerfile.chrome-cdp` - Google Chrome CDP backend for Kubernetes sidecar deployments
 - `docker-compose.yml` - Complete development environment
+
+#### Google Meet Chrome CDP Sidecar
+
+Build and publish the Chrome backend image separately from the bot image:
+
+```bash
+docker build -f Dockerfile.chrome-cdp -t ghcr.io/your-org/meeting-bot-chrome-cdp:latest .
+docker push ghcr.io/your-org/meeting-bot-chrome-cdp:latest
+```
+
+Then run it as a sidecar in the same Kubernetes pod as the bot:
+
+```yaml
+containers:
+  - name: meeting-bot
+    image: ghcr.io/your-org/meeting-bot:latest
+    env:
+      - name: GOOGLE_CHROME_CDP_URL
+        value: http://127.0.0.1:9222
+
+  - name: chrome-cdp
+    image: ghcr.io/your-org/meeting-bot-chrome-cdp:latest
+    ports:
+      - name: cdp
+        containerPort: 9222
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 3Gi
+```
+
+Do not expose the CDP port through a Kubernetes Service or Ingress. Keep it local to the pod so only the bot container can control the browser.
 
 #### Using Docker Image from GitHub Packages
 
@@ -531,7 +586,7 @@ src/
 - **JobStore**: Manages single job execution across the system
 - **RecordingTask**: Handles meeting recording functionality
 - **ContextBridgeTask**: Manages browser context and automation
-- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLPOP)
+- **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLMOVE/LREM)
 - **RedisConsumerService**: Processes messages from Redis queue asynchronously
 
 ## ⚠️ Limitations

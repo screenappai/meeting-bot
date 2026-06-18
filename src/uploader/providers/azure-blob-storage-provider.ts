@@ -14,6 +14,25 @@ import { DefaultAzureCredential } from '@azure/identity';
 export class AzureBlobStorageProvider implements StorageProvider {
   readonly name = 'azure' as const;
 
+  private parseConnectionString(connectionString?: string): Record<string, string> {
+    if (!connectionString) return {};
+
+    return connectionString.split(';').reduce<Record<string, string>>((parts, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) return parts;
+
+      const key = part.slice(0, separatorIndex);
+      const value = part.slice(separatorIndex + 1);
+      if (key && value) parts[key] = value;
+      return parts;
+    }, {});
+  }
+
+  private appendSasToken(baseUrl: string, sasToken: string): string {
+    const token = sasToken.startsWith('?') ? sasToken.substring(1) : sasToken;
+    return `${baseUrl}?${token}`;
+  }
+
   private getContainerClient(): ContainerClient {
     const cfg = config.azureBlobStorage;
 
@@ -57,6 +76,7 @@ export class AzureBlobStorageProvider implements StorageProvider {
       options.logger.info(`Starting Azure Blob upload for ${blobName}`);
       await blob.uploadFile(options.filePath, {
         blobHTTPHeaders: { blobContentType: options.contentType },
+        metadata: options.metadata,
         concurrency: options.concurrency ?? config.azureBlobStorage.uploadConcurrency ?? 4,
         onProgress: (p: { loadedBytes?: number }) => {
           if (p.loadedBytes) {
@@ -79,41 +99,45 @@ export class AzureBlobStorageProvider implements StorageProvider {
 
     // Determine credential type for SAS
     const cfg = config.azureBlobStorage;
+    const connectionStringParts = this.parseConnectionString(cfg.connectionString);
+    const accountName = cfg.accountName || connectionStringParts.AccountName;
+    const accountKey = cfg.accountKey || connectionStringParts.AccountKey;
+    const sasToken = cfg.sasToken || connectionStringParts.SharedAccessSignature;
     const baseUrl = container.getBlockBlobClient(blobName).url.split('?')[0];
 
-    if (cfg.accountName && cfg.accountKey) {
-      const cred = new StorageSharedKeyCredential(cfg.accountName, cfg.accountKey);
+    if (accountName && accountKey) {
+      const cred = new StorageSharedKeyCredential(accountName, accountKey);
       const sas = generateBlobSASQueryParameters({
         containerName: container.containerName,
         blobName,
         permissions: BlobSASPermissions.parse('r'),
+        startsOn: new Date(Date.now() - 5 * 60 * 1000),
         expiresOn: new Date(Date.now() + expiresIn * 1000),
         protocol: SASProtocol.Https,
       }, cred).toString();
       return `${baseUrl}?${sas}`;
     }
 
-    // If we have connection string with key, it is handled above; with SAS, URL already has SAS for container but not blob-specific; we can return blob URL with container SAS
-    if (cfg.connectionString || (cfg.accountName && cfg.sasToken)) {
-      // Container SAS should suffice to access blobs inside; ensure token is appended
-      const sas = cfg.connectionString ? '' : (cfg.sasToken || '');
-      const token = sas.startsWith('?') ? sas.substring(1) : sas; // strip leading ? if present
-      const sep = baseUrl.includes('?') ? '&' : '?';
-      return token ? `${baseUrl}${sep}${token}` : baseUrl;
+    if (sasToken) {
+      // A supplied container/account SAS should grant access to blobs inside the container.
+      return this.appendSasToken(baseUrl, sasToken);
     }
 
     // Managed identity / AAD: create User Delegation SAS
-    if (cfg.accountName && cfg.useManagedIdentity) {
+    if (accountName && cfg.useManagedIdentity) {
       const cred = new DefaultAzureCredential();
-      const service = new BlobServiceClient(`https://${cfg.accountName}.blob.core.windows.net`, cred);
-      const key = await service.getUserDelegationKey(new Date(), new Date(Date.now() + expiresIn * 1000));
+      const service = new BlobServiceClient(`https://${accountName}.blob.core.windows.net`, cred);
+      const startsOn = new Date(Date.now() - 5 * 60 * 1000);
+      const expiresOn = new Date(Date.now() + expiresIn * 1000);
+      const key = await service.getUserDelegationKey(startsOn, expiresOn);
       const sas = generateBlobSASQueryParameters({
         containerName: container.containerName,
         blobName,
         permissions: BlobSASPermissions.parse('r'),
-        expiresOn: new Date(Date.now() + expiresIn * 1000),
+        startsOn,
+        expiresOn,
         protocol: SASProtocol.Https,
-      }, key, cfg.accountName).toString();
+      }, key, accountName).toString();
       return `${baseUrl}?${sas}`;
     }
 

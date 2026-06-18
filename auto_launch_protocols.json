@@ -1,4 +1,6 @@
 {
+  "DefaultBrowserSettingEnabled": false,
+  "MetricsReportingEnabled": false,
   "AutoLaunchProtocolsFromOrigins": [
     {
       "allowed_origins": [

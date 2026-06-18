@@ -1,18 +1,77 @@
 services:
+  redis:
+    image: redis:7-alpine
+    # Host-published port is configurable via REDIS_PORT_HOST (default 6379) so it
+    # can dodge another local Redis already using :6379:
+    #   REDIS_PORT_HOST=6380 docker compose up
+    # The bot itself always reaches Redis over the compose network as `redis:6379`.
+    ports:
+      - "${REDIS_PORT_HOST:-6379}:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - cache:/data
+
   meeting-bot:
+    platform: linux/amd64
     build:
       context: .
       dockerfile: Dockerfile.development
+    # App config (storage provider, uploader, Azure/S3 creds, notifications, etc.)
+    # is the source of truth in .env — copy .env.example -> .env. Only the values
+    # that must differ inside the compose network are overridden in `environment`.
+    env_file:
+      - .env
     environment:
       - NODE_ENV=development
+      # Defaults to the bundled redis service over the compose network (.env's
+      # host.docker.internal is wrong for the in-compose redis). Override to attach
+      # the bot to another Redis — e.g. a local backend's queue so UI-triggered
+      # jobs reach it: REDIS_HOST=host.docker.internal docker compose up
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      # Default to the bundled chrome-cdp sidecar so Google Meet joins use a real,
+      # signed-in-capable Chrome instead of the bot's in-container Chromium (which
+      # Google increasingly blocks). Set GOOGLE_CHROME_CDP_URL= (empty) to fall
+      # back to the in-container browser. See README.md (Usage → Join a Google Meet).
+      - GOOGLE_CHROME_CDP_URL=${GOOGLE_CHROME_CDP_URL-http://chrome-cdp:9223}
     ports:
       - "3000:3000"
     volumes:
       - .:/usr/src/app
+      - ./.chrome:/usr/src/app/.chrome
       - ./assets/screenshots:/usr/src/app/assets/screenshots
       - ./debug-videos:/usr/src/app/debug-videos
       - /usr/src/app/node_modules  # Persist node_modules
     command: ["/bin/bash", "./start.sh"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      chrome-cdp:
+        condition: service_healthy
+
+  # Real Google Chrome + Xvfb exposed over the Chrome DevTools Protocol, used by
+  # the Google Meet bot via GOOGLE_CHROME_CDP_URL. Port 9223 is an nginx proxy
+  # that rewrites the Host header so Playwright can drive Chrome's DevTools
+  # endpoint from another container (Chrome's raw 9222 is loopback-only and
+  # rejects cross-container Host headers). Kept on the internal compose network
+  # only — never publish the CDP port to the host. See README.md (Usage → Join a Google Meet).
+  chrome-cdp:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.chrome-cdp
+    shm_size: "1gb"
+    expose:
+      - "9223"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9223/json/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 
 volumes:

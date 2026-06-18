@@ -6,7 +6,7 @@ import { createCorrelationId, loggerFactory } from '../util/logger';
 import DiskUploader from '../middleware/disk-uploader';
 import { getRecordingNamePrefix } from '../util/recordingName';
 import { encodeFileNameSafebase64 } from '../util/strings';
-import { MeetingJoinParams } from './common';
+import { MeetingJoinParams, notifyMeetingJoinFailure } from './common';
 import { globalJobStore } from '../lib/globalJobStore';
 
 const router = express.Router();
@@ -66,7 +66,17 @@ const joinMicrosoftTeams = async (req: Request, res: Response) => {
       // Create and join the meeting
       const bot = new MicrosoftTeamsBot(logger, correlationId);
       await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
-    }, logger);
+    }, logger, 0, (error) => notifyMeetingJoinFailure({
+      bearerToken,
+      url,
+      name,
+      teamId,
+      timezone,
+      userId,
+      eventId,
+      botId,
+      provider: 'microsoft',
+    }, error, logger));
 
     if (!jobResult.accepted) {
       return res.status(409).json({
