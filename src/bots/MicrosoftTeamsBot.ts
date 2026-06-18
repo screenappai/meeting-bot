@@ -809,10 +809,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       this._logger.info('Stopping ffmpeg recording...');
       await recorder.stop();
 
-      // Upload the recorded file
-      this._logger.info('Uploading recorded file...', { outputPath });
+      // Stage the recorded file for upload (the actual remote upload happens in
+      // join()'s handleUpload after joinMeeting returns).
+      this._logger.info('Staging recorded file for upload...', { outputPath });
 
-      let uploadSuccess = false;
+      let staged = false;
       if (fs.existsSync(outputPath)) {
         if (recordingStartedAt) {
           const recordedDurationSeconds = Math.max(1, Math.round((Date.now() - recordingStartedAt) / 1000));
@@ -822,10 +823,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         const fileBuffer = fs.readFileSync(outputPath);
         await uploader.saveDataToTempFile(fileBuffer);
 
-        // Clean up the temporary file
+        // Remove the ffmpeg output file (the staged copy now lives in the uploader temp)
         fs.unlinkSync(outputPath);
-        this._logger.info('Recording uploaded and temporary file cleaned up');
-        uploadSuccess = true;
+        this._logger.info('Recording staged to temp; ffmpeg output file removed');
+        staged = true;
       } else {
         this._logger.error('Recording file not found!', { outputPath });
       }
@@ -834,13 +835,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       this._logger.info('Closing the browser...');
       await this.page.context().browser()?.close();
 
-      // Log final status
+      // Log final status. The real remote upload + true completion is logged in
+      // join() after handleUpload: 'Recording and upload completed successfully'.
       if (ffmpegFailed) {
         this._logger.error('Recording failed due to FFmpeg error', { botId, eventId, userId, teamId });
-      } else if (!uploadSuccess) {
-        this._logger.error('Recording completed but file upload failed', { botId, eventId, userId, teamId });
+      } else if (!staged) {
+        this._logger.error('Recording file missing; nothing to upload', { botId, eventId, userId, teamId });
       } else {
-        this._logger.info('Recording completed successfully ✨', { botId, eventId, userId, teamId });
+        this._logger.info('Recording captured and staged; finalizing upload next...', { botId, eventId, userId, teamId });
       }
     }
   }

@@ -173,17 +173,17 @@ export class RedisConsumerService {
           case 'google':
             const googleBot = new GoogleMeetBot(logger, correlationId);
             await googleBot.join(joinParams);
-            logger.info('Joined Google Meet event successfully.', meetingParams.userId, meetingParams.teamId);
+            logger.info('Google Meet recording job completed successfully (join, record, upload).', meetingParams.userId, meetingParams.teamId);
             break;
           case 'microsoft':
             const microsoftBot = new MicrosoftTeamsBot(logger, correlationId);
             await microsoftBot.join(joinParams);
-            logger.info('Joined Microsoft Teams meeting successfully.', meetingParams.userId, meetingParams.teamId);
+            logger.info('Microsoft Teams recording job completed successfully (join, record, upload).', meetingParams.userId, meetingParams.teamId);
             break;
           case 'zoom':
             const zoomBot = new ZoomBot(logger, correlationId);
             await zoomBot.join(joinParams);
-            logger.info('Joined Zoom meeting successfully.', meetingParams.userId, meetingParams.teamId);
+            logger.info('Zoom recording job completed successfully (join, record, upload).', meetingParams.userId, meetingParams.teamId);
             break;
           default:
             throw new Error(`Unsupported provider: ${meetingParams.provider}`);

@@ -522,7 +522,7 @@ export class ZoomBot extends BotBase {
       this._logger.info('Closing the browser...');
       await this.page.context().browser()?.close();
 
-      this._logger.info('All done ✨', { botId, eventId, userId, teamId });
+      this._logger.info('Recording stopped; finalizing upload next...', { botId, eventId, userId, teamId });
     });
     await waitingPromise.promise;
   }
