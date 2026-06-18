@@ -1268,10 +1268,20 @@ export class GoogleMeetBot extends MeetBotBase {
     const waitingPromise: WaitPromise = getWaitingPromise(processingTime + duration);
 
     waitingPromise.promise.then(async () => {
-      this._logger.info('Closing the browser...');
-      await this.page.context().browser()?.close();
+      const context = this.page.context();
+      // For an external CDP browser (the chrome-cdp sidecar), browser.close() only
+      // disconnects Playwright — it leaves the Meet tab open, so the bot stays in
+      // the call. Close the page (tab) instead, which leaves the meeting and keeps
+      // the shared sidecar Chrome alive for the next job.
+      if (isExternalBrowserContext(context)) {
+        this._logger.info('Closing the page (external CDP browser stays up)...');
+        await this.page.close();
+      } else {
+        this._logger.info('Closing the browser...');
+        await context.browser()?.close();
+      }
 
-      this._logger.info('All done ✨', { eventId, botId, userId, teamId });
+      this._logger.info('Recording stopped and meeting left; finalizing upload next...', { eventId, botId, userId, teamId });
     });
 
     await waitingPromise.promise;
