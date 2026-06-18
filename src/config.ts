@@ -70,6 +70,7 @@ export default {
   googleChromeCdpUrl: process.env.GOOGLE_CHROME_CDP_URL,
   googleChromeUserDataDir: process.env.GOOGLE_CHROME_USER_DATA_DIR,
   googleChromeStorageStatePath: process.env.GOOGLE_CHROME_STORAGE_STATE_PATH,
+  zoomChromeCdpUrl: process.env.ZOOM_CHROME_CDP_URL,
   googleAnonymousJoinRequestAttempts: process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS ?
     Number(process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS) :
     10,
