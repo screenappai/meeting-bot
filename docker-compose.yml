@@ -38,11 +38,12 @@ services:
       # Google increasingly blocks). Set GOOGLE_CHROME_CDP_URL= (empty) to fall
       # back to the in-container browser. See README.md (Usage → Join a Google Meet).
       - GOOGLE_CHROME_CDP_URL=${GOOGLE_CHROME_CDP_URL-http://chrome-cdp:9223}
-      # Optional: connect Zoom bots to an already-running Chrome via CDP. Defaults
-      # to empty (opt-in) because the bundled chrome-cdp sidecar lacks Zoom's
-      # recording flags (swiftshader/MediaRecorder); point this at a Chrome launched
-      # with the full recordingBrowserArgs set. See src/lib/chromium.ts.
-      - ZOOM_CHROME_CDP_URL=${ZOOM_CHROME_CDP_URL:-}
+      # Connect Zoom bots to the bundled chrome-cdp sidecar by default (like Google).
+      # Set GOOGLE/ZOOM_CHROME_CDP_URL= (empty) to fall back to in-container Chromium.
+      # Caveat: the bundled sidecar lacks Zoom's rendering flags (swiftshader/MediaRecorder),
+      # so capture quality may suffer — point at a Chrome with the full recordingBrowserArgs
+      # for production-quality Zoom recording. See src/lib/chromium.ts.
+      - ZOOM_CHROME_CDP_URL=${ZOOM_CHROME_CDP_URL-http://chrome-cdp:9223}
     ports:
       - "3000:3000"
     volumes:
