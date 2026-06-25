@@ -209,29 +209,46 @@ async function createBrowserContext(url: string, correlationId: string, botType:
     }),
   };
 
-  if (botType === 'google' && config.googleChromeCdpUrl) {
-    console.log(`${getCorrelationIdLog(correlationId)} Connecting Google bot to external Chrome`, {
-      cdpUrl: config.googleChromeCdpUrl,
+  // External (already-running) Chrome via CDP. Supported for Google Meet and
+  // Zoom. Google reuses the browser's first context because it is tied to a
+  // logged-in profile/storageState; Zoom joins each meeting anonymously, so
+  // always spin up a fresh isolated context to avoid state bleeding between
+  // meetings (the /wc/join/ web client keeps IndexedDB/localStorage per origin).
+  const cdpUrl = botType === 'google' ? config.googleChromeCdpUrl
+    : botType === 'zoom' ? config.zoomChromeCdpUrl
+    : undefined;
+
+  if (cdpUrl) {
+    console.log(`${getCorrelationIdLog(correlationId)} Connecting ${botType} bot to external Chrome`, {
+      cdpUrl,
     });
 
     const browser = await launchBrowserWithTimeout(
-      async () => await chromium.connectOverCDP(config.googleChromeCdpUrl!),
+      async () => await chromium.connectOverCDP(cdpUrl!),
       60000,
       correlationId
     );
 
-    const context = browser.contexts()[0] ?? await browser.newContext({
-      ...contextOptions,
-      ...(config.googleChromeStorageStatePath ? {
-        storageState: config.googleChromeStorageStatePath,
-      } : {}),
-    });
+    const context = botType === 'google'
+      ? (browser.contexts()[0] ?? await browser.newContext({
+          ...contextOptions,
+          ...(config.googleChromeStorageStatePath ? {
+            storageState: config.googleChromeStorageStatePath,
+          } : {}),
+        }))
+      : await browser.newContext(contextOptions);
     externalBrowserContexts.add(context);
 
     const page = await context.newPage();
     await resizeBrowserWindow(page, browserWindowSize, correlationId);
     await page.setViewportSize(size);
     attachBrowserErrorHandlers(browser, context, page, correlationId);
+
+    // Parity with the non-CDP launch path: Zoom/Teams expect camera/mic grants
+    // for the pre-join audio check. Harmless if the web client doesn't use them.
+    if (botType !== 'google') {
+      await context.grantPermissions(['microphone', 'camera'], { origin: url });
+    }
 
     console.log(`${getCorrelationIdLog(correlationId)} External Chrome connected successfully!`);
 

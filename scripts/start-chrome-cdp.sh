@@ -81,6 +81,10 @@ google-chrome-stable \
   --force-device-scale-factor=1 \
   --auto-accept-this-tab-capture \
   --autoplay-policy=no-user-gesture-required \
+  --use-gl=angle \
+  --use-angle=swiftshader \
+  --enable-unsafe-swiftshader \
+  --ignore-gpu-blocklist \
   --no-first-run \
   --no-default-browser-check \
   --disable-dev-shm-usage \
