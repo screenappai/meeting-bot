@@ -30,12 +30,14 @@ export class RecordingTask extends Task<null, void> {
   }
 
   protected async execute(): Promise<void> {
-    const { mimeTypes } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
+    // Zoom records via real-time tab capture, often under software GL (swiftshader).
+    // VP9 can't keep up there and drops frames -> laggy playback, so prefer VP8.
+    const { mimeTypes } = getRecordingMimeTypesForExtension(config.uploaderFileExtension, true);
     const loneParticipantExitDelayMs = config.loneParticipantExitDelaySeconds * 1000;
 
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, mimeTypes }:
-        { teamId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, mimeTypes: string[] }) => {
+      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, mimeTypes, videoBitsPerSecond }:
+        { teamId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, userId: string, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, mimeTypes: string[], videoBitsPerSecond: number }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
 
@@ -84,7 +86,7 @@ export class RecordingTask extends Task<null, void> {
           }
 
           console.log(`Media Recorder will use ${selectedMimeType} codecs...`);
-          const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedMimeType });
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedMimeType, videoBitsPerSecond });
           console.log(`Media Recorder actual mime type: ${mediaRecorder.mimeType}`);
           let chunkUploadChain: Promise<void> = Promise.resolve();
           let isStoppingRecording = false;
@@ -182,6 +184,29 @@ export class RecordingTask extends Task<null, void> {
 
             loneTest = setInterval(() => {
               try {
+                const terminalText = (dom.body?.innerText ?? '').toLowerCase();
+                const participantWasRemoved = [
+                  'you have been removed from the meeting',
+                  'you have been removed by the host',
+                  'the host has removed you from this meeting',
+                ].some((text) => terminalText.includes(text));
+                const meetingHasEnded = [
+                  'this meeting has been ended by host',
+                  'this meeting has ended',
+                  'meeting has been ended',
+                ].some((text) => terminalText.includes(text));
+
+                if (participantWasRemoved || meetingHasEnded) {
+                  console.log('Detected terminal Zoom meeting state; finalizing recording.', {
+                    userId,
+                    reason: participantWasRemoved ? 'participant_removed' : 'meeting_ended',
+                  });
+                  clearInterval(loneTest);
+                  monitor = false;
+                  void stopTheRecording();
+                  return;
+                }
+
                 // Detect and click blocking "OK" buttons
                 const okButton = Array.from(dom.querySelectorAll('button'))
                     .filter((el) => el?.innerText?.trim()?.match(/^OK/i));
@@ -308,16 +333,17 @@ export class RecordingTask extends Task<null, void> {
         // Start the recording
         await startRecording();
       },
-      { 
+{
         teamId: this.teamId,
         duration: this.duration,
-        inactivityLimit: this.inactivityLimit, 
+        inactivityLimit: this.inactivityLimit,
         loneParticipantExitDelayMs,
-        userId: this.userId, 
+        userId: this.userId,
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
         activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
-        mimeTypes
+        mimeTypes,
+        videoBitsPerSecond: config.recordingVideoBitsPerSecond,
       }
     );
   }

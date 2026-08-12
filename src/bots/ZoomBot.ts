@@ -2,17 +2,32 @@ import { Frame, Page } from 'playwright';
 import { JoinParams, AbstractMeetBot } from './AbstractMeetBot';
 import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
-import { RecordingUploadFailedError, WaitingAtLobbyRetryError } from '../error';
+import {
+  RecordingUploadFailedError,
+  WaitingAtLobbyRetryError,
+  ZoomBrowserJoinBlockedError,
+  ZoomMeetingJoinError,
+} from '../error';
 import { v4 } from 'uuid';
 import { patchBotStatus } from '../services/botService';
 import { RecordingTask } from '../tasks/RecordingTask';
 import { ContextBridgeTask } from '../tasks/ContextBridgeTask';
 import { getWaitingPromise } from '../lib/promise';
-import createBrowserContext from '../lib/chromium';
+import createBrowserContext, { closeBrowserSession, getBrowserSession } from '../lib/chromium';
 import { uploadDebugImage } from '../services/bugService';
 import { Logger } from 'winston';
 import { handleWaitingAtLobbyError } from './MeetBotBase';
-import { ZOOM_REQUEST_DENIED } from '../constants';
+import { ZoomRtmsTransport } from '../rtms/ZoomRtmsTransport';
+import {
+  classifyZoomJoinState,
+  shouldUseZoomRtmsFallback,
+  ZoomJoinState,
+} from './zoomJoinState';
+import { reportRecoveredZoomFallback } from '../monitoring/sentry';
+import {
+  clickZoomJoinWithOptionalMediaPromptRetry,
+  dismissZoomOptionalMediaPrompt,
+} from './zoomPrejoinModal';
 
 class BotBase extends AbstractMeetBot {
   protected page: Page;
@@ -31,6 +46,8 @@ class BotBase extends AbstractMeetBot {
 }
 
 export class ZoomBot extends BotBase {
+  private joinState: ZoomJoinState = 'prejoin';
+
   constructor(logger: Logger, correlationId: string) {
     super(logger, correlationId);
   }
@@ -39,6 +56,21 @@ export class ZoomBot extends BotBase {
   // TODO Lift the JoinParams to the constructor argument
   async join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
+    let recoveredBrowserError: ZoomBrowserJoinBlockedError | undefined;
+    let recordingTransport: 'browser' | 'rtms' =
+      config.zoomTransportStrategy === 'rtms_only' ? 'rtms' : 'browser';
+    let fallbackResult = 'not_attempted';
+
+    const annotateFailure = (error: unknown, phase: string) => {
+      if (error && typeof error === 'object') {
+        Object.assign(error, {
+          transport: recordingTransport,
+          fallbackResult,
+          phase,
+        });
+      }
+      return error;
+    };
 
     const handleUpload = async () => {
       this._logger.info('Begin recording upload to server', { userId, teamId });
@@ -49,39 +81,85 @@ export class ZoomBot extends BotBase {
     
     try {
       const pushState = (st: BotStatus) => _state.push(st);
-      await this.joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader });
-      await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);
+      const joinParams = { url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader };
+      if (config.zoomTransportStrategy === 'rtms_only') {
+        try {
+          await new ZoomRtmsTransport(this._logger).record(joinParams, pushState);
+        } catch (rtmsError) {
+          throw annotateFailure(rtmsError, 'recording');
+        }
+      } else {
+        try {
+          await this.joinMeeting({ ...joinParams, pushState });
+        } catch (browserError) {
+          if (!shouldUseZoomRtmsFallback(
+            browserError,
+            config.zoomTransportStrategy === 'browser_then_rtms',
+            this.joinState
+          )) {
+            throw browserError;
+          }
+
+          this._logger.warn('Zoom browser join was blocked before admission; trying RTMS fallback', {
+            teamId,
+            eventId,
+            botId,
+          });
+          await closeBrowserSession(this.page);
+
+          recordingTransport = 'rtms';
+          fallbackResult = 'failed';
+          try {
+            await new ZoomRtmsTransport(this._logger).record(joinParams, pushState);
+          } catch (fallbackError) {
+            throw annotateFailure(fallbackError, 'fallback');
+          }
+
+          fallbackResult = 'recovered';
+          recoveredBrowserError = browserError;
+        }
+      }
 
       // Finish the upload from the temp video
-      const uploadResult = await handleUpload();
+      let uploadResult: boolean;
+      try {
+        uploadResult = await handleUpload();
+      } catch (uploadError) {
+        throw annotateFailure(uploadError, 'upload');
+      }
 
       if (_state.includes('finished') && !uploadResult) {
         _state.splice(_state.indexOf('finished'), 1, 'failed');
-        throw new RecordingUploadFailedError('Zoom recording completed but upload failed');
+        throw annotateFailure(
+          new RecordingUploadFailedError('Zoom recording completed but upload failed'),
+          'upload'
+        );
+      }
+
+      await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);
+      if (recoveredBrowserError) {
+        reportRecoveredZoomFallback({
+          phase: 'fallback',
+          teamId,
+          eventId,
+          botId,
+          correlationId: this._correlationId,
+        }, recoveredBrowserError);
       }
     } catch(error) {
       if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
       await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);
-      
+
       if (error instanceof WaitingAtLobbyRetryError) {
         await handleWaitingAtLobbyError({ token: bearerToken, botId, eventId, provider: 'zoom', error }, this._logger);
       }
 
       throw error;
     } finally {
-      // Guarantee chrome subprocess tree is reaped regardless of exit path.
-      // No-op if a deeper code path already closed the browser.
       try {
-        const browser = this.page?.context().browser();
-        if (browser?.isConnected()) {
-          await browser.close();
-          this._logger.info('Browser closed in join finally');
-        } else if (this.page?.context()) {
-          await this.page.context().close();
-          this._logger.info('Persistent browser context closed in join finally');
-        }
+        await closeBrowserSession(this.page);
       } catch (cleanupErr) {
         this._logger.warn('Browser cleanup in join finally failed (non-fatal)', { error: cleanupErr });
       }
@@ -89,16 +167,83 @@ export class ZoomBot extends BotBase {
   }
 
   private async joinMeeting({ pushState, ...params }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
-    const { url, name } = params;
+    this.joinState = 'prejoin';
     this._logger.info('Launching browser for Zoom...', { userId: params.userId });
+    this.page = await createBrowserContext(
+      params.url,
+      this._correlationId,
+      'zoom',
+      params.timezone,
+      params.teamId,
+    );
+    const browserSession = getBrowserSession(this.page);
+    const joinWork = this.joinMeetingInBrowser({ ...params, pushState });
 
-    this.page = await createBrowserContext(url, this._correlationId, 'zoom');
+    if (browserSession) {
+      await Promise.race([
+        joinWork,
+        browserSession.failure.then(error => Promise.reject(error)),
+      ]);
+      return;
+    }
 
-    await this.page.route('**/*.exe', (route) => {
+    await joinWork;
+  }
+
+  private async joinMeetingInBrowser({ pushState, ...params }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
+    const { url, name } = params;
+
+    await this.page.route('**/*.exe', async (route) => {
       this._logger.info(`Detected .exe download: ${route.request().url()?.split('download')[0]}`);
+      await route.abort();
     });
 
-    this._logger.info('Navigating to Zoom Meeting URL...');
+    const readVisiblePageText = async (): Promise<string> => {
+      const frameTexts = await Promise.all(
+        this.page.frames().map(frame => frame.locator('body').innerText({ timeout: 2_000 }).catch(() => ''))
+      );
+      return frameTexts.join('\n');
+    };
+
+    const applyJoinState = (bodyText: string): ZoomJoinState => {
+      const state = classifyZoomJoinState(bodyText);
+      if (state !== 'unknown') this.joinState = state;
+      if (state === 'automated_bot_blocked') {
+        throw new ZoomBrowserJoinBlockedError();
+      }
+      if (state === 'host_rejected' || state === 'sign_in_required' || state === 'meeting_ended') {
+        throw new ZoomMeetingJoinError(state);
+      }
+      return state;
+    };
+
+    const inspectJoinState = async (): Promise<ZoomJoinState> =>
+      applyJoinState(await readVisiblePageText());
+
+    let usingDirectWebClient = false;
+    const visitWebClientByUrl = async (): Promise<boolean> => {
+      usingDirectWebClient = true;
+      try {
+        const wcUrl = new URL(url);
+        wcUrl.pathname = wcUrl.pathname.replace('/j/', '/wc/join/');
+        this._logger.info('Navigating to the Zoom Web Client fallback...', {
+          botId: params.botId,
+          userId: params.userId,
+        });
+        await this.page.goto(wcUrl.toString(), { waitUntil: 'domcontentloaded' });
+        await inspectJoinState();
+        return true;
+      } catch(err) {
+        if (err instanceof ZoomBrowserJoinBlockedError || err instanceof ZoomMeetingJoinError) {
+          throw err;
+        }
+        usingDirectWebClient = false;
+        this._logger.info('Failed to access ZOOM web client by URL', { botId: params.botId, userId: params.userId });
+        return false;
+      }
+    };
+
+    this._logger.info('Navigating to the original Zoom meeting URL...');
     await this.page.goto(url, { waitUntil: 'domcontentloaded' });
 
     // Accept cookies
@@ -108,8 +253,8 @@ export class ZoomBot extends BotBase {
       await acceptCookies.waitFor({ timeout: 2500 });
 
       this._logger.info('Clicking the "Accept Cookies" button...', await acceptCookies.count());
-      await acceptCookies.click({ force: true });
-      
+      await acceptCookies.click();
+
     } catch (error) {
       this._logger.info('Unable to accept cookies...', error);
     }
@@ -118,7 +263,6 @@ export class ZoomBot extends BotBase {
     this._logger.info(`Page focus status: ${hasFocus}`);
 
     const attempts = 3;
-    let usingDirectWebClient = false;
     const findAndEnableJoinFromBrowserButton = async (retry: number): Promise<boolean> => {
       try {
         if (retry >= attempts) {
@@ -128,20 +272,11 @@ export class ZoomBot extends BotBase {
         const launchMeetingGetByRole = this.page.getByRole('button', { name: /Launch Meeting/i }).first();
         this._logger.info('Does Launch Meeting exist', await launchMeetingGetByRole.isVisible({ timeout: 1000 }).catch(() => false));
 
-        const launchDownloadGetByRole = this.page.getByRole('button', { name: /Download Now/i }).first();
-        const launchDownloadVisible = await launchDownloadGetByRole.isVisible({ timeout: 1000 }).catch(() => false);
-        this._logger.info('Does Download Now exist', launchDownloadVisible);
-
-        if (launchDownloadVisible) {
-          this._logger.info('Click on Download Now...');
-          await launchDownloadGetByRole.click({ force: true });
-        }
-
         const joinFromBrowser = this.page.locator('a', { hasText: 'Join from your browser' }).first();
         await joinFromBrowser.waitFor({ timeout: 4000 });
 
         if (await joinFromBrowser.isVisible({ timeout: 500 }).catch(() => false)) {
-          await joinFromBrowser.click({ force: true });
+          await joinFromBrowser.click();
           return true;
         }
         else {
@@ -149,26 +284,12 @@ export class ZoomBot extends BotBase {
           return await findAndEnableJoinFromBrowserButton(retry + 1);
         }
       } catch(error) {
+        await inspectJoinState();
         this._logger.info('Error on try find the web client', error);
         if (retry >= attempts) {
           return false;
         }
         return await findAndEnableJoinFromBrowserButton(retry + 1);
-      }
-    };
-
-    const visitWebClientByUrl = async (): Promise<boolean> => {
-      usingDirectWebClient = true;
-      try {
-        const wcUrl = new URL(url);
-        wcUrl.pathname = wcUrl.pathname.replace('/j/', '/wc/join/');
-        this._logger.info('Navigating to Zoom Web Client URL...', { wcUrl: wcUrl.toString(), botId: params.botId, userId: params.userId });
-        await this.page.goto(wcUrl.toString(), { waitUntil: 'domcontentloaded' });
-        return true;
-      } catch(err) {
-        usingDirectWebClient = false;
-        this._logger.info('Failed to access ZOOM web client by URL', { botId: params.botId, userId: params.userId });
-        return false;
       }
     };
 
@@ -220,25 +341,28 @@ export class ZoomBot extends BotBase {
       }
     };
 
-    // Join from browser
-    this._logger.info('Waiting for Join from your browser to be visible...');
-    const foundAndClickedJoinFromBrowser = await findAndEnableJoinFromBrowserButton(0);
-    
-    let navSuccess = false;
-    if (foundAndClickedJoinFromBrowser) {
-      this._logger.info('Verify the meeting web client is visible...');
-      // Ensure the page has navigated to the web client...
-      navSuccess = await waitForJoinFromBrowserNav();
-    }
-    
-    if (!foundAndClickedJoinFromBrowser || !navSuccess) {
-      await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'enable-join-from-browser', params.userId, this._logger, params.botId);
-      this._logger.info('Failed to enable Join from your browser button...', params.userId);
-      this._logger.info('Zoom Bot will now attempt to access the Web Client by URL...', params.userId);
-      const canAccess = await visitWebClientByUrl();
-      if (!canAccess) {
-        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'direct-access-webclient', params.userId, this._logger, params.botId);
-        throw new Error('Unable to join meeting after trying to access the web client by /wc/join/');
+    if (!usingDirectWebClient) {
+      // Join from browser
+      this._logger.info('Waiting for Join from your browser to be visible...');
+      const foundAndClickedJoinFromBrowser = await findAndEnableJoinFromBrowserButton(0);
+
+      let navSuccess = false;
+      if (foundAndClickedJoinFromBrowser) {
+        this._logger.info('Verify the meeting web client is visible...');
+        // Ensure the page has navigated to the web client...
+        navSuccess = await waitForJoinFromBrowserNav();
+      }
+
+      if (!foundAndClickedJoinFromBrowser || !navSuccess) {
+        await inspectJoinState();
+        await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'enable-join-from-browser', params.userId, this._logger, params.botId);
+        this._logger.info('Failed to enable Join from your browser button...', params.userId);
+        this._logger.info('Zoom Bot will now attempt to access the Web Client by URL...', params.userId);
+        const canAccess = await visitWebClientByUrl();
+        if (!canAccess) {
+          await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'direct-access-webclient', params.userId, this._logger, params.botId);
+          throw new Error('Unable to join meeting after trying to access the web client by /wc/join/');
+        }
       }
     }
 
@@ -278,6 +402,7 @@ export class ZoomBot extends BotBase {
 
         return true;
       } catch(err) {
+        await inspectJoinState();
         this._logger.info('Cannot detect the App container for Zoom Web Client', startWith, err);
         await uploadDebugImage(await this.page.screenshot({ type: 'png', fullPage: true }), 'detect-app-container', params.userId, this._logger, params.botId);
         return await detectAppContainer(startWith === 'app' ? 'iframe' : 'app');
@@ -287,96 +412,64 @@ export class ZoomBot extends BotBase {
     const foundAppContainer = await detectAppContainer(usingDirectWebClient ? 'app' : 'iframe');
 
     if (!iframe || !foundAppContainer) {
+      await inspectJoinState();
       throw new Error(`Failed to get the Zoom PWA iframe on user ${params.userId}`);
     }
 
     this._logger.info('Waiting for the input field to be visible...');
     await iframe.waitForSelector('input[type="text"]', { timeout: 60000 });
 
+    if (await dismissZoomOptionalMediaPrompt(iframe)) {
+      this._logger.info('Continuing Zoom pre-join without microphone and camera...');
+    }
+
     this._logger.info('Filling the input field with the name...');
-    await iframe.fill('input[type="text"]', name ? name : 'ScreenApp Notetaker');
+    await iframe.fill('input[type="text"]', name ? name : 'winkk AI Notetaker');
 
     this._logger.info('Clicking the "Join" button...');
+    await dismissZoomOptionalMediaPrompt(iframe, 500);
     const joinButton = iframe.locator('button', { hasText: 'Join' }).first();
     await joinButton.waitFor({ timeout: 15000 });
-    await joinButton.click();
+    await clickZoomJoinWithOptionalMediaPromptRetry(
+      iframe,
+      () => joinButton.click({ timeout: 2_000 })
+    );
+    this.joinState = 'waiting_room';
 
-    // Wait in waiting room
-    try {
-      const wanderingTime = config.joinWaitTime * 60 * 1000; // Give some time to be let in
+    const lobbyDeadline = Date.now() + config.joinWaitTime * 60 * 1000;
+    let joined = false;
+    while (Date.now() < lobbyDeadline) {
+      const state = await inspectJoinState();
+      if (state === 'waiting_room') this.joinState = state;
 
-      let waitTimeout: NodeJS.Timeout;
-      let waitInterval: NodeJS.Timeout;
-      const waitAtLobbyPromise = new Promise<boolean>((resolveMe) => {
-        waitTimeout = setTimeout(() => {
-          clearInterval(waitInterval);
-          resolveMe(false);
-        }, wanderingTime);
-
-        waitInterval = setInterval(async () => {
-          try {
-            const footerInfo = await iframe.locator('#wc-footer');
-            await footerInfo.waitFor({ state: 'attached' });
-            const footerText = await footerInfo?.innerText();
-
-            const tokens1 = footerText.split('\n');
-            const tokens2 = footerText.split(' ');
-            const tokens = tokens1.length > tokens2.length ? tokens1 : tokens2;
-  
-            const filtered: string[] = [];
-            for (const tok of tokens) {
-              if (!tok) continue;
-              if (!Number.isNaN(Number(tok.trim())))
-                filtered.push(tok);
-              else if (tok.trim().toLowerCase() === 'participants') {
-                filtered.push(tok.trim().toLowerCase());
-                break;
-              }
-            }
-            const joinedText = filtered.join('');
-
-            if (joinedText === 'participants') 
-              return;
-
-            const isValid = joinedText.match(/\d+(.*)participants/i);
-            if (!isValid) {
-              return;
-            }
-
-            const num = joinedText.match(/\d+/);
-            this._logger.info('Final Number of participants while waiting...', num);
-            if (num && Number(num[0]) === 0)
-              this._logger.info('Waiting on host...');
-            else {
-              clearInterval(waitInterval);
-              clearTimeout(waitTimeout);
-              resolveMe(true);
-            }
-          } catch(e) {
-            // Do nothing
-          }
-        }, 2000);
-      });
-
-      const joined = await waitAtLobbyPromise;
-      if (!joined) {
-        const bodyText = await this.page.evaluate(() => document.body.innerText);
-
-        const userDenied = (bodyText || '')?.includes(ZOOM_REQUEST_DENIED);
-
-        this._logger.error('Cant finish wait at the lobby check', { userDenied, waitingAtLobbySuccess: joined, bodyText });
-
-        // Don't retry lobby errors - if user doesn't admit bot, retrying won't help
-        throw new WaitingAtLobbyRetryError('Zoom bot could not enter the meeting...', bodyText ?? '', false, 0);
+      const footerText = await iframe.locator('#wc-footer')
+        .innerText({ timeout: 1_500 })
+        .catch(() => '');
+      const participantCount = footerText.match(/(\d+)\s*participants?/i);
+      if (participantCount && Number(participantCount[1]) > 0) {
+        joined = true;
+        break;
       }
 
-      this._logger.info('Bot is entering the meeting after wait room...');
-    } catch (error) {
-      this._logger.info('Closing the browser on error...', error);
-      await this.page.context().browser()?.close();
-
-      throw error;
+      await new Promise(resolve => setTimeout(resolve, 2_000));
     }
+
+    if (!joined) {
+      await inspectJoinState();
+      this._logger.warn('Zoom participant was not admitted before the lobby timeout', {
+        botId: params.botId,
+        userId: params.userId,
+      });
+      throw new WaitingAtLobbyRetryError(
+        'Zoom recording participant was not admitted before the lobby timeout',
+        '',
+        false,
+        0
+      );
+    }
+
+    this.joinState = 'joined';
+    this._logger.info('Bot is entering the meeting after wait room...');
 
     // Wait for device notifications and close the notifications
     let notifyInternval: NodeJS.Timeout;
@@ -518,12 +611,14 @@ export class ZoomBot extends BotBase {
     await recordingTask.runAsync(null);
   
     this._logger.info('Waiting for recording duration:', config.maxRecordingDuration, 'minutes...');
-    waitingPromise.promise.then(async () => {
-      this._logger.info('Closing the browser...');
-      await this.page.context().browser()?.close();
-
-      this._logger.info('Recording stopped; finalizing upload next...', { botId, eventId, userId, teamId });
-    });
     await waitingPromise.promise;
+
+    this._logger.info('Recording stopped; closing the meeting browser context...', {
+      botId,
+      eventId,
+      userId,
+      teamId,
+    });
+    await closeBrowserSession(this.page);
   }
 }

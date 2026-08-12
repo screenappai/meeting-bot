@@ -9,6 +9,9 @@ RUN apt-get update && \
     dumb-init \
     ffmpeg \
     fonts-liberation \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji \
+    fonts-noto-core \
     gnupg \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -54,7 +57,7 @@ RUN chmod +x /usr/local/bin/start-chrome-cdp
 
 USER chrome
 ENV XDG_RUNTIME_DIR=/run/user/1001
-EXPOSE 9222 9223
+EXPOSE 9223
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["start-chrome-cdp"]

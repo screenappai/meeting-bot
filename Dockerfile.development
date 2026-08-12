@@ -1,4 +1,10 @@
-FROM node:20
+FROM gcc:13-bookworm AS rtms-cxx-runtime
+RUN cp "$(g++ -print-file-name=libstdc++.so.6)" /libstdc++.so.6
+
+FROM node:22-bookworm
+
+COPY --from=rtms-cxx-runtime /libstdc++.so.6 /opt/rtms/libstdc++.so.6
+ENV LD_LIBRARY_PATH=/opt/rtms
 
 WORKDIR /usr/src/app
 
@@ -57,6 +63,11 @@ RUN npm install -g nodemon
 COPY package*.json ./
 RUN npm install
 
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+    cp /opt/rtms/libstdc++.so.6 /usr/src/app/node_modules/@zoom/rtms/build/Release/libstdc++.so.6 && \
+    node -e "const rtms=require('@zoom/rtms').default;if(typeof rtms.Client!=='function')process.exit(1)"; \
+  fi
+
 # Install Playwright and its dependencies
 RUN npx playwright install --with-deps
 
@@ -64,7 +75,7 @@ RUN npx playwright install --with-deps
 COPY . .
 
 # Build app
-RUN npm run build
+RUN npm test && npm run build
 
 # Set permissions
 RUN chmod +x /usr/src/app/start.sh

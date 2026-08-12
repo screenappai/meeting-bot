@@ -5,10 +5,13 @@ export DISPLAY="${DISPLAY:-:99}"
 export CHROME_USER_DATA_DIR="${CHROME_USER_DATA_DIR:-/tmp/chrome-profile}"
 export CHROME_REMOTE_DEBUGGING_ADDRESS="${CHROME_REMOTE_DEBUGGING_ADDRESS:-127.0.0.1}"
 export CHROME_REMOTE_DEBUGGING_PORT="${CHROME_REMOTE_DEBUGGING_PORT:-9222}"
-export CHROME_CDP_PROXY_ADDRESS="${CHROME_CDP_PROXY_ADDRESS:-0.0.0.0}"
+export CHROME_CDP_PROXY_ADDRESS="${CHROME_CDP_PROXY_ADDRESS:-127.0.0.1}"
 export CHROME_CDP_PROXY_PORT="${CHROME_CDP_PROXY_PORT:-9223}"
 export CHROME_WINDOW_SIZE="${CHROME_WINDOW_SIZE:-1280,800}"
 export CHROME_URL="${CHROME_URL:-about:blank}"
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="${LC_ALL:-C.UTF-8}"
+
 CHROME_WINDOW_SIZE_FOR_CHROME="${CHROME_WINDOW_SIZE/x/,}"
 XVFB_SCREEN_SIZE="${CHROME_WINDOW_SIZE/,/x}"
 
@@ -43,12 +46,6 @@ http {
       proxy_set_header Host 127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT};
       proxy_set_header Upgrade \$http_upgrade;
       proxy_set_header Connection "upgrade";
-      # Chrome reports its DevTools socket using the (rewritten) Host header, so
-      # /json* responses contain ws://127.0.0.1:${CHROME_REMOTE_DEBUGGING_PORT}/...
-      # which a remote client (e.g. the bot in another container) can't reach.
-      # Rewrite it back to the address the client used so connectOverCDP's second
-      # hop comes through this proxy. Disable upstream compression so sub_filter
-      # can see the body.
       proxy_set_header Accept-Encoding "";
       sub_filter_types application/json;
       sub_filter_once off;
@@ -68,27 +65,50 @@ cleanup() {
     kill "$chrome_pid" >/dev/null 2>&1 || true
   fi
   kill "$xvfb_pid" >/dev/null 2>&1 || true
+  wait "$nginx_pid" >/dev/null 2>&1 || true
+  if [ -n "${chrome_pid:-}" ]; then
+    wait "$chrome_pid" >/dev/null 2>&1 || true
+  fi
+  wait "$xvfb_pid" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
-google-chrome-stable \
-  --remote-debugging-address="$CHROME_REMOTE_DEBUGGING_ADDRESS" \
-  --remote-debugging-port="$CHROME_REMOTE_DEBUGGING_PORT" \
-  --remote-allow-origins='*' \
-  --user-data-dir="$CHROME_USER_DATA_DIR" \
-  --window-size="$CHROME_WINDOW_SIZE_FOR_CHROME" \
-  --window-position=0,0 \
-  --force-device-scale-factor=1 \
-  --auto-accept-this-tab-capture \
-  --autoplay-policy=no-user-gesture-required \
-  --no-first-run \
-  --no-default-browser-check \
-  --disable-dev-shm-usage \
-  --disable-background-timer-throttling \
-  --disable-backgrounding-occluded-windows \
-  --disable-renderer-backgrounding \
-  --no-sandbox \
-  "$CHROME_URL" &
+chrome_args=(
+  "--remote-debugging-address=$CHROME_REMOTE_DEBUGGING_ADDRESS"
+  "--remote-debugging-port=$CHROME_REMOTE_DEBUGGING_PORT"
+  "--user-data-dir=$CHROME_USER_DATA_DIR"
+  "--window-size=$CHROME_WINDOW_SIZE_FOR_CHROME"
+  '--window-position=0,0'
+  '--force-device-scale-factor=1'
+  '--lang=en-US'
+  '--auto-accept-this-tab-capture'
+  '--autoplay-policy=no-user-gesture-required'
+  '--no-first-run'
+  '--no-default-browser-check'
+  '--disable-background-timer-throttling'
+  '--disable-blink-features=AutomationControlled'
+  '--disable-backgrounding-occluded-windows'
+  '--disable-renderer-backgrounding'
+)
+
+if [ "${CHROME_SOFTWARE_GL:-true}" = 'true' ]; then
+  chrome_args+=(
+    '--use-gl=angle'
+    '--use-angle=swiftshader'
+    '--enable-unsafe-swiftshader'
+  )
+fi
+
+# Keep the v1.3.6 container-compatible default. The setuid sandbox cannot create
+# its PID namespace under the hardened Kubernetes/Docker security context.
+if [ "${CHROME_NO_SANDBOX:-true}" = 'true' ]; then
+  chrome_args+=(
+    '--no-sandbox'
+    '--disable-setuid-sandbox'
+  )
+fi
+
+google-chrome-stable "${chrome_args[@]}" "$CHROME_URL" &
 chrome_pid="$!"
 
-wait -n "$nginx_pid" "$chrome_pid"
+wait -n "$xvfb_pid" "$nginx_pid" "$chrome_pid"

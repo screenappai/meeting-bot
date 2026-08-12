@@ -1,3 +1,4 @@
+import './instrumentation';
 // Ensure global Web Crypto API is available (needed by Azure SDK, polyfill for older Node versions)
 import './shims/crypto-polyfill';
 import http from 'http';
@@ -7,6 +8,8 @@ import messageBroker from './connect/messageBroker';
 import config from './config';
 import { isPodMarkedForDeletion } from './util/k8sLifecycle';
 import { loggerFactory } from './util/logger';
+import { zoomRtmsEventStore } from './rtms/ZoomRtmsEventStore';
+import { captureOperationalError, flushSentry } from './monitoring/sentry';
 
 const port = 3000;
 
@@ -35,6 +38,7 @@ setTimeout(() => {
     })
     .catch((err) => {
       console.error('Startup pod-deletion check threw (continuing normal startup):', err);
+      captureOperationalError(err, { phase: 'startup_pod_deletion_check' });
     });
 }, 10000);
 
@@ -64,6 +68,8 @@ const initiateGracefulShutdown = async () => {
     gracefulShutdownApp();
   } catch (error) {
     console.error('Error during graceful shutdown:', error);
+    captureOperationalError(error, { phase: 'graceful_shutdown' });
+    await flushSentry();
     // Force exit if graceful shutdown fails
     process.exit(1);
   }
@@ -71,10 +77,14 @@ const initiateGracefulShutdown = async () => {
 
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
+  captureOperationalError(err, { phase: 'uncaught_exception' });
+  void flushSentry();
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
+  captureOperationalError(reason, { phase: 'unhandled_rejection' });
+  void flushSentry();
 });
 
 process.on('SIGTERM', () => {
@@ -97,15 +107,24 @@ export const gracefulShutdownApp = () => {
   server.close(async () => {
     console.log('HTTP server closed. Exiting application');
 
-    // Only shutdown Redis services if Redis is enabled
-    if (config.isRedisEnabled) {
-      await redisConsumerService.shutdown();
-      await messageBroker.quitClientGracefully();
-    } else {
-      console.log('Redis services not running - skipping Redis shutdown');
+    let exitCode = 0;
+    try {
+      // Only shutdown Redis services if Redis is enabled
+      if (config.isRedisEnabled) {
+        await redisConsumerService.shutdown();
+        await messageBroker.quitClientGracefully();
+      } else {
+        console.log('Redis services not running - skipping Redis shutdown');
+      }
+      await zoomRtmsEventStore.close();
+    } catch (error) {
+      exitCode = 1;
+      console.error('Error while closing application resources:', error);
+      captureOperationalError(error, { phase: 'resource_shutdown' });
+    } finally {
+      await flushSentry();
+      console.log('Exiting.....');
+      process.exit(exitCode);
     }
-
-    console.log('Exiting.....');
-    process.exit(0);
   });
 };

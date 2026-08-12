@@ -7,10 +7,25 @@ import microsoftRouter from './microsoft';
 import zoomRouter from './zoom';
 import { globalJobStore } from '../lib/globalJobStore';
 import { RedisConsumerService } from '../connect/RedisConsumerService';
+import { captureRawBody } from '../rtms/webhook';
+import { captureOperationalError } from '../monitoring/sentry';
 
 const app = express();
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'");
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+app.use(express.json({ verify: captureRawBody }));
 
 // Initialize Redis consumer service
 export const redisConsumerService = new RedisConsumerService();
@@ -83,6 +98,7 @@ export const getIsBusy = () => isbusy;
 if (config.isRedisEnabled) {
   redisConsumerService.start().catch((error) => {
     console.error('Failed to start Redis consumer service:', error);
+    captureOperationalError(error, { phase: 'redis_consumer_startup' });
   });
 } else {
   console.info('Redis consumer service not started - Redis is disabled');

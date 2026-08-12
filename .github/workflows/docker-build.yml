@@ -25,6 +25,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install media test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -58,15 +78,6 @@ jobs:
             exit 1
           fi
 
-      # Create and push git tag if it doesn't exist (only on main push)
-      - name: Create and push tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ env.TAG }}
-          git push origin ${{ env.TAG }}
-
       # Always generate Docker tags for build, but only include version tag on main
       - name: Extract metadata
         id: meta
@@ -89,6 +100,39 @@ jobs:
             type=ref,event=branch
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build Chrome CDP smoke image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.chrome-cdp
+          platforms: linux/amd64
+          load: true
+          tags: meeting-bot-chrome-cdp:smoke
+          cache-from: type=gha,scope=chrome-cdp
+
+      - name: Smoke-test Chrome CDP sidecar
+        run: |
+          set -euo pipefail
+          container=meeting-bot-chrome-cdp-smoke
+          cleanup() {
+            status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then
+              docker logs "$container" || true
+            fi
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          docker run --detach \
+            --name "$container" \
+            --network host \
+            --shm-size=1g \
+            --env CHROME_NO_SANDBOX=true \
+            meeting-bot-chrome-cdp:smoke
+          CHROME_CDP_CONTAINER="$container" node scripts/smoke-chrome-cdp.mjs
 
       # Build and push on all branches
       - name: Build and push Docker image
@@ -116,3 +160,12 @@ jobs:
           labels: ${{ steps.chrome-cdp-meta.outputs.labels }}
           cache-from: type=gha,scope=chrome-cdp
           cache-to: type=gha,mode=max,scope=chrome-cdp
+
+      # Create and push the release tag only after both images and the smoke test succeed.
+      - name: Create and push tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ env.TAG }}
+          git push origin ${{ env.TAG }}

@@ -3,6 +3,14 @@ import { BotStatus, IVFSResponse, LogCategory, LogSubCategory } from '../types';
 import config from '../config';
 import { Logger } from 'winston';
 
+export const hasUsableLegacyCoreToken = (token: string): boolean => {
+  const normalized = token.trim().toLowerCase();
+  return normalized.length > 0 &&
+    normalized !== 'your-auth-token' &&
+    normalized !== 'placeholder' &&
+    normalized !== 'unused';
+};
+
 export const patchBotStatus = async ({
   eventId,
   botId,
@@ -16,6 +24,10 @@ export const patchBotStatus = async ({
     provider: 'google' | 'microsoft' | 'zoom',
     status: BotStatus[],
 }, logger: Logger) => {
+  if (!hasUsableLegacyCoreToken(token)) {
+    logger.debug('Skipping legacy Core bot status callback because no user bearer token was supplied');
+    return true;
+  }
   try {
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<
@@ -59,6 +71,10 @@ export const addBotLog = async ({
     category: LogCategory,
     subCategory: LogSubCategory<LogCategory>,
 }, logger: Logger) => {
+  if (!hasUsableLegacyCoreToken(token)) {
+    logger.debug('Skipping legacy Core bot log callback because no user bearer token was supplied');
+    return true;
+  }
   try {
     const apiV2 = createApiV2(token, config.serviceKey);
     const response = await apiV2.patch<

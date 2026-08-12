@@ -17,11 +17,29 @@ import { getStorageProvider } from '../uploader/providers/factory';
 import { getTimeString } from '../lib/datetime';
 import { notifyRecordingCompleted, RecordingCompletedPayload } from '../services/notificationService';
 import { writeWebmDurationMetadata } from '../lib/webmDuration';
+import { encodeFileNameSafebase64 } from '../util/strings';
 
 console.log(' ----- PWD OR CWD ----- ', process.cwd());
 
 const tempFolder = path.join(process.cwd(), 'dist', '_tempvideo');
 const execFileAsync = promisify(execFile);
+const SAFE_FILE_COMPONENT = /^[A-Za-z0-9_-]+$/;
+const SAFE_FILE_EXTENSION = /^\.[A-Za-z0-9]+$/;
+
+export function assertSafeFileComponent(value: string, label: string): void {
+  if (!value || !SAFE_FILE_COMPONENT.test(value)) {
+    throw new Error(`Invalid ${label} for temporary recording path`);
+  }
+}
+
+export function assertPathWithinTempFolder(filePath: string): string {
+  const root = path.resolve(tempFolder);
+  const resolved = path.resolve(filePath); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new Error('Temporary recording path escapes its isolated directory');
+  }
+  return resolved;
+}
 
 function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean {
   /**
@@ -49,6 +67,7 @@ function isNoSuchUploadError(err: any, userId: string, logger: Logger): boolean 
 export interface IUploader {
   uploadRecordingToRemoteStorage(options?: { forceUpload?: boolean }): Promise<boolean>;
   saveDataToTempFile(data: Buffer): Promise<boolean>;
+  useExternalFile(filePath: string, extension: string): Promise<void>;
   setRecordingDuration(durationSeconds: number): void;
 }
 
@@ -324,6 +343,50 @@ class DiskUploader implements IUploader {
     }
   }
 
+  public async useExternalFile(filePath: string, extension: string): Promise<void> {
+    await this.waitForWritingFlag();
+    if (this.queue.length > 0) {
+      throw new Error('Cannot replace the recording while disk writes are pending');
+    }
+
+    const normalizedExtension = extension.startsWith('.') ? extension : `.${extension}`;
+    const targetPath = DiskUploader.getFilePath(
+      this._userId,
+      this._tempFileId,
+      normalizedExtension
+    );
+    // `filePath` is produced by the internal RTMS recorder; still enforce the
+    // temporary-media boundary before moving it into the uploader location.
+    const sourcePath = assertPathWithinTempFolder(filePath);
+    const resolvedTarget = assertPathWithinTempFolder(targetPath);
+
+    if (sourcePath !== resolvedTarget) {
+      await fs.promises.unlink(resolvedTarget).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      try {
+        await fs.promises.rename(sourcePath, resolvedTarget);
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException)?.code !== 'EXDEV') throw error;
+        await fs.promises.copyFile(sourcePath, resolvedTarget);
+        await fs.promises.unlink(sourcePath);
+      }
+    }
+
+    const stats = await fs.promises.stat(resolvedTarget);
+    if (!stats.isFile() || stats.size === 0) {
+      throw new Error('External recording file is empty');
+    }
+
+    this.fileExtension = normalizedExtension;
+    this.contentType = extensionToContentType[normalizedExtension] ?? 'video/mp4';
+    this.firstChunkReceivedAt = this.firstChunkReceivedAt ?? Date.now();
+    this._logger.info('Using externally recorded media file for upload', {
+      extension: normalizedExtension,
+      size: stats.size,
+    });
+  }
+
   public setRecordingDuration(durationSeconds: number): void {
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
       this._logger.warn('Ignoring invalid recording duration from recorder', { durationSeconds });
@@ -340,15 +403,21 @@ class DiskUploader implements IUploader {
   }
 
   private static getFolderPath(userId: string) {
-    const folderPath = path.join(tempFolder, userId);
+    const safeUserId = encodeFileNameSafebase64(userId);
+    assertSafeFileComponent(safeUserId, 'userId');
+    const folderPath = path.join(tempFolder, safeUserId); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     return folderPath;
   }
 
   private static getFilePath(userId: string, tempFileId: string, fileExtension: string) {
+    assertSafeFileComponent(tempFileId, 'temporary file ID');
+    if (!SAFE_FILE_EXTENSION.test(fileExtension)) {
+      throw new Error('Invalid temporary recording file extension');
+    }
     const fileName = `${tempFileId}${fileExtension}`;
     const folderPath = DiskUploader.getFolderPath(userId);
-    const filePath = path.join(folderPath, fileName);
-    return filePath;
+    const filePath = path.join(folderPath, fileName); // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    return assertPathWithinTempFolder(filePath);
   }
 
   private async processRecordingUpload() {

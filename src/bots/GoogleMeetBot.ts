@@ -11,7 +11,11 @@ import { browserLogCaptureCallback } from '../util/logger';
 import { getWaitingPromise } from '../lib/promise';
 import { retryActionWithWait } from '../util/resilience';
 import { uploadDebugImage } from '../services/bugService';
-import createBrowserContext, { isExternalBrowserContext } from '../lib/chromium';
+import createBrowserContext, {
+  closeBrowserSession,
+  normalizeBrowserSessionError,
+  raceBrowserSessionFailure,
+} from '../lib/chromium';
 import { GOOGLE_LOBBY_MODE_HOST_TEXT, GOOGLE_REQUEST_DENIED, GOOGLE_REQUEST_TIMEOUT } from '../constants';
 import { getRecordingMimeTypesForExtension } from '../lib/recording';
 import { getGoogleMeetDisplayName } from '../util/googleMeetDisplayName';
@@ -50,6 +54,7 @@ export class GoogleMeetBot extends MeetBotBase {
 
       await patchBotStatus({ botId, eventId, provider: 'google', status: _state, token: bearerToken }, this._logger);
     } catch(error) {
+      error = normalizeBrowserSessionError(this.page, error);
       if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
@@ -68,28 +73,18 @@ export class GoogleMeetBot extends MeetBotBase {
       // Guarantee chrome subprocess tree is reaped regardless of exit path.
       // No-op if a deeper code path already closed the browser.
       try {
-        const context = this.page?.context();
-        const browser = context?.browser();
-        if (isExternalBrowserContext(context)) {
-          await this.page?.close();
-          this._logger.info('External browser page closed in join finally');
-        } else if (browser?.isConnected()) {
-          await browser.close();
-          this._logger.info('Browser closed in join finally');
-        } else if (context) {
-          await context.close();
-          this._logger.info('Persistent browser context closed in join finally');
-        }
+        await closeBrowserSession(this.page);
+        this._logger.info('Browser session closed in join finally');
       } catch (cleanupErr) {
         this._logger.warn('Browser cleanup in join finally failed (non-fatal)', { error: cleanupErr });
       }
     }
   }
 
-  private async joinMeeting({ url, name, teamId, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
+  private async joinMeeting({ url, name, teamId, timezone, userId, eventId, botId, pushState, uploader }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
     this._logger.info('Launching browser...');
 
-    this.page = await createBrowserContext(url, this._correlationId, 'google');
+    this.page = await createBrowserContext(url, this._correlationId, 'google', timezone);
 
     this._logger.info('Navigating to Google Meet URL...');
     await this.page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -530,11 +525,7 @@ export class GoogleMeetBot extends MeetBotBase {
       }
     } catch(lobbyError) {
       this._logger.info('Closing the browser on error...', lobbyError);
-      if (isExternalBrowserContext(this.page.context())) {
-        await this.page.close();
-      } else {
-        await this.page.context().browser()?.close();
-      }
+      await closeBrowserSession(this.page);
 
       throw lobbyError;
     }
@@ -1012,7 +1003,7 @@ export class GoogleMeetBot extends MeetBotBase {
                     console.warn('Meet participant detection failed, retrying. Failure count:', detectionFailures);
                     // Log for debugging
                     if (detectionFailures >= maxDetectionFailures) {
-                      console.log('Persistent detection failures:', { bodyText: `${document.body.innerText?.toString()}` });
+                      console.log('Persistent participant detection failures.');
                       loneTestDetectionActive = false;
                     }
                     retryWithBackoff();
@@ -1267,23 +1258,15 @@ export class GoogleMeetBot extends MeetBotBase {
     const processingTime = 0.2 * 60 * 1000;
     const waitingPromise: WaitPromise = getWaitingPromise(processingTime + duration);
 
-    waitingPromise.promise.then(async () => {
-      const context = this.page.context();
-      // For an external CDP browser (the chrome-cdp sidecar), browser.close() only
-      // disconnects Playwright — it leaves the Meet tab open, so the bot stays in
-      // the call. Close the page (tab) instead, which leaves the meeting and keeps
-      // the shared sidecar Chrome alive for the next job.
-      if (isExternalBrowserContext(context)) {
-        this._logger.info('Closing the page (external CDP browser stays up)...');
-        await this.page.close();
-      } else {
-        this._logger.info('Closing the browser...');
-        await context.browser()?.close();
-      }
+    try {
+      await raceBrowserSessionFailure(this.page, waitingPromise.promise);
+    } catch (error) {
+      waitingPromise.resolveEarly();
+      throw error;
+    }
 
-      this._logger.info('Recording stopped and meeting left; finalizing upload next...', { eventId, botId, userId, teamId });
-    });
-
-    await waitingPromise.promise;
+    this._logger.info('Closing the browser session...');
+    await closeBrowserSession(this.page);
+    this._logger.info('Recording stopped and meeting left; finalizing upload next...', { eventId, botId, userId, teamId });
   }
 }

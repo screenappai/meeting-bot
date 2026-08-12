@@ -3,6 +3,13 @@ import { KnownError, WaitingAtLobbyRetryError } from '../error';
 import { getErrorType } from '../util/logger';
 import config from '../config';
 import { createMeetingFailedPayload, notifyMeetingFailed } from '../services/notificationService';
+import {
+  createSentryCorrelationId,
+  inferFallbackResult,
+  inferMeetingFailurePhase,
+  inferMeetingFailureTransport,
+  reportPermanentMeetingFailure,
+} from '../monitoring/sentry';
 
 export interface MeetingJoinParams {
   url: string;
@@ -110,6 +117,16 @@ export const notifyMeetingJoinFailure = async (
   error: unknown,
   logger: Logger
 ) => {
+  reportPermanentMeetingFailure(error, {
+    provider: params.provider,
+    transport: inferMeetingFailureTransport(error),
+    phase: inferMeetingFailurePhase(error),
+    fallbackResult: inferFallbackResult(error),
+    teamId: params.teamId,
+    eventId: params.eventId,
+    botId: params.botId,
+    correlationId: createSentryCorrelationId(params),
+  });
   const payload = createMeetingFailedPayload(params, error);
   await notifyMeetingFailed(payload, logger);
 };

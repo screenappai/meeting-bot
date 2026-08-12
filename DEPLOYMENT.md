@@ -28,7 +28,7 @@ The workflow is defined in `.github/workflows/docker-build.yml` and includes:
 
 ### Production Image (`Dockerfile.production`)
 
-- **Base**: Node.js 20 Alpine
+- **Base**: Node.js 22 Bookworm
 - **Multi-stage build** for smaller final image
 - **Security**: Runs as non-root user
 - **Optimized**: Only production dependencies
@@ -36,7 +36,7 @@ The workflow is defined in `.github/workflows/docker-build.yml` and includes:
 
 ### Development Image (`Dockerfile`)
 
-- **Base**: Node.js 20
+- **Base**: Node.js 22 Bookworm
 - **Full dependencies** for development
 - **Hot reload** support
 - **Debugging tools** included
@@ -269,4 +269,4 @@ For high availability, consider:
 
 ### Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved with the project. 
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved with the project.

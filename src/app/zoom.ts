@@ -8,6 +8,7 @@ import { getRecordingNamePrefix } from '../util/recordingName';
 import { encodeFileNameSafebase64 } from '../util/strings';
 import { MeetingJoinParams, notifyMeetingJoinFailure } from './common';
 import { globalJobStore } from '../lib/globalJobStore';
+import zoomRtmsWebhookRouter from '../rtms/webhook';
 
 const router = express.Router();
 
@@ -126,5 +127,6 @@ const joinZoom = async (req: Request, res: Response) => {
 };
 
 router.post('/join', joinZoom);
+router.use('/rtms/webhook', zoomRtmsWebhookRouter);
 
 export default router;
