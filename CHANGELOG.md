@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - N/A
 
+## [1.3.16] - 2026-09-09
+
+### Fixed
+- Reduce Google Meet recording load by preferring VP8 for WebM and limiting capture to 25 fps; honor the existing video bitrate setting.
+
 ## [1.0.0] - 2024-01-01
 
 ### Added

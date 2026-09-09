@@ -674,12 +674,13 @@ export class GoogleMeetBot extends MeetBotBase {
       }
     });
 
-    const { mimeTypes } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
+    // Match the shared recorder: prefer VP8 to reduce real-time encoding load.
+    const { mimeTypes } = getRecordingMimeTypesForExtension(config.uploaderFileExtension, true);
 
     // Inject the MediaRecorder code into the browser context using page.evaluate
     await this.page.evaluate(
-      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, mimeTypes }:
-      { teamId:string, userId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, mimeTypes: string[] }) => {
+      async ({ teamId, duration, inactivityLimit, loneParticipantExitDelayMs, userId, slightlySecretId, activateInactivityDetectionAfter, activateInactivityDetectionAfterMinutes, mimeTypes, videoBitsPerSecond }:
+      { teamId:string, userId: string, duration: number, inactivityLimit: number, loneParticipantExitDelayMs: number, slightlySecretId: string, activateInactivityDetectionAfter: string, activateInactivityDetectionAfterMinutes: number, mimeTypes: string[], videoBitsPerSecond: number }) => {
         let timeoutId: NodeJS.Timeout;
         let inactivitySilenceDetectionTimeout: NodeJS.Timeout;
         let isOnValidGoogleMeetPageInterval: NodeJS.Timeout;
@@ -707,7 +708,7 @@ export class GoogleMeetBot extends MeetBotBase {
           }
           
           const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
-            video: true,
+            video: { frameRate: { ideal: 25, max: 25 } },
             audio: {
               autoGainControl: false,
               channels: 2,
@@ -732,7 +733,7 @@ export class GoogleMeetBot extends MeetBotBase {
           }
 
           console.log(`Media Recorder will use ${selectedMimeType} codecs...`);
-          const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedMimeType });
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedMimeType, videoBitsPerSecond });
           console.log(`Media Recorder actual mime type: ${mediaRecorder.mimeType}`);
           let chunkUploadChain: Promise<void> = Promise.resolve();
           let isStoppingRecording = false;
@@ -1250,7 +1251,8 @@ export class GoogleMeetBot extends MeetBotBase {
         slightlySecretId: this.slightlySecretId,
         activateInactivityDetectionAfterMinutes: config.activateInactivityDetectionAfter,
         activateInactivityDetectionAfter: new Date(new Date().getTime() + config.activateInactivityDetectionAfter * 60 * 1000).toISOString(),
-        mimeTypes
+        mimeTypes,
+        videoBitsPerSecond: config.recordingVideoBitsPerSecond
       }
     );
   

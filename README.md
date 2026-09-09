@@ -721,3 +721,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Note**: This project is for educational and legitimate automation purposes. Please ensure compliance with the terms of service of the platforms you're automating.
+
+### Browser recording quality
+
+Google Meet and the shared browser recorder prefer VP8/Opus for WebM, with VP9
+as a compatibility fallback. Google Meet capture requests at most 25 fps to reduce
+encoding load. `RECORDING_VIDEO_BITS_PER_SECOND` sets the video bitrate target
+(default: 4000000). MP4 continues to prefer H.264/AAC.
+
+If audio stutters, inspect audio packet timestamps as well as browser CPU load:
+continuous decoding alone does not rule out gaps in the recording timeline.
+Changing encoder settings requires a new recording to verify the improvement;
+it cannot recover audio missing from an existing file.
